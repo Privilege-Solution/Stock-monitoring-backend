@@ -1,0 +1,2658 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ASW Monitor — Asia Wealth Corporation (ASW.BK)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="dist/styles.css">
+<style>
+  /* CSS variables only — consumed by both Tailwind utilities (var(--*)) and runtime JS getComputedStyle() */
+  :root {
+    --primary:  #3B8BD4;
+    --positive: #3B6D11;
+    --negative: #A32D2D;
+    --amber:    #EF9F27;
+    --teal:     #1D9E75;
+    --surface:  #F4F3EF;
+    --card:     #FFFFFF;
+    --border:   #D3D1C7;
+    --text:     #1A1A18;
+    --muted:    #888780;
+
+    --evt-rate:  #A32D2D;
+    --evt-corp:  #3B6D11;
+    --evt-pol:   #EF9F27;
+    --evt-proj:  #3B8BD4;
+    --evt-macro: #6B5B95;
+    --evt-other: #888780;
+
+    --sidebar-bg:      #FFFFFF;
+    --sidebar-text:    #1A1A18;
+    --sidebar-muted:   #888780;
+    --sidebar-active:  #F4F3EF;
+    --sidebar-border:  #D3D1C7;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">A</div>
+      <div>
+        <div class="topbar-title">ASW Monitor</div>
+        <div class="topbar-sub th">ติดตามราคาและปัจจัยมหภาค/อสังหาฯ สำหรับนักวิเคราะห์ภายใน</div>
+      </div>
+      <span class="tag" style="background:var(--primary); margin-left:6px;">ASW.BK</span>
+    </div>
+    <div class="topbar-actions">
+      <div class="topbar-meta th">
+        <span>อัปเดตล่าสุด:</span>
+        <span id="lastUpdated" style="color:var(--text); font-weight:500;">—</span>
+      </div>
+      <button id="refreshBtn" class="btn btn-ghost" title="ดึงข้อมูลล่าสุด">
+        <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        <span class="th">รีเฟรช</span>
+      </button>
+      <div style="position:relative;">
+        <button id="exportBtn" class="btn btn-primary">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-3-3v6m-7 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="th">ส่งออก</span>
+          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div id="exportMenu" style="position:absolute; right:0; top:calc(100% + 4px); background:var(--card); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.08); display:none; min-width:180px; z-index:50;">
+          <button class="btn btn-ghost" data-export="excel" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📊 Export Excel (.xlsx)</button>
+          <button class="btn btn-ghost" data-export="pdf" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📄 Export PDF</button>
+          <button class="btn btn-ghost" data-export="copy" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📋 Copy Summary Text</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title th">เมนูหลัก</div>
+      <div class="sidebar-item active" data-view="dashboard">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">Dashboard</span>
+      </div>
+      <div class="sidebar-item" data-view="price">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3v18h18M7 14l4-4 4 4 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">ราคาย้อนหลัง</span>
+      </div>
+      <div class="sidebar-item" data-view="news">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V9a2 2 0 012-2h2a2 2 0 012 2v9a2 2 0 01-2 2h-2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">ข่าวและปัจจัย</span>
+      </div>
+    </div>
+    <hr class="sidebar-divider" />
+    <div class="sidebar-group">
+      <div class="sidebar-group-title th">รายงาน</div>
+      <div class="sidebar-item" data-view="report">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-3-3v6m-7 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">สร้างรายงาน</span>
+      </div>
+      <div class="sidebar-item" data-view="history">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3M3 12a9 9 0 109-9 9 9 0 00-9 9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">ประวัติ</span>
+      </div>
+    </div>
+    <hr class="sidebar-divider" />
+    <div class="sidebar-group">
+      <div class="sidebar-group-title th">อื่นๆ</div>
+      <div class="sidebar-item" data-view="settings">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">ตั้งค่าแจ้งเตือน</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- ====================== Dashboard View ====================== -->
+    <section class="view active" id="view-dashboard">
+
+      <!-- KPI cards -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="card">
+          <div class="card-title th">ราคาปิดล่าสุด</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiPrice">—</div>
+            <div class="kpi-unit">฿</div>
+          </div>
+          <div class="kpi-delta" id="kpiPriceCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title th">ปริมาณซื้อขาย vs 30d avg</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiVolume">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiVolumeCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">SET Index</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiSet">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiSetCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">PROP Index</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiProp">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiPropCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title th">52W Range</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpi52Price">—</div>
+            <div class="kpi-unit">฿</div>
+          </div>
+          <div class="range-bar" id="rangeBar">
+            <div class="range-bar-fill"></div>
+            <div class="range-bar-marker"></div>
+          </div>
+          <div class="range-bar-labels">
+            <span id="rangeLow">—</span>
+            <span id="rangeHigh">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main chart + news -->
+      <div class="chart-row">
+        <div class="card">
+          <div class="chart-toolbar">
+            <div class="row">
+              <h3 class="th" style="font-size:13px;">กราฟราคา + Event Pins</h3>
+              <span class="muted th" id="chartPeriodLabel" style="font-size:11px;">—</span>
+            </div>
+            <div class="row" style="gap:6px;">
+              <div class="pill-row" id="overlayPills">
+                <button class="pill" data-overlay="price">Price</button>
+                <button class="pill" data-overlay="set">+ SET</button>
+                <button class="pill" data-overlay="prop">+ PROP</button>
+                <button class="pill" data-overlay="all">All</button>
+              </div>
+              <div class="pill-row" id="rangePills">
+                <button class="pill" data-range="1W">1W</button>
+                <button class="pill" data-range="1M">1M</button>
+                <button class="pill" data-range="3M">3M</button>
+                <button class="pill" data-range="6M">6M</button>
+                <button class="pill" data-range="1Y">1Y</button>
+                <button class="pill" data-range="ALL">All</button>
+              </div>
+            </div>
+          </div>
+          <div class="chart-container-tall">
+            <canvas id="dashChart"></canvas>
+          </div>
+          <div class="chart-legend">
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--primary)"></span> ASW Close</div>
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--muted); border-top:1px dashed var(--muted)"></span> SET Index</div>
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--teal); border-top:1px dashed var(--teal)"></span> PROP Index</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-rate)"></span> ดอกเบี้ย</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-corp)"></span> ผลประกอบการ</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-pol)"></span> การเมือง</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-proj)"></span> โครงการ</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-macro)"></span> มหภาค</div>
+            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-other)"></span> อื่นๆ</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column; max-height: 500px;">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">ข่าวล่าสุด</h3>
+            <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
+          </div>
+          <input type="text" id="dashNewsSearch" placeholder="ค้นหา remark..."
+                 class="th" style="font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;" />
+          <div id="dashNewsList" class="scroll-y" style="flex:1; min-height:0;"></div>
+        </div>
+      </div>
+
+      <!-- Bottom: data table + correlation -->
+      <div class="bottom-row" style="align-items: stretch;">
+        <div class="card" style="display:flex; flex-direction:column;">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">ตารางข้อมูลรายวัน</h3>
+            <span class="muted th" id="tableSummary" style="font-size:11px;">—</span>
+          </div>
+          <div class="data-table-wrap" style="flex:1; min-height:0;">
+            <table class="data-table" id="dataTable">
+              <thead>
+                <tr>
+                  <th data-sort="date" class="th">วันที่</th>
+                  <th data-sort="close" class="num th">ราคาปิด</th>
+                  <th data-sort="change" class="num th">%เปลี่ยนแปลง</th>
+                  <th data-sort="volume" class="num th">ปริมาณ (พันหุ้น)</th>
+                  <th data-sort="value" class="num th">มูลค่า (ลบ.)</th>
+                  <th data-sort="setIdx" class="num">SET</th>
+                  <th data-sort="propIdx" class="num">PROP</th>
+                  <th data-sort="remark" class="th">Remark</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div class="row-between mt-8">
+            <button class="btn btn-ghost" id="tablePrev">‹ ก่อนหน้า</button>
+            <span class="muted th" id="tablePageInfo" style="font-size:11px;">หน้า —</span>
+            <button class="btn btn-ghost" id="tableNext">ถัดไป ›</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">หุ้นอสังหาฯ ไทย — วันล่าสุด</h3>
+            <span class="muted th" id="peerSnapshotDate" style="font-size:11px;">—</span>
+          </div>
+          <div class="muted th mb-8" style="font-size:11px;">เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์</div>
+          <table class="data-table" id="peerTable">
+            <thead>
+              <tr>
+                <th class="th">Ticker</th>
+                <th class="th">บริษัท</th>
+                <th class="num th">ราคาปิด</th>
+                <th class="num th">%เปลี่ยนแปลง</th>
+              </tr>
+            </thead>
+            <tbody id="peerTableBody"></tbody>
+          </table>
+          <div class="muted th mt-8" style="font-size:10px;">* ข้อมูลจาก Yahoo Finance · อัปเดตทุกครั้งที่กดรีเฟรช</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Price History View ====================== -->
+    <section class="view" id="view-price">
+      <h2 class="view-title th">ราคาย้อนหลัง</h2>
+      <div class="view-sub th">กราฟราคา OHLC + Volume + Event Pins พร้อมสถิติช่วงเวลา</div>
+
+      <div class="grid-2 mb-12">
+        <div class="card">
+          <div class="chart-toolbar">
+            <div class="row" style="gap:6px;">
+              <div class="pill-row" id="priceRangePills">
+                <button class="pill" data-prange="1W">1W</button>
+                <button class="pill" data-prange="1M">1M</button>
+                <button class="pill" data-prange="3M">3M</button>
+                <button class="pill" data-prange="6M">6M</button>
+                <button class="pill" data-prange="1Y">1Y</button>
+                <button class="pill" data-prange="ALL">All</button>
+              </div>
+              <div class="pill-row">
+                <button class="pill active" data-chartmode="line">Line</button>
+                <button class="pill" data-chartmode="candle">Candle</button>
+              </div>
+            </div>
+            <div class="row" style="gap:8px;">
+              <label class="row th" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleEvents" checked> Events</label>
+              <label class="row" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleSet" checked> SET</label>
+              <label class="row" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleProp" checked> PROP</label>
+            </div>
+          </div>
+          <div class="chart-container" style="height:360px;">
+            <canvas id="priceMainChart"></canvas>
+          </div>
+          <div class="chart-container mt-12" style="height:140px;">
+            <canvas id="volumeChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="th mb-12" style="font-size:13px;">สถิติช่วงเวลา</h3>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="th">วันเริ่มต้น</label>
+              <input type="date" id="priceStart" />
+            </div>
+            <div class="form-field">
+              <label class="th">วันสิ้นสุด</label>
+              <input type="date" id="priceEnd" />
+            </div>
+          </div>
+          <div class="stat-list" id="priceStats"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row-between mb-8">
+          <h3 class="th" style="font-size:13px;">ตารางรายละเอียด</h3>
+          <input type="text" id="priceTableSearch" placeholder="กรอง Remark..."
+                 class="th" style="font-size:12px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; width:240px;" />
+        </div>
+        <div class="data-table-wrap" style="max-height:420px;">
+          <table class="data-table" id="priceTable">
+            <thead>
+              <tr>
+                <th class="th">วันที่</th>
+                <th class="num th">ราคาปิด</th>
+                <th class="num th">%เปลี่ยนแปลง</th>
+                <th class="num th">ปริมาณ</th>
+                <th class="num th">มูลค่า</th>
+                <th class="num">SET</th>
+                <th class="num">PROP</th>
+                <th class="th">Remark</th>
+              </tr>
+            </thead>
+            <tbody id="priceTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== News & Factors View ====================== -->
+    <section class="view" id="view-news">
+      <h2 class="view-title th">ข่าวและปัจจัย</h2>
+      <div class="view-sub th">เหตุการณ์ที่กระทบราคา ASW จัดกลุ่มตามประเภท + ปัจจัยมหภาค/อสังหาฯ</div>
+
+      <div class="subtabs">
+        <button class="subtab active" data-ntab="asw">ASW</button>
+        <button class="subtab th" data-ntab="prop">อสังหาฯ</button>
+        <button class="subtab th" data-ntab="econ">เศรษฐกิจ</button>
+        <button class="subtab th" data-ntab="pol">การเมือง</button>
+      </div>
+
+      <!-- ASW tab -->
+      <div class="ntab" id="ntab-asw">
+        <div class="row-between mb-12">
+          <div class="row" style="gap:6px;">
+            <span class="muted th" style="font-size:11px;">เรียง:</span>
+            <div class="pill-row" id="newsSort">
+              <button class="pill active" data-sort="newest">ใหม่สุด</button>
+              <button class="pill" data-sort="oldest">เก่าสุด</button>
+              <button class="pill" data-sort="impact">|Impact| สูง</button>
+            </div>
+          </div>
+          <span class="muted th" id="aswCount" style="font-size:11px;">—</span>
+        </div>
+        <div id="aswNewsList"></div>
+      </div>
+
+      <!-- อสังหาฯ tab -->
+      <div class="ntab" id="ntab-prop" style="display:none;">
+        <div class="grid-2">
+          <div class="card">
+            <h3 class="th mb-8" style="font-size:13px;">Property Sector Index (PROP)</h3>
+            <div class="chart-container" style="height:220px;">
+              <canvas id="propChart"></canvas>
+            </div>
+            <div id="propStats" class="mt-8" style="font-size:11px;"></div>
+          </div>
+          <div class="card">
+            <div class="row-between mb-8">
+              <h3 class="th" style="font-size:13px;">ข่าวอสังหาฯ ล่าสุด</h3>
+              <button id="propNewsRefresh" class="pill th" style="font-size:11px;">↻ รีเฟรช</button>
+            </div>
+            <div id="propNewsList"></div>
+            <div class="mt-12">
+              <h4 class="th mb-8" style="font-size:12px;">เหตุการณ์โครงการใน ASW</h4>
+              <div id="projectNewsList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- เศรษฐกิจ tab -->
+      <div class="ntab" id="ntab-econ" style="display:none;">
+        <div class="card mb-12">
+          <h3 class="th mb-8" style="font-size:13px;">BOT อัตราดอกเบี้ยนโยบาย — Timeline</h3>
+          <div class="muted th mb-12" style="font-size:11px;">จาก Remark column (ดอกเบี้ย / กนง.)</div>
+          <div id="rateTimeline" class="timeline"></div>
+        </div>
+      </div>
+
+      <!-- การเมือง tab -->
+      <div class="ntab" id="ntab-pol" style="display:none;">
+        <div class="card">
+          <h3 class="th mb-8" style="font-size:13px;">เหตุการณ์การเมือง — Timeline</h3>
+          <div class="muted th mb-12" style="font-size:11px;">สกัดจาก Remark column</div>
+          <div id="polTimeline" class="timeline"></div>
+        </div>
+      </div>
+
+      <!-- News-Price Correlation -->
+      <div class="card mt-16">
+        <h3 class="th mb-8" style="font-size:13px;">News-Price Correlation — Average Impact by Event Type</h3>
+        <div class="muted th mb-12" style="font-size:11px;">เปรียบเทียบ %เปลี่ยนแปลงราคาเฉลี่ย (วันเกิดเหตุการณ์ + 3 วันถัดไป)</div>
+        <div class="chart-container" style="height:220px;">
+          <canvas id="impactChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== Report Builder View ====================== -->
+    <section class="view" id="view-report">
+      <h2 class="view-title th">สร้างรายงาน</h2>
+      <div class="view-sub th">เลือก template, กำหนดช่วงเวลา, ดู preview แล้ว export เป็น Excel / PDF / ข้อความ</div>
+
+      <div class="wizard-steps" id="wizardSteps">
+        <div class="wizard-step active" data-step="1"><span class="num">1</span><span class="th">เลือก Template</span></div>
+        <div class="wizard-step" data-step="2"><span class="num">2</span><span class="th">กำหนด Parameters</span></div>
+        <div class="wizard-step" data-step="3"><span class="num">3</span><span class="th">Preview</span></div>
+        <div class="wizard-step" data-step="4"><span class="num">4</span><span class="th">Export</span></div>
+      </div>
+
+      <div class="card mb-12">
+        <!-- Step 1: Template -->
+        <div class="wstep active" id="wstep-1">
+          <h3 class="th mb-12" style="font-size:13px;">เลือก Template รายงาน</h3>
+          <div class="template-grid">
+            <div class="template-card selected" data-template="summary">
+              <h4 class="th">Summary (1 หน้า)</h4>
+              <p class="th">KPI cards + กราฟราคา + เหตุการณ์สำคัญ</p>
+            </div>
+            <div class="template-card" data-template="full">
+              <h4 class="th">Full Report (3–5 หน้า)</h4>
+              <p class="th">Summary + ตารางราคา + Timeline + เปรียบเทียบ Sector</p>
+            </div>
+            <div class="template-card" data-template="custom">
+              <h4 class="th">Custom</h4>
+              <p class="th">เลือก section ที่ต้องการเอง</p>
+            </div>
+          </div>
+          <div id="customSections" style="display:none;">
+            <h4 class="th mb-8" style="font-size:12px;">เลือก Section</h4>
+            <div class="grid-3">
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-cover" checked> Cover</label>
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-summary" checked> Executive Summary</label>
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-price" checked> Price Performance</label>
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-events" checked> Key Events</label>
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-sector" checked> Sector Context</label>
+              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-appendix" checked> Appendix (Data Table)</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Parameters -->
+        <div class="wstep" id="wstep-2" style="display:none;">
+          <h3 class="th mb-12" style="font-size:13px;">กำหนด Parameters</h3>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="th">วันเริ่มต้น</label>
+              <input type="date" id="rptStart" />
+            </div>
+            <div class="form-field">
+              <label class="th">วันสิ้นสุด</label>
+              <input type="date" id="rptEnd" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field" style="flex:2;">
+              <label class="th">ชื่อรายงาน</label>
+              <input type="text" id="rptTitle" class="th" placeholder="ASW.BK รายงานราคาหุ้น" />
+            </div>
+            <div class="form-field">
+              <label class="th">ผู้จัดทำ</label>
+              <input type="text" id="rptPreparedBy" class="th" placeholder="ชื่อ-นามสกุล" />
+            </div>
+            <div class="form-field" style="max-width:140px;">
+              <label class="th">ภาษา</label>
+              <select id="rptLang">
+                <option value="th">ไทย</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Preview -->
+        <div class="wstep" id="wstep-3" style="display:none;">
+          <h3 class="th mb-12" style="font-size:13px;">Preview</h3>
+          <label class="th muted" style="font-size:11px; display:block; margin-bottom:4px;">สรุปผลบริหาร (แก้ไขได้ก่อนส่งออก)</label>
+          <textarea id="rptExecSummary"
+            style="width:100%; min-height:96px; font:13px/1.6 'Sarabun',sans-serif;
+                   padding:8px; border:1px solid var(--border); border-radius:6px;
+                   margin-bottom:12px; resize:vertical;"></textarea>
+          <div id="reportPreview" style="background:white; padding:20px; border:1px solid var(--border); border-radius:6px; min-height:300px;">
+            <div class="empty-state th">กด "ถัดไป" เพื่อสร้าง Preview</div>
+          </div>
+        </div>
+
+        <!-- Step 4: Export -->
+        <div class="wstep" id="wstep-4" style="display:none;">
+          <h3 class="th mb-12" style="font-size:13px;">Export</h3>
+          <div class="grid-3">
+            <div class="card" style="text-align:center;">
+              <h4 class="th">Excel (.xlsx)</h4>
+              <p class="th muted" style="font-size:11px;">ตารางข้อมูล + chart + events</p>
+              <button class="btn btn-primary mt-8" id="exportExcelBtn" style="margin-top:8px;">📊 Export</button>
+            </div>
+            <div class="card" style="text-align:center;">
+              <h4 class="th">PDF</h4>
+              <p class="th muted" style="font-size:11px;">รายงานแบบ formatted หลายหน้า</p>
+              <button class="btn btn-primary mt-8" id="exportPdfBtn" style="margin-top:8px;">📄 Export</button>
+            </div>
+            <div class="card" style="text-align:center;">
+              <h4 class="th">Copy Summary</h4>
+              <p class="th muted" style="font-size:11px;">ข้อความสรุปสำหรับส่ง Line/Email</p>
+              <button class="btn btn-primary mt-8" id="exportCopyBtn" style="margin-top:8px;">📋 Copy</button>
+            </div>
+          </div>
+          <div class="mt-12">
+            <button class="btn" id="exportLogBtn">บันทึกลงประวัติ</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end; gap:8px;">
+        <button class="btn btn-ghost" id="wizardBack" style="display:none;">‹ ย้อนกลับ</button>
+        <button class="btn btn-primary" id="wizardNext">ถัดไป ›</button>
+      </div>
+    </section>
+
+    <!-- ====================== History View ====================== -->
+    <section class="view" id="view-history">
+      <h2 class="view-title th">ประวัติการส่งออกรายงาน</h2>
+      <div class="view-sub th">รายการรายงานที่สร้างและ export ใน session นี้</div>
+      <div class="card">
+        <div id="historyList"></div>
+      </div>
+    </section>
+
+    <!-- ====================== Settings View ====================== -->
+    <section class="view" id="view-settings">
+      <h2 class="view-title th">ตั้งค่าแจ้งเตือน</h2>
+      <div class="view-sub th">ข้อมูลตัวอย่าง + ตั้งค่าการแจ้งเตือน</div>
+
+      <div class="grid-2 mb-12">
+        <div class="card">
+          <h3 class="th mb-12" style="font-size:13px;">ข้อมูลตัวอย่าง</h3>
+          <div class="placeholder th" style="padding:20px;">
+            <div style="font-size:22px; margin-bottom:8px;">📊</div>
+            <div style="font-weight:600;">ASW-PRICE MOVEMENT</div>
+            <div class="muted" style="margin-top:4px;">Sample data · ข้อมูลตัวอย่างสำหรับ demo</div>
+          </div>
+          <div class="mt-12">
+            <div class="row-between" style="font-size:13px;">
+              <span class="th muted">ไฟล์:</span>
+              <span id="currentFileName" class="th" style="font-weight:500;">sample_data.js</span>
+            </div>
+            <div class="row-between mt-8" style="font-size:13px;">
+              <span class="th muted">ช่วงข้อมูล:</span>
+              <span id="currentFileRange" class="th" style="font-weight:500;">—</span>
+            </div>
+            <div class="row-between mt-8" style="font-size:13px;">
+              <span class="th muted">จำนวนแถว:</span>
+              <span id="currentFileEvents" class="th" style="font-weight:500;">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="th mb-12" style="font-size:13px;">ตั้งค่าการแจ้งเตือน</h3>
+          <div class="muted th mb-12" style="font-size:11px;">การแจ้งเตือนจะใช้งานได้ใน v2 (ปัจจุบันแสดงผลเท่านั้น)</div>
+
+          <div class="mb-12">
+            <h4 class="th mb-8" style="font-size:12px;">📈 Price Alert</h4>
+            <div class="form-row">
+              <div class="form-field">
+                <label class="th">แจ้งเมื่อ ≥</label>
+                <input type="number" step="0.05" value="9.00" class="th" />
+              </div>
+              <div class="form-field">
+                <label class="th">หรือ ≤</label>
+                <input type="number" step="0.05" value="8.00" class="th" />
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-12">
+            <h4 class="th mb-8" style="font-size:12px;">📊 Volume Alert</h4>
+            <div class="form-row">
+              <div class="form-field">
+                <label class="th">แจ้งเมื่อปริมาณ > 30d avg ×</label>
+                <input type="number" step="0.1" value="2" class="th" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="th mb-8" style="font-size:12px;">🔔 News Keyword Alert</h4>
+            <div class="form-field">
+              <label class="th">แจ้งเมื่อ Remark มีคำว่า</label>
+              <input type="text" class="th" placeholder="เช่น Presale, ดอกเบี้ย" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="healthCard" style="margin-bottom:12px;">
+        <h3 class="th mb-8" style="font-size:13px;">Data Health</h3>
+        <div class="th" style="font-size:12px; line-height:1.7;">
+          <div><span class="muted">Last fetch:</span> <span id="healthLastFetch">—</span></div>
+          <div><span class="muted">Stored rows:</span> <span id="healthRows">—</span></div>
+          <div><span class="muted">Range:</span> <span id="healthRange">—</span></div>
+          <div><span class="muted">Missing dates:</span> <span id="healthMissing">—</span></div>
+          <ul id="healthMissingList" class="th" style="font-size:11px; max-height:140px; overflow-y:auto; margin-top:6px; padding-left:18px;"></ul>
+          <button id="healthRefillBtn" class="btn btn-ghost" style="margin-top:8px;">
+            <span class="th">เติมข้อมูลที่ขาด</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="th mb-8" style="font-size:13px;">เกี่ยวกับ</h3>
+        <div class="muted th" style="font-size:12px; line-height:1.7;">
+          ASW Monitor · v1.0 MVP · Internal use only<br>
+          ข้อมูลจาก Excel ที่นักวิเคราะห์จัดทำ · Sheet: ASW-PRICE MOVEMENT
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Status bar -->
+  <footer class="statusbar">
+    <div class="statusbar-left">
+      <span class="th">ไฟล์:</span>
+      <span id="sbFile" style="color:var(--text);">sample_data.js</span>
+      <span>·</span>
+      <span class="th">ช่วง:</span>
+      <span id="sbRange" style="color:var(--text);">—</span>
+      <span>·</span>
+      <span class="th">Events:</span>
+      <span id="sbEvents" style="color:var(--text);">—</span>
+    </div>
+    <div class="statusbar-right">
+      <span class="th">ASW.BK</span>
+      <span>·</span>
+      <span id="sbView" style="color:var(--text);">Dashboard</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Data bootstrap: pulls from the Node backend at /api/daily and /api/metadata.
+     Falls back to bundled SAMPLE_DATA when the backend is unreachable (e.g. opened
+     directly via file://) so the demo still renders without a server. -->
+<script>
+'use strict';
+window.ASW_API = {
+  async metadata() {
+    try { const r = await fetch('/api/metadata'); if (!r.ok) throw 0; return await r.json(); }
+    catch (e) { return { rowCount: (window.SAMPLE_DATA||[]).length, lastFetched: null, lastFetchOk: null, lastFetchSource: 'bundled', status: 'bundled' }; }
+  },
+  async daily() {
+    try { const r = await fetch('/api/daily'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
+    catch (e) { return window.SAMPLE_DATA || []; }
+  },
+  async peers() {
+    try { const r = await fetch('/api/peers'); if (!r.ok) throw 0; const d = await r.json(); return d; }
+    catch (e) { return { date: null, rows: [], count: 0 }; }
+  },
+  async refresh() {
+    try {
+      const r = await fetch('/api/refresh', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' });
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  async health() {
+    try { const r = await fetch('/api/health'); if (!r.ok) throw 0; return await r.json(); }
+    catch (e) { return null; }
+  },
+  async healthRefresh() {
+    try { const r = await fetch('/api/health/refresh', { method:'POST' }); return await r.json(); }
+    catch (e) { return { ok: false, error: 'offline' }; }
+  },
+};
+</script>
+
+<!-- Bundled sample data — used only if /api/* is unreachable. -->
+<script src="sample_data.js"></script>
+
+<script>
+'use strict';
+// Mirror of lib/exec-summary.js — deterministic rules engine for the editable
+// Executive Summary block in the Report Builder. Generated server-side via the
+// same module; this client copy exists so the textarea + preview can be
+// regenerated on demand without an extra round-trip.
+window.ASW_EXEC = (function () {
+  const TEXT = {
+    th: {
+      up:       (p) => `ราคาปิดบวก ${p.toFixed(2)}% จากก่อนหน้า`,
+      down:     (p) => `ราคาปิดลบ ${Math.abs(p).toFixed(2)}% จากก่อนหน้า`,
+      volume:   (x) => `ปริมาณซื้อขายพุ่ง ${x.toFixed(2)} เท่าของค่าเฉลี่ย 30 วัน`,
+      event:    (remark) => `เหตุการณ์ที่มีผลกระทบมากที่สุด: ${remark}`,
+      range52W: (pos) => `ราคาอยู่ที่ ${pos.toFixed(0)}% ของ 52W range`,
+      wins:     (n, type) => `เหตุการณ์หลักในช่วง: ${type} ×${n}`,
+      noEvents: () => 'ไม่พบเหตุการณ์ที่จัดประเภทได้ในช่วงนี้',
+      noData:   () => 'ไม่มีข้อมูลในช่วงที่เลือก',
+      eventLabels: { 'ดอกเบี้ย': 'ดอกเบี้ย', 'presale': 'Presale', 'งบ': 'ผลประกอบการ', 'โครงการ': 'โครงการ', 'การเมือง': 'การเมือง' },
+    },
+    en: {
+      up:       (p) => `Closed up ${p.toFixed(2)}% from prior session`,
+      down:     (p) => `Closed down ${Math.abs(p).toFixed(2)}% from prior session`,
+      volume:   (x) => `Volume surged ${x.toFixed(2)}× the 30-day average`,
+      event:    (remark) => `Biggest event impact: ${remark}`,
+      range52W: (pos) => `Price at ${pos.toFixed(0)}% of 52W range`,
+      wins:     (n, type) => `Key events in range: ${type} ×${n}`,
+      noEvents: () => 'No classifiable events in range',
+      noData:   () => 'No data in selected range',
+      eventLabels: { 'ดอกเบี้ย': 'Interest rate', 'presale': 'Presale', 'งบ': 'Earnings', 'โครงการ': 'Project', 'การเมือง': 'Political' },
+    },
+  };
+  function classifyEventType(remark) {
+    const r = String(remark || '');
+    if (/ดอกเบี้ย|กนง|ปรับขึ้นดอกเบี้ย/i.test(r)) return 'ดอกเบี้ย';
+    if (/presale/i.test(r)) return 'presale';
+    if (/งบ|ปันผล|รางวัล|จ่ายเงินปันผล/i.test(r)) return 'งบ';
+    if (/โครงการ|เปิดโครงการ|ยอดจอง|openday|site visit|oppday/i.test(r)) return 'โครงการ';
+    if (/การเมือง|เลือกตั้ง|กกต|ทักษิณ|นายก|สภา|โหวต|เศรษฐา/i.test(r)) return 'การเมือง';
+    return null;
+  }
+  function generate(data, lang) {
+    lang = lang || 'th';
+    const t = TEXT[lang] || TEXT.th;
+    if (!data || !data.length) return [t.noData()];
+    const withPrice = data.filter(r => r.close != null);
+    if (!withPrice.length) return [t.noData()];
+    const last = withPrice[withPrice.length - 1];
+    const bullets = [];
+    if (last.change != null && Math.abs(last.change) >= 2) {
+      bullets.push(last.change > 0 ? t.up(last.change) : t.down(last.change));
+    }
+    const last30 = withPrice.slice(-31);
+    const avg30 = last30.length
+      ? last30.reduce((a, b) => a + (b.volume || 0), 0) / last30.length
+      : 0;
+    if (avg30 > 0 && last.volume > 2 * avg30) {
+      bullets.push(t.volume(last.volume / avg30));
+    }
+    const withRemark = withPrice.filter(r => r.remark && r.setIdx != null);
+    if (withRemark.length) {
+      const idxMap = new Map(withPrice.map((r, i) => [r.date, i]));
+      const ranked = withRemark.map(r => {
+        const i = idxMap.get(r.date);
+        const prev = i > 0 ? withPrice[i - 1] : null;
+        const setPct = prev?.setIdx && r.setIdx
+          ? ((r.setIdx - prev.setIdx) / prev.setIdx) * 100 : 0;
+        return { r, impact: Math.abs((r.change || 0) - setPct) };
+      }).sort((a, b) => b.impact - a.impact);
+      if (ranked[0]?.impact > 0) bullets.push(t.event(ranked[0].r.remark));
+    }
+    const lookback = withPrice.slice(-252);
+    if (lookback.length) {
+      const lo = Math.min(...lookback.map(r => r.close));
+      const hi = Math.max(...lookback.map(r => r.close));
+      if (hi > lo) {
+        const pos = ((last.close - lo) / (hi - lo)) * 100;
+        bullets.push(t.range52W(pos));
+      }
+    }
+    const counts = {};
+    for (const r of withPrice.filter(r => r.remark)) {
+      const k = classifyEventType(r.remark);
+      if (k) counts[k] = (counts[k] || 0) + 1;
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (top) bullets.push(t.wins(top[1], t.eventLabels[top[0]] || top[0]));
+    if (!bullets.length) bullets.push(t.noEvents());
+    return bullets.slice(0, 5);
+  }
+  return { generate, TEXT };
+})();
+</script>
+
+<script>
+'use strict';
+
+/* ====================================================================
+ * ASW Monitor — Application Logic
+ * ==================================================================== */
+
+/* ============== State ============== */
+const STATE = {
+  view: 'dashboard',
+  range: '6M',
+  overlay: 'price',
+  priceRange: '6M',
+  priceChartMode: 'line',
+  priceShowEvents: true,
+  priceShowSet: true,
+  priceShowProp: true,
+  tablePage: 0,
+  tableSort: { key: 'date', dir: 'desc' },
+  priceTableSort: { key: 'date', dir: 'desc' },
+  priceFilter: null, // { start, end } override
+  newsSort: 'newest',
+  focusedDate: null,
+  wizardStep: 1,
+  report: {
+    template: 'summary',
+    title: '',
+    preparedBy: '',
+    lang: 'th',
+    start: '',
+    end: '',
+    sections: { cover: true, summary: true, price: true, events: true, sector: true, appendix: true },
+  },
+  exportLog: [],
+};
+
+let DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+let DASH_CHART = null, VOL_CHART = null, PRICE_CHART = null, PROP_CHART = null, IMPACT_CHART = null;
+let CURRENT_FILE_NAME = 'sample_data.js';
+
+/* ============== Utilities ============== */
+const $ = (id) => document.getElementById(id);
+const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const fmtNum = (n, dp = 2) => n == null ? '—' : Number(n).toFixed(dp);
+const fmtPct = (n, dp = 2) => {
+  if (n == null) return '—';
+  const s = n > 0 ? '+' : '';
+  return s + Number(n).toFixed(dp) + '%';
+};
+const fmtBigNum = (n) => {
+  if (n == null) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return (n/1e3).toFixed(2) + 'K';
+  return n.toFixed(2);
+};
+const fmtDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+};
+const fmtThaiDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  const y = dt.getFullYear() + 543;
+  return dt.getDate() + ' ' + thaiMonths[dt.getMonth()] + ' ' + y;
+};
+const fmtThaiShort = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.getDate() + '/' + (dt.getMonth()+1) + '/' + (dt.getFullYear()+543-2500);
+};
+const showToast = (msg) => {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+};
+
+/* ============== Event Classification (per spec) ============== */
+function classifyEvent(remark) {
+  if (!remark || !String(remark).trim()) return null;
+  const r = String(remark);
+  if (r.includes('ดอกเบี้ย') || r.includes('กนง') || r.includes('ปรับขึ้นดอกเบี้ย'))
+    return { type: 'interest_rate', color: getCSS('--evt-rate'), label: 'ดอกเบี้ย' };
+  if (/presale|งบ|รางวัล|q2|q3|q4|ปันผล|จ่ายเงินปันผล/i.test(r))
+    return { type: 'corporate', color: getCSS('--evt-corp'), label: 'ผลประกอบการ' };
+  if (r.includes('การเมือง') || r.includes('เลือกตั้ง') || r.includes('กกต') ||
+      r.includes('ทักษิณ') || r.includes('นายก') || r.includes('สภา') ||
+      r.includes('โหวต') || r.includes('เศรษฐา'))
+    return { type: 'political', color: getCSS('--evt-pol'), label: 'การเมือง' };
+  if (/โครงการ|talis|wellness|arbor|title|kave|embryo|honor|atmoz|jv|openday|site visit|oppday|เปิดโครงการ|ยอดจอง|ขาย/i.test(r))
+    return { type: 'project', color: getCSS('--evt-proj'), label: 'โครงการ' };
+  if (r.includes('แผ่นดินไหว') || r.includes('เศรษฐกิจ') || r.includes('เปิดประเทศ') ||
+      r.includes('สคบ') || r.includes('ปิดแคมป์'))
+    return { type: 'macro', color: getCSS('--evt-macro'), label: 'มหภาค' };
+  return { type: 'other', color: getCSS('--evt-other'), label: 'อื่นๆ' };
+}
+function getCSS(v) {
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+}
+
+/* ============== Time Range Filter ============== */
+function filterByRange(data, range) {
+  if (range === 'ALL' || !data.length) return data;
+  const withPrice = data.filter(r => r.close != null);
+  if (!withPrice.length) return data;
+  const last = new Date(withPrice[withPrice.length-1].date + 'T00:00:00');
+  const start = new Date(last);
+  if (range === '1W') start.setDate(last.getDate() - 7);
+  else if (range === '1M') start.setMonth(last.getMonth() - 1);
+  else if (range === '3M') start.setMonth(last.getMonth() - 3);
+  else if (range === '6M') start.setMonth(last.getMonth() - 6);
+  else if (range === '1Y') start.setFullYear(last.getFullYear() - 1);
+  else if (range === 'YTD') { start.setFullYear(last.getFullYear(), 0, 1); }
+  return data.filter(r => new Date(r.date + 'T00:00:00') >= start);
+}
+
+function filterByDateRange(data, startStr, endStr) {
+  if (!startStr && !endStr) return data;
+  const s = startStr ? new Date(startStr + 'T00:00:00') : null;
+  const e = endStr ? new Date(endStr + 'T23:59:59') : null;
+  return data.filter(r => {
+    const d = new Date(r.date + 'T00:00:00');
+    if (s && d < s) return false;
+    if (e && d > e) return false;
+    return true;
+  });
+}
+
+function pctChange(arr, key) {
+  if (!arr.length) return null;
+  const first = arr[0][key], last = arr[arr.length-1][key];
+  if (first == null || last == null || first === 0) return null;
+  return ((last - first) / first) * 100;
+}
+
+/* ============== KPI Rendering ============== */
+function renderKPIs(filtered) {
+  const withPrice = filtered.filter(r => r.close != null);
+  const last = withPrice.length ? withPrice[withPrice.length-1] : null;
+  const prev = withPrice.length >= 2 ? withPrice[withPrice.length-2] : null;
+
+  // 1. Price
+  if (last) {
+    $('kpiPrice').textContent = fmtNum(last.close);
+    const ch = prev && prev.close ? ((last.close - prev.close) / prev.close) * 100 : (last.change || 0);
+    const el = $('kpiPriceCh');
+    el.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + (ch || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
+    // lastUpdated is now a wall-clock timestamp set by loadMetadata(); no per-render write here.
+  } else {
+    $('kpiPrice').textContent = '—';
+    $('kpiPriceCh').textContent = '—';
+    $('kpiPriceCh').className = 'kpi-delta mut';
+  }
+
+  // 2. Volume vs 30d avg
+  if (last && last.volume != null) {
+    const v = last.volume;
+    $('kpiVolume').textContent = v >= 1000 ? (v / 1000).toFixed(2) + 'M' : v.toFixed(2) + 'K';
+    const withVol = filtered.filter(r => r.volume != null);
+    const last30 = withVol.slice(-31);
+    const avg30 = last30.length ? last30.reduce((a,b) => a + (b.volume || 0), 0) / last30.length : null;
+    const el = $('kpiVolumeCh');
+    if (avg30 && avg30 > 0) {
+      const ratio = last.volume / avg30;
+      el.textContent = ratio.toFixed(2) + '× 30d avg (' + (v >= 1000 ? (v/1000).toFixed(2)+'M' : v.toFixed(2)+'K') + ')';
+      el.className = 'kpi-delta ' + (ratio > 1.2 ? 'pos' : ratio < 0.8 ? 'neg' : 'mut');
+    } else {
+      el.textContent = '—';
+      el.className = 'kpi-delta mut';
+    }
+  } else {
+    $('kpiVolume').textContent = '—';
+    $('kpiVolumeCh').textContent = '—';
+    $('kpiVolumeCh').className = 'kpi-delta mut';
+  }
+
+  // 3. SET Index
+  const setPoints = filtered.filter(r => r.setIdx != null);
+  const lastSet = setPoints.length ? setPoints[setPoints.length-1].setIdx : null;
+  if (lastSet != null) {
+    $('kpiSet').textContent = fmtNum(lastSet);
+    const setCh = pctChange(setPoints, 'setIdx');
+    const el = $('kpiSetCh');
+    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '▼ ' : '') + (setCh || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (setCh > 0 ? 'pos' : setCh < 0 ? 'neg' : 'mut');
+  } else {
+    $('kpiSet').textContent = '—';
+    $('kpiSetCh').textContent = '—';
+    $('kpiSetCh').className = 'kpi-delta mut';
+  }
+
+  // 4. PROP Index
+  const propPoints = filtered.filter(r => r.propIdx != null);
+  const lastProp = propPoints.length ? propPoints[propPoints.length-1].propIdx : null;
+  if (lastProp != null) {
+    $('kpiProp').textContent = fmtNum(lastProp);
+    const propCh = pctChange(propPoints, 'propIdx');
+    const el = $('kpiPropCh');
+    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '▼ ' : '') + (propCh || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (propCh > 0 ? 'pos' : propCh < 0 ? 'neg' : 'mut');
+  } else {
+    $('kpiProp').textContent = '—';
+    $('kpiPropCh').textContent = '—';
+    $('kpiPropCh').className = 'kpi-delta mut';
+  }
+
+  // 5. 52W Range
+  const last252 = DATA.slice(-252);
+  const prices252 = last252.filter(r => r.close != null).map(r => r.close);
+  if (prices252.length && last) {
+    const lo = Math.min(...prices252);
+    const hi = Math.max(...prices252);
+    const pos = hi > lo ? ((last.close - lo) / (hi - lo)) * 100 : 50;
+    $('kpi52Price').textContent = fmtNum(last.close);
+    $('rangeLow').textContent = 'Lo ฿' + fmtNum(lo);
+    $('rangeHigh').textContent = 'Hi ฿' + fmtNum(hi);
+    const fill = $('rangeBar').querySelector('.range-bar-fill');
+    const marker = $('rangeBar').querySelector('.range-bar-marker');
+    fill.style.width = pos + '%';
+    marker.style.left = pos + '%';
+  } else {
+    $('kpi52Price').textContent = '—';
+    $('rangeLow').textContent = '—';
+    $('rangeHigh').textContent = '—';
+  }
+}
+
+/* ============== Event Pin Annotations ============== */
+function buildPinAnnotations(rows, showOnlyTypes) {
+  const ann = {};
+  rows.filter(r => r.remark).forEach((r, i) => {
+    const c = classifyEvent(r.remark);
+    if (!c) return;
+    if (showOnlyTypes && !showOnlyTypes.includes(c.type)) return;
+    const x = r.date + 'T00:00:00';
+    // Pin marker only (no vertical line — minimal style)
+    ann['evtPin_' + i] = {
+      type: 'point',
+      xValue: x,
+      yValue: r.close,
+      backgroundColor: c.color,
+      borderColor: '#ffffff',
+      borderWidth: 2,
+      radius: 6,
+    };
+  });
+  return ann;
+}
+
+/* ============== Dashboard Chart ============== */
+function buildDashChart(filtered) {
+  const ctx = $('dashChart').getContext('2d');
+  const priceData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
+  const setData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.setIdx }));
+  const propData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
+  const annotations = buildPinAnnotations(filtered);
+
+  // Tighten price-axis range so the line fills the chart (don't span to zero)
+  const priceVals = priceData.map(p => p.y).filter(v => v != null);
+  const pMin = priceVals.length ? Math.min(...priceVals) : 0;
+  const pMax = priceVals.length ? Math.max(...priceVals) : 1;
+  const pad = (pMax - pMin) * 0.15 || 0.5;
+  const yMin = Math.max(0, pMin - pad);
+  const yMax = pMax + pad;
+
+  // Tighten x-axis to where we actually have price data (avoid large empty trailing space)
+  let xMinIso = null, xMaxIso = null;
+  const firstWithClose = priceData.find(p => p.y != null);
+  const lastWithClose = [...priceData].reverse().find(p => p.y != null);
+  if (firstWithClose && lastWithClose) {
+    const xMinDate = new Date(firstWithClose.x);
+    const xMaxDate = new Date(lastWithClose.x);
+    const xPadDays = 7;
+    xMinDate.setDate(xMinDate.getDate() - xPadDays);
+    xMaxDate.setDate(xMaxDate.getDate() + xPadDays);
+    xMinIso = xMinDate.toISOString();
+    xMaxIso = xMaxDate.toISOString();
+  }
+
+  const datasets = [{
+    label: 'ASW Close', data: priceData,
+    borderColor: getCSS('--primary'),
+    backgroundColor: 'rgba(59,139,212,0.06)',
+    borderWidth: 4,
+    pointRadius: 0, pointHoverRadius: 4,
+    spanGaps: true, tension: 0.18, fill: true,
+    yAxisID: 'yPrice',
+  }];
+
+  const ov = STATE.overlay;
+  if (ov === 'set' || ov === 'all') datasets.push({
+    label: 'SET Index', data: setData,
+    borderColor: getCSS('--muted'), borderDash: [5, 4],
+    borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    yAxisID: 'yIdx',
+  });
+  if (ov === 'prop' || ov === 'all') datasets.push({
+    label: 'PROP Index', data: propData,
+    borderColor: getCSS('--teal'), borderDash: [3, 3],
+    borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    yAxisID: 'yIdx',
+  });
+
+  if (DASH_CHART) DASH_CHART.destroy();
+  DASH_CHART = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: getCSS('--border'),
+          borderWidth: 1,
+          padding: 10,
+          titleColor: getCSS('--text'),
+          bodyColor: getCSS('--text'),
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const d = new Date(items[0].parsed.x);
+              return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            },
+            label: (item) => {
+              const v = item.parsed.y;
+              if (item.dataset.label === 'ASW Close') return 'ASW: ฿' + v.toFixed(2);
+              if (item.dataset.label === 'SET Index') return 'SET: ' + v.toFixed(2);
+              if (item.dataset.label === 'PROP Index') return 'PROP: ' + v.toFixed(2);
+              return item.dataset.label + ': ' + v;
+            },
+            afterBody: (items) => {
+              if (!items.length) return '';
+              const dt = new Date(items[0].parsed.x);
+              const ymd = dt.toISOString().slice(0,10);
+              const row = DATA.find(r => r.date === ymd);
+              if (row && row.remark) {
+                const c = classifyEvent(row.remark);
+                return ['', (c ? '[' + c.label + '] ' : '📰 ') + row.remark];
+              }
+              return '';
+            }
+          }
+        },
+        annotation: { annotations }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          min: xMinIso, max: xMaxIso,
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--muted'), font: { size: 13 } }
+        },
+        yPrice: {
+          position: 'left',
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--primary'), font: { size: 13, weight: '500' },
+            callback: (v) => '฿' + v.toFixed(2) },
+          min: yMin,
+          max: yMax,
+        },
+        yIdx: {
+          position: 'right',
+          grid: { display: false },
+          ticks: { color: getCSS('--muted'), font: { size: 12 } },
+        }
+      }
+    }
+  });
+
+  // Re-apply focused date zoom if set
+  if (STATE.focusedDate) {
+    focusDashOnDate(STATE.focusedDate);
+  }
+}
+
+function focusDashOnDate(dateStr) {
+  if (!DASH_CHART) return;
+  const dt = new Date(dateStr + 'T00:00:00');
+  const start = new Date(dt); start.setDate(start.getDate() - 30);
+  const end = new Date(dt); end.setDate(end.getDate() + 30);
+  const dataStart = new Date(DATA[0].date + 'T00:00:00');
+  if (start < dataStart) {
+    end.setDate(end.getDate() + (dataStart - start) / (1000*60*60*24));
+    start.setTime(dataStart.getTime());
+  }
+  DASH_CHART.options.scales.x.min = start.toISOString();
+  DASH_CHART.options.scales.x.max = end.toISOString();
+  DASH_CHART.update();
+}
+
+/* ============== News Lists ============== */
+function renderDashNews(filtered) {
+  const items = filtered.filter(r => r.remark);
+  $('dashNewsCount').textContent = items.length + ' รายการ';
+  const search = ($('dashNewsSearch').value || '').toLowerCase().trim();
+  const filtered2 = search ? items.filter(r => r.remark.toLowerCase().includes(search)) : items;
+  const list = $('dashNewsList');
+
+  if (!filtered2.length) {
+    list.innerHTML = '<div class="empty-state th">ไม่พบข่าวในช่วงเวลานี้</div>';
+    return;
+  }
+
+  const sorted = [...filtered2].reverse(); // newest first
+  list.innerHTML = sorted.map(r => {
+    const c = classifyEvent(r.remark);
+    const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
+    return `<div class="news-item ${r.date === STATE.focusedDate ? 'focused' : ''}" data-date="${r.date}">
+      <div class="news-date th">${fmtThaiShort(r.date)}</div>
+      <div>
+        <div class="news-text th">${escapeHtml(r.remark)}</div>
+        <div class="mt-8">${tag}</div>
+      </div>
+      <div class="news-meta">
+        <div class="price">฿${fmtNum(r.close)}</div>
+        <div class="chg ${r.change > 0 ? 'text-pos' : r.change < 0 ? 'text-neg' : 'muted'}">${r.change != null ? fmtPct(r.change) : '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.news-item').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.focusedDate = el.dataset.date;
+      focusDashOnDate(STATE.focusedDate);
+      renderDashNews(filterByRange(DATA, STATE.range));
+    });
+  });
+}
+
+function renderAswNews() {
+  const items = DATA.filter(r => r.remark && r.close != null);
+  $('aswCount').textContent = items.length + ' เหตุการณ์';
+
+  let sorted;
+  if (STATE.newsSort === 'newest') sorted = [...items].sort((a,b) => b.date.localeCompare(a.date));
+  else if (STATE.newsSort === 'oldest') sorted = [...items].sort((a,b) => a.date.localeCompare(b.date));
+  else sorted = [...items].sort((a,b) => Math.abs(b.change || 0) - Math.abs(a.change || 0));
+
+  const list = $('aswNewsList');
+  list.innerHTML = sorted.map(r => {
+    const c = classifyEvent(r.remark);
+    const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
+    return `<div class="news-item" data-date="${r.date}">
+      <div class="news-date th">${fmtThaiShort(r.date)}</div>
+      <div>
+        <div class="news-text th">${escapeHtml(r.remark)}</div>
+        <div class="mt-8">${tag}</div>
+      </div>
+      <div class="news-meta">
+        <div class="price">฿${fmtNum(r.close)}</div>
+        <div class="chg ${r.change > 0 ? 'text-pos' : r.change < 0 ? 'text-neg' : 'muted'}">${r.change != null ? fmtPct(r.change) : '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderProjectNews() {
+  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'project')
+    .sort((a,b) => b.date.localeCompare(a.date));
+  const list = $('projectNewsList');
+  if (!items.length) {
+    list.innerHTML = '<div class="muted th" style="font-size:11px;">ไม่พบเหตุการณ์โครงการ</div>';
+    return;
+  }
+  list.innerHTML = items.slice(0, 20).map(r => {
+    return `<div class="timeline-item">
+      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
+      <div class="timeline-text th">${escapeHtml(r.remark)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderRateTimeline() {
+  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'interest_rate')
+    .sort((a,b) => a.date.localeCompare(b.date));
+  const list = $('rateTimeline');
+  if (!items.length) {
+    list.innerHTML = '<div class="muted th">ไม่พบข้อมูลอัตราดอกเบี้ย</div>';
+    return;
+  }
+  list.innerHTML = items.map(r => `
+    <div class="timeline-item">
+      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
+      <div class="timeline-text th"><span class="tag interest_rate">ดอกเบี้ย</span> ${escapeHtml(r.remark)}</div>
+    </div>`).join('');
+}
+
+function renderPolTimeline() {
+  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'political')
+    .sort((a,b) => b.date.localeCompare(a.date));
+  const list = $('polTimeline');
+  if (!items.length) {
+    list.innerHTML = '<div class="muted th">ไม่พบเหตุการณ์การเมือง</div>';
+    return;
+  }
+  list.innerHTML = items.map(r => `
+    <div class="timeline-item">
+      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
+      <div class="timeline-text th"><span class="tag political">การเมือง</span> ${escapeHtml(r.remark)}</div>
+    </div>`).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[m]));
+}
+
+/* ============== Data Table (paginated, sortable) ============== */
+function renderDataTable() {
+  const filtered = filterByRange(DATA, STATE.range);
+  const sortKey = STATE.tableSort.key;
+  const dir = STATE.tableSort.dir === 'asc' ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+
+  const PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE));
+  if (STATE.tablePage >= totalPages) STATE.tablePage = totalPages - 1;
+  if (STATE.tablePage < 0) STATE.tablePage = 0;
+  const start = STATE.tablePage * PAGE;
+  const page = sorted.slice(start, start + PAGE);
+
+  $('tableSummary').textContent = `${sorted.length} วัน · หน้า ${STATE.tablePage + 1}/${totalPages}`;
+  $('tablePageInfo').textContent = `หน้า ${STATE.tablePage + 1} / ${totalPages}`;
+
+  const body = $('dataTableBody');
+  body.innerHTML = page.map(r => {
+    const chg = r.change;
+    const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
+    return `<tr class="${r.remark ? 'has-remark' : ''}">
+      <td class="th nowrap">${fmtThaiShort(r.date)}</td>
+      <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
+      <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
+      <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
+      <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
+      <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
+      <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
+      <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPriceTable() {
+  let filtered = DATA;
+  if (STATE.priceFilter) {
+    filtered = filterByDateRange(filtered, STATE.priceFilter.start, STATE.priceFilter.end);
+  } else {
+    filtered = filterByRange(filtered, STATE.priceRange);
+  }
+  const search = ($('priceTableSearch').value || '').toLowerCase().trim();
+  if (search) filtered = filtered.filter(r => r.remark && r.remark.toLowerCase().includes(search));
+
+  const sortKey = STATE.priceTableSort.key;
+  const dir = STATE.priceTableSort.dir === 'asc' ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+
+  const body = $('priceTableBody');
+  body.innerHTML = sorted.slice(0, 100).map(r => {
+    const chg = r.change;
+    const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
+    return `<tr class="${r.remark ? 'has-remark' : ''}">
+      <td class="th nowrap">${fmtThaiShort(r.date)}</td>
+      <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
+      <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
+      <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
+      <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
+      <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
+      <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
+      <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+    </tr>`;
+  }).join('');
+  if (!sorted.length) body.innerHTML = '<tr><td colspan="8" class="empty-state th">ไม่พบข้อมูล</td></tr>';
+}
+
+/* ============== Thai Real-Estate Peer Snapshot ============== */
+// Real peer prices come from /api/peers (populated by db.writePeers from the Yahoo fetcher).
+const THAI_RE_PEERS = [
+  { ticker: 'AP',    name: 'AP Thailand' },
+  { ticker: 'LH',    name: 'Land & Houses' },
+  { ticker: 'QH',    name: 'Quality Houses' },
+  { ticker: 'SIRI',  name: 'Siri Vanachroen' },
+  { ticker: 'SPALI', name: 'Supalai' },
+  { ticker: 'NOBLE', name: 'Noble Development' },
+  { ticker: 'ORI',   name: 'Origin Property' },
+  { ticker: 'ANAN',  name: 'Ananda Development' },
+  { ticker: 'LPN',   name: 'L.P.N. Development' },
+  { ticker: 'WHA',   name: 'WHA Corporation' },
+];
+
+// In-memory cache so we don't refetch every time the dashboard re-renders.
+let PEER_CACHE = null;
+async function buildPeerSnapshot() {
+  const body = $('peerTableBody');
+  const lastRow = DATA.filter(r => r.close != null).slice(-1)[0];
+  if (!lastRow) { body.innerHTML = '<tr><td colspan="4" class="empty-state th">ไม่พบข้อมูล</td></tr>'; return; }
+  const lastDate = lastRow.date;
+  $('peerSnapshotDate').textContent = 'ณ ' + new Date(lastDate + 'T00:00:00').toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'numeric' });
+
+  // Pull real prices from /api/peers (cached for the session).
+  if (!PEER_CACHE) {
+    try { PEER_CACHE = await window.ASW_API.peers(); }
+    catch (e) { PEER_CACHE = { date: null, rows: [] }; }
+  }
+  const peerByTicker = new Map();
+  for (const r of (PEER_CACHE.rows || [])) {
+    const t = (r.ticker || '').replace('.BK', '');
+    peerByTicker.set(t, r);
+  }
+
+  // Build rows: real prices if available, else fall back to THAI_RE_PEERS metadata
+  // with "—" placeholders for close/change (no fake-hash values).
+  const peerRows = THAI_RE_PEERS.map(p => {
+    const live = peerByTicker.get(p.ticker);
+    return {
+      ticker: p.ticker,
+      name: live?.name || p.name,
+      close: live?.close ?? null,
+      change: live?.change ?? null,
+    };
+  });
+
+  // Insert real ASW row at position 4 (mid-list, prominent without being on top)
+  const aswRow = { ticker: 'ASW', name: 'Asia Wealth Corporation', close: lastRow.close, change: lastRow.change, isASW: true };
+  peerRows.splice(4, 0, aswRow);
+
+  body.innerHTML = peerRows.map(r => {
+    const chg = r.change != null ? r.change : null;
+    const hasData = r.close != null && chg != null;
+    const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '▼ ' : '─ ';
+    const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">ASW</span>' : '';
+    const closeText = hasData ? `฿${r.close.toFixed(2)}` : '—';
+    const colorStyle = !hasData
+      ? 'color:var(--muted)'
+      : chg > 0.05 ? 'color:var(--positive)' : chg < -0.05 ? 'color:var(--negative)' : 'color:var(--muted)';
+    const chgText = !hasData ? '—' : `${arrow}${(chg >= 0 ? '+' : '')}${chg.toFixed(2)}%`;
+    return `<tr style="${r.isASW ? 'background:var(--sidebar-active); font-weight:600;' : ''}">
+      <td><strong>${r.ticker}</strong>${aswBadge}</td>
+      <td class="th muted">${r.name}</td>
+      <td class="num">${closeText}</td>
+      <td class="num" style="${colorStyle}; font-weight:500;">${chgText}</td>
+    </tr>`;
+  }).join('');
+}
+
+function pearson(a, b) {
+  const n = a.length;
+  if (n < 2) return null;
+  let sa = 0, sb = 0, ca = 0;
+  for (let i = 0; i < n; i++) {
+    if (a[i] == null || b[i] == null) return null;
+    sa += a[i]; sb += b[i];
+  }
+  sa /= n; sb /= n;
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) {
+    const x = a[i] - sa, y = b[i] - sb;
+    num += x * y; da += x * x; db += y * y;
+  }
+  const den = Math.sqrt(da * db);
+  return den === 0 ? null : num / den;
+}
+
+/* ============== Price History View ============== */
+function buildPriceChart() {
+  let filtered;
+  if (STATE.priceFilter) {
+    filtered = filterByDateRange(DATA, STATE.priceFilter.start, STATE.priceFilter.end);
+  } else {
+    filtered = filterByRange(DATA, STATE.priceRange);
+  }
+  const ctx = $('priceMainChart').getContext('2d');
+  const setData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.setIdx }));
+  const propData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
+  const priceData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
+
+  // Tighten price-axis range + x-axis to actual data range
+  const priceVals = priceData.map(p => p.y).filter(v => v != null);
+  const pMin = priceVals.length ? Math.min(...priceVals) : 0;
+  const pMax = priceVals.length ? Math.max(...priceVals) : 1;
+  const pad = (pMax - pMin) * 0.15 || 0.5;
+  const yMin = Math.max(0, pMin - pad);
+  const yMax = pMax + pad;
+
+  let xMinIso = null, xMaxIso = null;
+  const firstWithClose = priceData.find(p => p.y != null);
+  const lastWithClose = [...priceData].reverse().find(p => p.y != null);
+  if (firstWithClose && lastWithClose) {
+    const xMinDate = new Date(firstWithClose.x);
+    const xMaxDate = new Date(lastWithClose.x);
+    const xPadDays = 7;
+    xMinDate.setDate(xMinDate.getDate() - xPadDays);
+    xMaxDate.setDate(xMaxDate.getDate() + xPadDays);
+    xMinIso = xMinDate.toISOString();
+    xMaxIso = xMaxDate.toISOString();
+  }
+
+  const annotations = STATE.priceShowEvents ? buildPinAnnotations(filtered) : {};
+  const datasets = [];
+  if (STATE.priceChartMode === 'line') {
+    datasets.push({
+      label: 'ASW Close', data: priceData,
+      borderColor: getCSS('--primary'),
+      backgroundColor: 'rgba(59,139,212,0.06)',
+      borderWidth: 3, pointRadius: 0, pointHoverRadius: 4,
+      spanGaps: true, tension: 0.18, fill: true,
+      yAxisID: 'yPrice',
+    });
+  } else {
+    // Candlestick (synthetic OHLC from close — approximated using ±change%)
+    datasets.push({
+      label: 'ASW Candle', data: priceData,
+      borderColor: getCSS('--primary'),
+      borderWidth: 2, pointRadius: 0,
+      yAxisID: 'yPrice',
+    });
+  }
+  if (STATE.priceShowSet) datasets.push({
+    label: 'SET', data: setData,
+    borderColor: getCSS('--muted'), borderDash: [4, 4],
+    borderWidth: 1.5, pointRadius: 0, yAxisID: 'yIdx',
+  });
+  if (STATE.priceShowProp) datasets.push({
+    label: 'PROP', data: propData,
+    borderColor: getCSS('--teal'), borderDash: [3, 3],
+    borderWidth: 1.5, pointRadius: 0, yAxisID: 'yIdx',
+  });
+
+  if (PRICE_CHART) PRICE_CHART.destroy();
+  PRICE_CHART = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 200 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: getCSS('--border'), borderWidth: 1,
+          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              return new Date(items[0].parsed.x).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+            },
+            label: (item) => {
+              const v = item.parsed.y;
+              return item.dataset.label + ': ' + (v != null ? v.toFixed(2) : '—');
+            },
+            afterBody: (items) => {
+              if (!items.length) return '';
+              const dt = new Date(items[0].parsed.x);
+              const ymd = dt.toISOString().slice(0,10);
+              const row = DATA.find(r => r.date === ymd);
+              if (row && row.remark) {
+                const c = classifyEvent(row.remark);
+                return ['', (c ? '[' + c.label + '] ' : '') + row.remark];
+              }
+              return '';
+            }
+          }
+        },
+        annotation: { annotations },
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          min: xMinIso, max: xMaxIso,
+          grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 12 } } },
+        yPrice: { position: 'left', grid: { color: 'rgba(0,0,0,0.04)' },
+          min: yMin, max: yMax,
+          ticks: { color: getCSS('--primary'), font: { size: 12, weight: '500' },
+            callback: (v) => '฿' + v.toFixed(2) } },
+        yIdx: { position: 'right', grid: { display: false },
+          ticks: { color: getCSS('--muted'), font: { size: 11 } } },
+      }
+    }
+  });
+
+  // Update date inputs
+  if (!STATE.priceFilter && filtered.length) {
+    $('priceStart').value = filtered[0].date;
+    $('priceEnd').value = filtered[filtered.length - 1].date;
+  }
+
+  // Volume chart
+  buildVolumeChart(filtered);
+  // Stats
+  renderPriceStats(filtered);
+}
+
+function buildVolumeChart(filtered) {
+  const ctx = $('volumeChart').getContext('2d');
+  const data = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.volume }));
+  if (VOL_CHART) VOL_CHART.destroy();
+  VOL_CHART = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      datasets: [{
+        label: 'Volume', data,
+        backgroundColor: (ctx) => {
+          const i = ctx.dataIndex;
+          if (i === 0) return getCSS('--surface');
+          const prev = data[i-1].y;
+          const cur = data[i].y;
+          if (prev == null || cur == null) return getCSS('--surface');
+          return cur >= prev ? 'rgba(59,109,17,0.5)' : 'rgba(163,45,45,0.5)';
+        },
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          grid: { display: false }, ticks: { color: getCSS('--muted'), font: { size: 9 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--muted'), font: { size: 9 },
+            callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v } },
+      }
+    }
+  });
+}
+
+function renderPriceStats(filtered) {
+  const withPrice = filtered.filter(r => r.close != null);
+  if (!withPrice.length) {
+    $('priceStats').innerHTML = '<div class="muted th">ไม่มีข้อมูล</div>';
+    return;
+  }
+  const closes = withPrice.map(r => r.close);
+  const lo = Math.min(...closes);
+  const hi = Math.max(...closes);
+  const first = withPrice[0].close;
+  const last = withPrice[withPrice.length-1].close;
+  const ret = ((last - first) / first) * 100;
+  const vols = filtered.filter(r => r.volume != null).map(r => r.volume);
+  const avgVol = vols.length ? vols.reduce((a,b) => a+b, 0) / vols.length : 0;
+  const events = filtered.filter(r => r.remark).length;
+  $('priceStats').innerHTML = `
+    <div class="stat-row"><span class="label th">ผลตอบแทน (%)</span>
+      <span class="val ${ret > 0 ? 'text-pos' : ret < 0 ? 'text-neg' : ''}">${fmtPct(ret)}</span></div>
+    <div class="stat-row"><span class="label th">ราคาสูงสุด</span><span class="val">฿${fmtNum(hi)}</span></div>
+    <div class="stat-row"><span class="label th">ราคาต่ำสุด</span><span class="val">฿${fmtNum(lo)}</span></div>
+    <div class="stat-row"><span class="label th">ปริมาณเฉลี่ย</span><span class="val">${fmtBigNum(avgVol)} พันหุ้น</span></div>
+    <div class="stat-row"><span class="label th">จำนวน Events</span><span class="val">${events}</span></div>
+    <div class="stat-row"><span class="label th">วันที่</span><span class="val">${fmtThaiShort(filtered[0].date)} → ${fmtThaiShort(filtered[filtered.length-1].date)}</span></div>
+  `;
+}
+
+/* ============== News View Charts (PROP + Impact) ============== */
+function buildPropChart() {
+  const ctx = $('propChart').getContext('2d');
+  const filtered = filterByRange(DATA, STATE.range);
+  const data = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
+
+  if (PROP_CHART) PROP_CHART.destroy();
+  PROP_CHART = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{
+      label: 'PROP Index', data,
+      borderColor: getCSS('--teal'),
+      backgroundColor: 'rgba(29,158,117,0.08)',
+      borderWidth: 2, pointRadius: 0, tension: 0.18, fill: true,
+    }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: getCSS('--border'), borderWidth: 1,
+          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
+          callbacks: {
+            label: (item) => 'PROP: ' + (item.parsed.y != null ? item.parsed.y.toFixed(2) : '—'),
+          }
+        }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 10 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--teal'), font: { size: 10 } } },
+      }
+    }
+  });
+
+  const valid = filtered.filter(r => r.propIdx != null);
+  if (valid.length) {
+    const ch = pctChange(valid, 'propIdx');
+    const first = valid[0].propIdx, last = valid[valid.length-1].propIdx;
+    $('propStats').innerHTML = `
+      <div class="row-between"><span class="th muted">ช่วง:</span> <span>${fmtThaiShort(valid[0].date)} → ${fmtThaiShort(valid[valid.length-1].date)}</span></div>
+      <div class="row-between mt-8"><span class="th muted">เปลี่ยนแปลง:</span>
+        <span class="${ch > 0 ? 'text-pos' : ch < 0 ? 'text-neg' : 'muted'}">${fmtPct(ch)}</span></div>
+      <div class="row-between mt-8"><span class="th muted">ค่าสุดท้าย:</span> <strong>${fmtNum(last)}</strong></div>
+    `;
+  }
+}
+
+// --- Live news (NewsAPI.org) for the อสังหาฯ tab ---
+
+const TAG_LABELS = {
+  asw: 'ASW', ap: 'AP', lh: 'LH', qh: 'QH', siri: 'SIRI', spali: 'SPALI',
+  noble: 'NOBLE', ori: 'ORI', anan: 'ANAN', lpn: 'LPN', wha: 'WHA',
+  'prop-th': 'Thai RE', 'prop-bkk': 'Bangkok',
+};
+
+async function fetchNews({ from, tag, limit = 30 } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (tag)  params.set('tag',  tag);
+  if (limit) params.set('limit', String(limit));
+  const r = await fetch('/api/news?' + params.toString());
+  if (!r.ok) return { rows: [], error: 'fetch_failed' };
+  return r.json();
+}
+
+function fmtNewsDate(iso) {
+  if (!iso) return '';
+  // NewsAPI returns "2025-06-30T14:22:00Z" — render as local dd MMM HH:mm.
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function renderPropNews() {
+  const el = $('propNewsList');
+  if (!el) return;
+  el.innerHTML = '<div class="muted th" style="font-size:11px;">กำลังโหลด...</div>';
+
+  // 30-day window keeps the list snappy and matches the cron overlap.
+  const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const data = await fetchNews({ from, limit: 25 });
+
+  if (data.error) {
+    el.innerHTML = '<div class="empty-state th">โหลดข่าวไม่สำเร็จ</div>';
+    return;
+  }
+  if (!data.rows || !data.rows.length) {
+    el.innerHTML = '<div class="empty-state th">ยังไม่มีข่าว — กดปุ่มรีเฟรช หรือตั้งค่า NEWSAPI_KEY ที่เซิร์ฟเวอร์</div>';
+    return;
+  }
+
+  el.innerHTML = data.rows.map(a => {
+    const tagLabel = TAG_LABELS[a.query_tag] || a.query_tag || 'News';
+    const src = a.source_name ? `<span class="muted" style="font-size:10px;"> · ${escapeHtml(a.source_name)}</span>` : '';
+    return `<div class="news-item">
+      <div class="news-date th">${fmtNewsDate(a.published_at)}</div>
+      <div>
+        <a class="news-text th" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">${escapeHtml(a.title)}</a>
+        ${src}
+      </div>
+      <div class="news-meta"><span class="tag ${a.query_tag}">${escapeHtml(tagLabel)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshPropNews() {
+  const btn = $('propNewsRefresh');
+  if (btn) { btn.disabled = true; btn.textContent = 'กำลังรีเฟรช...'; }
+  try {
+    const r = await fetch('/api/news/refresh', { method: 'POST' });
+    const j = await r.json();
+    if (!j.ok) {
+      const el = $('propNewsList');
+      if (el) el.innerHTML = `<div class="empty-state th">รีเฟรชไม่สำเร็จ: ${escapeHtml(j.error || 'unknown')}</div>`;
+      return;
+    }
+    await renderPropNews();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ รีเฟรช'; }
+  }
+}
+
+function buildImpactChart() {
+  const ctx = $('impactChart').getContext('2d');
+  // For each event category, find events where close is available; compute avg %change on event day + 3 days after
+  const categories = ['interest_rate', 'corporate', 'political', 'project', 'macro', 'other'];
+  const labels = [];
+  const day0 = []; // event day
+  const day3 = []; // 3 days after
+  const colors = [];
+
+  categories.forEach(cat => {
+    const events = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === cat && r.close != null);
+    if (!events.length) return;
+    let sumDay0 = 0, sumDay3 = 0, n0 = 0, n3 = 0;
+    events.forEach(ev => {
+      // Day 0: %change on event day
+      if (typeof ev.change === 'number') { sumDay0 += ev.change; n0++; }
+      // Day 3: cumulative %change from event day to 3 trading days later
+      const idx = DATA.findIndex(r => r.date === ev.date);
+      if (idx >= 0) {
+        const future = DATA.slice(idx, idx + 4).filter(r => r.close != null);
+        if (future.length >= 2) {
+          const cum = ((future[future.length-1].close - future[0].close) / future[0].close) * 100;
+          sumDay3 += cum; n3++;
+        }
+      }
+    });
+    const c = classifyEvent(events[0].remark);
+    labels.push(c.label);
+    day0.push(n0 ? sumDay0 / n0 : 0);
+    day3.push(n3 ? sumDay3 / n3 : 0);
+    colors.push(c.color);
+  });
+
+  if (IMPACT_CHART) IMPACT_CHART.destroy();
+  IMPACT_CHART = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'วันเกิดเหตุการณ์', data: day0, backgroundColor: colors.map(c => c + 'AA') },
+        { label: 'สะสม 3 วัน', data: day3, backgroundColor: colors },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, color: getCSS('--text') } },
+        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: getCSS('--border'), borderWidth: 1,
+          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
+          callbacks: { label: (item) => item.dataset.label + ': ' + fmtPct(item.parsed.y) } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: getCSS('--text'), font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--muted'), font: { size: 10 },
+            callback: (v) => v + '%' } },
+      }
+    }
+  });
+}
+
+/* ============== Report Builder Wizard ============== */
+function initWizard() {
+  // Default dates: last 3 months
+  const withPrice = DATA.filter(r => r.close != null);
+  if (withPrice.length && !STATE.report.start) {
+    const last = withPrice[withPrice.length-1];
+    const startD = new Date(last.date + 'T00:00:00');
+    startD.setMonth(startD.getMonth() - 3);
+    STATE.report.start = startD.toISOString().slice(0,10);
+    STATE.report.end = last.date;
+    $('rptStart').value = STATE.report.start;
+    $('rptEnd').value = STATE.report.end;
+  }
+  STATE.report.title = $('rptTitle').value || ('ASW.BK รายงานราคาหุ้น ' + fmtThaiShort(STATE.report.start) + ' – ' + fmtThaiShort(STATE.report.end));
+}
+
+function gotoWizardStep(step) {
+  STATE.wizardStep = step;
+  document.querySelectorAll('.wizard-step').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.step) === step);
+  });
+  document.querySelectorAll('.wstep').forEach(el => el.style.display = 'none');
+  $('wstep-' + step).style.display = 'block';
+  $('wizardBack').style.display = step > 1 ? '' : 'none';
+  $('wizardNext').textContent = step < 4 ? 'ถัดไป ›' : 'เสร็จสิ้น';
+  if (step === 3) renderReportPreview();
+}
+
+function renderReportPreview() {
+  const data = filterByDateRange(DATA, STATE.report.start, STATE.report.end);
+  if (!data.length) {
+    $('reportPreview').innerHTML = '<div class="empty-state th">ไม่พบข้อมูลในช่วงที่เลือก</div>';
+    return;
+  }
+  const withPrice = data.filter(r => r.close != null);
+  const first = withPrice[0], last = withPrice[withPrice.length-1];
+  const ret = ((last.close - first.close) / first.close) * 100;
+  const events = data.filter(r => r.remark);
+  const lo = Math.min(...withPrice.map(r => r.close));
+  const hi = Math.max(...withPrice.map(r => r.close));
+  const t = STATE.report;
+  const lang = t.lang || 'th';
+  const isEn = lang === 'en';
+
+  // ---- Auto-generate exec summary bullets (deterministic rules) ----
+  // If the textarea is empty OR the language changed, regenerate.
+  // Otherwise honor the user's manual edits.
+  const ta = $('rptExecSummary');
+  const prevLang = ta?.dataset.lang;
+  const prevStart = ta?.dataset.rangeStart;
+  const prevEnd = ta?.dataset.rangeEnd;
+  const rangeChanged = prevStart !== t.start || prevEnd !== t.end;
+  const langChanged = prevLang !== lang;
+  const userEdited = ta?.dataset.userEdited === '1';
+  const bullets = window.ASW_EXEC ? window.ASW_EXEC.generate(withPrice, lang) : [];
+  const bulletsText = bullets.join('\n');
+  if (ta && (!userEdited || langChanged || rangeChanged)) {
+    ta.value = bulletsText;
+    ta.dataset.lang = lang;
+    ta.dataset.rangeStart = t.start;
+    ta.dataset.rangeEnd = t.end;
+    ta.dataset.userEdited = '0';
+  }
+
+  let sections = [];
+  if (t.template === 'summary') {
+    sections = ['cover', 'summary', 'price', 'events'];
+  } else if (t.template === 'full') {
+    sections = ['cover', 'summary', 'price', 'events', 'sector', 'appendix'];
+  } else {
+    sections = Object.keys(t.sections).filter(k => t.sections[k]);
+  }
+
+  // Bilingual section labels
+  const LBL = {
+    execSummary: isEn ? 'Executive Summary' : 'Executive Summary',
+    coverDefault: isEn ? 'ASW.BK Price Report' : 'ASW.BK รายงานราคาหุ้น',
+    coverBy: isEn ? 'Prepared by: ' : 'จัดทำโดย: ',
+    pricePerf: isEn ? 'Price Performance' : 'Price Performance',
+    firstPrice: isEn ? 'First price:' : 'ราคาแรก:',
+    lastPrice: isEn ? 'Last price:' : 'ราคาสุดท้าย:',
+    ret: isEn ? 'Return:' : 'ผลตอบแทน:',
+    keyEvents: isEn ? 'Key Events' : 'เหตุการณ์สำคัญ',
+    noEventsRange: isEn ? 'No events in range' : 'ไม่มีเหตุการณ์ในช่วงนี้',
+    sectorCtx: isEn ? 'Sector Context' : 'บริบทภาคอุตสาหกรรม',
+    propIdx: isEn ? 'PROP Index' : 'PROP Index',
+    setIdx: isEn ? 'SET Index' : 'SET Index',
+    aswPos: isEn ? 'ASW position vs Thai RE sector peers: see in-app snapshot table (top-10 peers, latest day)'
+              : 'ตำแหน่ง ASW เทียบกับกลุ่มอสังหาฯ ไทย: ดูตาราง snapshot ในแอป (10 peers ล่าสุด)',
+    appendix: isEn ? 'Appendix — Data Table (top 50)' : 'ภาคผนวก — ตารางข้อมูล (50 แถวล่าสุด)',
+  };
+
+  let html = '';
+  if (sections.includes('cover')) {
+    html += `
+      <div style="text-align:center; padding:20px; border-bottom:2px solid var(--primary); margin-bottom:20px;">
+        <div style="font-size:24px; font-weight:700; color:var(--primary);">${escapeHtml(t.title || LBL.coverDefault)}</div>
+        <div class="muted ${isEn ? '' : 'th'}" style="margin-top:8px;">${fmtThaiDate(first.date)} – ${fmtThaiDate(last.date)}</div>
+        <div class="muted ${isEn ? '' : 'th'}" style="margin-top:4px;">${LBL.coverBy}${escapeHtml(t.preparedBy || '—')}</div>
+      </div>`;
+  }
+
+  if (sections.includes('summary')) {
+    const bulletsHtml = bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('');
+    html += `
+      <h3 style="color:var(--primary); margin-top:16px;">${LBL.execSummary}</h3>
+      <ul class="${isEn ? '' : 'th'}" style="line-height:1.7;">
+        ${bulletsHtml}
+      </ul>`;
+  }
+
+  if (sections.includes('price')) {
+    html += `
+      <h3 style="color:var(--primary); margin-top:16px;">${LBL.pricePerf}</h3>
+      <div style="height:240px; margin:8px 0;"><canvas id="reportChart"></canvas></div>
+      <div class="grid-3 th" style="font-size:11px;">
+        <div><span class="muted">${LBL.firstPrice}</span> <strong>฿${fmtNum(first.close)}</strong></div>
+        <div><span class="muted">${LBL.lastPrice}</span> <strong>฿${fmtNum(last.close)}</strong></div>
+        <div><span class="muted">${LBL.ret}</span> <strong class="${ret > 0 ? 'text-pos' : 'text-neg'}">${fmtPct(ret)}</strong></div>
+      </div>`;
+  }
+
+  if (sections.includes('events')) {
+    html += `<h3 style="color:var(--primary); margin-top:16px;">${LBL.keyEvents} (${events.length})</h3>`;
+    if (!events.length) {
+      html += `<div class="muted ${isEn ? '' : 'th'}">${LBL.noEventsRange}</div>`;
+    } else {
+      html += '<div class="timeline">' + events.slice(0, 25).map(r => {
+        const c = classifyEvent(r.remark);
+        return `<div class="timeline-item">
+          <div class="timeline-date th">${fmtThaiShort(r.date)} · ฿${fmtNum(r.close)}</div>
+          <div class="timeline-text th">${c ? `<span class="tag ${c.type}">${c.label}</span> ` : ''}${escapeHtml(r.remark)}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+  }
+
+  if (sections.includes('sector')) {
+    const validProp = data.filter(r => r.propIdx != null);
+    const validSet = data.filter(r => r.setIdx != null);
+    html += `
+      <h3 style="color:var(--primary); margin-top:16px;">${LBL.sectorCtx}</h3>
+      <div class="${isEn ? '' : 'th'}" style="font-size:12px; line-height:1.7;">
+        ${LBL.propIdx}: ${fmtPct(pctChange(validProp, 'propIdx'))} (${validProp[0]?.propIdx} → ${validProp[validProp.length-1]?.propIdx})<br>
+        ${LBL.setIdx}: ${fmtPct(pctChange(validSet, 'setIdx'))} (${validSet[0]?.setIdx} → ${validSet[validSet.length-1]?.setIdx})<br>
+        ${LBL.aswPos}
+      </div>`;
+  }
+
+  if (sections.includes('appendix')) {
+    html += `<h3 style="color:var(--primary); margin-top:16px;">${LBL.appendix}</h3>`;
+    html += `<div style="max-height:300px; overflow-y:auto;"><table class="data-table">
+      <thead><tr><th class="th">วันที่</th><th class="num th">ราคา</th><th class="num th">%Chg</th><th class="num th">ปริมาณ</th><th class="th">Remark</th></tr></thead>
+      <tbody>`;
+    data.slice(-50).reverse().forEach(r => {
+      html += `<tr class="${r.remark ? 'has-remark' : ''}">
+        <td class="th">${fmtThaiShort(r.date)}</td>
+        <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
+        <td class="num ${r.change > 0 ? 'pos' : r.change < 0 ? 'neg' : ''}">${r.change != null ? fmtPct(r.change) : '—'}</td>
+        <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
+        <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  }
+
+  $('reportPreview').innerHTML = html;
+
+  // Render report chart if needed
+  if (sections.includes('price')) {
+    const ctx = $('reportChart').getContext('2d');
+    const pData = data.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
+    new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{
+        label: 'ASW', data: pData,
+        borderColor: getCSS('--primary'),
+        backgroundColor: 'rgba(59,139,212,0.08)',
+        borderWidth: 2, pointRadius: 0, tension: 0.18, fill: true,
+      }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+            grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 10 } } },
+          y: { grid: { color: 'rgba(0,0,0,0.04)' },
+            ticks: { color: getCSS('--muted'), font: { size: 10 } } }
+        }
+      }
+    });
+  }
+}
+
+/* ============== Exports (Excel, PDF, Copy) ============== */
+function buildReportData() {
+  const data = filterByDateRange(DATA, STATE.report.start, STATE.report.end);
+  const withPrice = data.filter(r => r.close != null);
+  const first = withPrice[0], last = withPrice[withPrice.length-1];
+  const ret = first && last ? ((last.close - first.close) / first.close) * 100 : 0;
+  const events = data.filter(r => r.remark);
+  const t = STATE.report;
+  return { data, withPrice, first, last, ret, events, title: t.title || 'ASW.BK รายงาน', preparedBy: t.preparedBy || '—', lang: t.lang };
+}
+
+function exportToExcel() {
+  const r = buildReportData();
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Cover
+  const cover = [
+    ['ASW.BK รายงานราคาหุ้น'],
+    ['ชื่อรายงาน', r.title],
+    ['ผู้จัดทำ', r.preparedBy],
+    ['วันที่สร้าง', fmtThaiDate(new Date().toISOString().slice(0,10))],
+    ['ช่วงข้อมูล', fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date)],
+    ['Template', STATE.report.template],
+    ['ภาษา', r.lang],
+    [],
+    ['สรุป'],
+    ['ราคาปิดวันสุดท้าย', r.last?.close ?? '—'],
+    ['ผลตอบแทน (%)', r.ret?.toFixed(2) ?? '—'],
+    ['จำนวนวัน', r.data.length],
+    ['จำนวน Events', r.events.length],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cover), 'Cover');
+
+  // Sheet 2: Data
+  const dataSheet = [['วันที่', 'ราคาปิด', '%เปลี่ยนแปลง', 'ปริมาณ (พันหุ้น)', 'มูลค่า (ลบ.)', 'SET Index', 'PROP Index', 'Remark', 'Category']];
+  r.data.forEach(d => {
+    dataSheet.push([
+      d.date, d.close, d.change, d.volume, d.value,
+      d.setIdx, d.propIdx, d.remark || '',
+      classifyEvent(d.remark)?.label || '',
+    ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dataSheet), 'Data');
+
+  // Sheet 3: Events only
+  if (r.events.length) {
+    const evSheet = [['วันที่', 'หมวด', 'ราคาปิด', '%เปลี่ยนแปลง', 'Remark']];
+    r.events.forEach(e => {
+      evSheet.push([e.date, classifyEvent(e.remark)?.label || '', e.close, e.change, e.remark]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evSheet), 'Events');
+  }
+
+  const fname = 'ASW_Report_' + (STATE.report.start || 'all') + '_' + (STATE.report.end || 'all') + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  STATE.exportLog.unshift({ type: 'excel', filename: fname, at: new Date().toLocaleString('th-TH') });
+  showToast('ส่งออก Excel สำเร็จ: ' + fname);
+}
+
+async function exportToPdf() {
+  const r = buildReportData();
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  let y = 20;
+
+  // Cover
+  pdf.setFontSize(20);
+  pdf.text(r.title, pageW / 2, y, { align: 'center' });
+  y += 10;
+  pdf.setFontSize(11);
+  pdf.text('Period: ' + fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date), pageW / 2, y, { align: 'center' });
+  y += 6;
+  pdf.text('Prepared by: ' + r.preparedBy, pageW / 2, y, { align: 'center' });
+  y += 6;
+  pdf.text('Generated: ' + new Date().toLocaleString('th-TH'), pageW / 2, y, { align: 'center' });
+  y += 14;
+
+  // Executive summary
+  pdf.setFontSize(14);
+  pdf.text('Executive Summary', 15, y); y += 8;
+  pdf.setFontSize(10);
+  const summaryLines = [
+    'Last close: ฿' + fmtNum(r.last?.close) + ' (' + fmtPct(r.ret) + ' from period start)',
+    '52W Range in period: ฿' + fmtNum(Math.min(...r.withPrice.map(x => x.close))) + ' – ฿' + fmtNum(Math.max(...r.withPrice.map(x => x.close))),
+    'Key events: ' + r.events.length,
+    'SET change: ' + fmtPct(pctChange(r.data.filter(x => x.setIdx != null), 'setIdx')),
+    'PROP change: ' + fmtPct(pctChange(r.data.filter(x => x.propIdx != null), 'propIdx')),
+  ];
+  summaryLines.forEach(line => { pdf.text('• ' + line, 15, y); y += 6; });
+  y += 4;
+
+  // Chart image (from preview)
+  try {
+    const preview = $('reportPreview');
+    if (preview) {
+      const canvas = await html2canvas(preview, { scale: 1.5, backgroundColor: '#FFFFFF' });
+      const img = canvas.toDataURL('image/png');
+      const imgW = pageW - 30;
+      const imgH = (canvas.height / canvas.width) * imgW;
+      if (y + imgH > pageH - 20) { pdf.addPage(); y = 20; }
+      pdf.addImage(img, 'PNG', 15, y, imgW, Math.min(imgH, pageH - y - 20));
+      y += Math.min(imgH, pageH - y - 20) + 10;
+    }
+  } catch (e) {
+    console.warn('Chart capture failed:', e);
+  }
+
+  // New page: events table
+  pdf.addPage(); y = 20;
+  pdf.setFontSize(14);
+  pdf.text('Key Events (' + r.events.length + ')', 15, y); y += 8;
+  pdf.setFontSize(9);
+  pdf.text('Date', 15, y); pdf.text('Cat', 40, y); pdf.text('Price', 60, y); pdf.text('%Chg', 80, y); pdf.text('Remark', 100, y); y += 5;
+  r.events.slice(0, 60).forEach(e => {
+    if (y > pageH - 20) { pdf.addPage(); y = 20; }
+    const c = classifyEvent(e.remark);
+    pdf.text(fmtThaiShort(e.date), 15, y);
+    pdf.text(c?.label || '', 40, y);
+    pdf.text('฿' + fmtNum(e.close), 60, y);
+    pdf.text(fmtPct(e.change), 80, y);
+    const txt = String(e.remark || '').slice(0, 60);
+    pdf.text(txt, 100, y);
+    y += 5;
+  });
+
+  const fname = 'ASW_Report_' + (STATE.report.start || 'all') + '_' + (STATE.report.end || 'all') + '.pdf';
+  pdf.save(fname);
+  STATE.exportLog.unshift({ type: 'pdf', filename: fname, at: new Date().toLocaleString('th-TH') });
+  showToast('ส่งออก PDF สำเร็จ: ' + fname);
+}
+
+async function copySummary() {
+  const r = buildReportData();
+  const lines = [
+    r.title,
+    fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date),
+    'จัดทำโดย: ' + r.preparedBy,
+    '',
+    'ราคาปิดวันสุดท้าย: ฿' + fmtNum(r.last?.close) + ' (' + fmtPct(r.ret) + ')',
+    'SET: ' + fmtPct(pctChange(r.data.filter(x => x.setIdx != null), 'setIdx')),
+    'PROP: ' + fmtPct(pctChange(r.data.filter(x => x.propIdx != null), 'propIdx')),
+    'Events: ' + r.events.length + ' รายการ',
+    '',
+    'Key Events:',
+  ];
+  r.events.slice(0, 10).forEach(e => {
+    lines.push('• ' + fmtThaiShort(e.date) + ' ฿' + fmtNum(e.close) + ' ' + (e.change > 0 ? '+' : '') + fmtPct(e.change) + ' — ' + e.remark);
+  });
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    STATE.exportLog.unshift({ type: 'copy', filename: '(clipboard)', at: new Date().toLocaleString('th-TH') });
+    showToast('คัดลอก Summary ลง Clipboard แล้ว');
+  } catch (e) {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('คัดลอก Summary ลง Clipboard แล้ว');
+  }
+}
+
+/* ============== Status Bar + History ============== */
+function updateStatusBar() {
+  $('sbFile').textContent = CURRENT_FILE_NAME;
+  if (DATA.length) {
+    $('sbRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
+    $('sbEvents').textContent = DATA.filter(r => r.remark).length;
+  }
+  const viewNames = { dashboard: 'Dashboard', price: 'ราคาย้อนหลัง', news: 'ข่าวและปัจจัย', report: 'สร้างรายงาน', history: 'ประวัติ', settings: 'ตั้งค่า' };
+  $('sbView').textContent = viewNames[STATE.view] || STATE.view;
+}
+
+function renderHistory() {
+  const list = $('historyList');
+  if (!STATE.exportLog.length) {
+    list.innerHTML = '<div class="empty-state th">ยังไม่มีรายการ — ลอง Export รายงานจากหน้า "สร้างรายงาน"</div>';
+    return;
+  }
+  list.innerHTML = '<table class="data-table"><thead><tr><th class="th">เวลา</th><th class="th">ประเภท</th><th class="th">ไฟล์</th></tr></thead><tbody>' +
+    STATE.exportLog.map(item =>
+      `<tr>
+        <td class="th">${item.at}</td>
+        <td><span class="tag ${item.type === 'excel' ? 'project' : item.type === 'pdf' ? 'corporate' : 'political'}">${item.type.toUpperCase()}</span></td>
+        <td class="th">${escapeHtml(item.filename)}</td>
+      </tr>`).join('') + '</tbody></table>';
+}
+
+/* ============== Settings file info ============== */
+function renderSettingsInfo() {
+  $('currentFileName').textContent = CURRENT_FILE_NAME;
+  if (DATA.length) {
+    $('currentFileRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
+    $('currentFileEvents').textContent = DATA.filter(r => r.remark).length + ' รายการ';
+  }
+  // Trigger async Data Health fetch
+  loadDataHealth();
+}
+
+/* ============== View routing ============== */
+function setView(view) {
+  STATE.view = view;
+  STATE.focusedDate = null;
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  $('view-' + view).classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+  STATE.priceFilter = null;
+  // Re-render the active view
+  if (view === 'dashboard') refreshDashboard();
+  else if (view === 'price') refreshPrice();
+  else if (view === 'news') refreshNews();
+  else if (view === 'report') { initWizard(); gotoWizardStep(STATE.wizardStep); }
+  else if (view === 'history') renderHistory();
+  else if (view === 'settings') renderSettingsInfo();
+  updateStatusBar();
+}
+
+/* ============== Refresh per view ============== */
+function refreshDashboard() {
+  const filtered = filterByRange(DATA, STATE.range);
+  renderKPIs(filtered);
+  buildDashChart(filtered);
+  renderDashNews(filtered);
+  renderDataTable();
+  buildPeerSnapshot();
+  // Update active pills
+  document.querySelectorAll('#rangePills .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === STATE.range);
+  });
+  document.querySelectorAll('#overlayPills .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.overlay === STATE.overlay);
+  });
+  // Update chart period label
+  if (filtered.length) {
+    const first = new Date(filtered[0].date + 'T00:00:00');
+    const last = new Date(filtered[filtered.length-1].date + 'T00:00:00');
+    $('chartPeriodLabel').textContent = thaiMonths[first.getMonth()] + ' ' + (first.getFullYear() + 543) +
+      ' – ' + thaiMonths[last.getMonth()] + ' ' + (last.getFullYear() + 543);
+  }
+}
+
+function refreshPrice() {
+  buildPriceChart();
+  renderPriceTable();
+  document.querySelectorAll('#priceRangePills .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.prange === STATE.priceRange);
+  });
+}
+
+function refreshNews() {
+  renderAswNews();
+  buildPropChart();
+  renderProjectNews();
+  renderRateTimeline();
+  renderPolTimeline();
+  buildImpactChart();
+}
+
+/* ============== File upload ============== */
+// (Removed — app uses bundled sample_data.js only; no upload needed for MVP demo.)
+
+/* ============== Event wiring ============== */
+document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar
+  document.querySelectorAll('.sidebar-item').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      const v = b.dataset.view;
+      if (v) setView(v);
+    });
+  });
+
+  // Range pills (dashboard)
+  document.querySelectorAll('#rangePills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.range = b.dataset.range;
+      STATE.focusedDate = null;
+      refreshDashboard();
+    });
+  });
+  // Overlay pills
+  document.querySelectorAll('#overlayPills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.overlay = b.dataset.overlay;
+      refreshDashboard();
+    });
+  });
+  // News search
+  $('dashNewsSearch').addEventListener('input', () => {
+    renderDashNews(filterByRange(DATA, STATE.range));
+  });
+  // Table pagination
+  $('tablePrev').addEventListener('click', () => { STATE.tablePage--; renderDataTable(); });
+  $('tableNext').addEventListener('click', () => { STATE.tablePage++; renderDataTable(); });
+  // Table sort
+  document.querySelectorAll('#dataTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (STATE.tableSort.key === k) STATE.tableSort.dir = STATE.tableSort.dir === 'asc' ? 'desc' : 'asc';
+      else STATE.tableSort = { key: k, dir: 'desc' };
+      renderDataTable();
+    });
+  });
+
+  // Price view
+  document.querySelectorAll('#priceRangePills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.priceRange = b.dataset.prange;
+      STATE.priceFilter = null;
+      refreshPrice();
+    });
+  });
+  document.querySelectorAll('[data-chartmode]').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.priceChartMode = b.dataset.chartmode;
+      document.querySelectorAll('[data-chartmode]').forEach(x => x.classList.toggle('active', x === b));
+      refreshPrice();
+    });
+  });
+  $('toggleEvents').addEventListener('change', (e) => { STATE.priceShowEvents = e.target.checked; refreshPrice(); });
+  $('toggleSet').addEventListener('change', (e) => { STATE.priceShowSet = e.target.checked; refreshPrice(); });
+  $('toggleProp').addEventListener('change', (e) => { STATE.priceShowProp = e.target.checked; refreshPrice(); });
+  $('priceStart').addEventListener('change', () => {
+    STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
+    refreshPrice();
+  });
+  $('priceEnd').addEventListener('change', () => {
+    STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
+    refreshPrice();
+  });
+  $('priceTableSearch').addEventListener('input', () => renderPriceTable());
+
+  // News tabs
+  document.querySelectorAll('.subtab').forEach(b => {
+    b.addEventListener('click', () => {
+      const t = b.dataset.ntab;
+      document.querySelectorAll('.subtab').forEach(x => x.classList.toggle('active', x === b));
+      document.querySelectorAll('.ntab').forEach(el => el.style.display = 'none');
+      $('ntab-' + t).style.display = 'block';
+      // Lazy-load live news the first time the user opens the อสังหาฯ tab.
+      if (t === 'prop' && !window.__propNewsLoaded) {
+        window.__propNewsLoaded = true;
+        renderPropNews();
+      }
+    });
+  });
+  // Live news refresh button (อสังหาฯ tab).
+  const propRefresh = $('propNewsRefresh');
+  if (propRefresh) propRefresh.addEventListener('click', refreshPropNews);
+  // News sort
+  document.querySelectorAll('#newsSort .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.newsSort = b.dataset.sort;
+      document.querySelectorAll('#newsSort .pill').forEach(x => x.classList.toggle('active', x === b));
+      renderAswNews();
+    });
+  });
+  // Report language toggle — re-render preview on change
+  const rptLang = $('rptLang');
+  if (rptLang) rptLang.addEventListener('change', () => {
+    STATE.report.lang = rptLang.value;
+    if (STATE.wizardStep === 3) renderReportPreview();
+  });
+  // Mark exec-summary textarea as user-edited when typed into
+  const rptExec = $('rptExecSummary');
+  if (rptExec) rptExec.addEventListener('input', () => {
+    rptExec.dataset.userEdited = '1';
+  });
+  // Click news → focus dashboard chart (switch view if needed)
+  document.body.addEventListener('click', (e) => {
+    const item = e.target.closest('.news-item');
+    if (item && item.dataset.date) {
+      STATE.focusedDate = item.dataset.date;
+      if (STATE.view !== 'dashboard') {
+        setView('dashboard');
+      }
+      focusDashOnDate(STATE.focusedDate);
+    }
+  });
+
+  // Wizard
+  document.querySelectorAll('.template-card').forEach(c => {
+    c.addEventListener('click', () => {
+      STATE.report.template = c.dataset.template;
+      document.querySelectorAll('.template-card').forEach(x => x.classList.toggle('selected', x === c));
+      $('customSections').style.display = c.dataset.template === 'custom' ? 'block' : 'none';
+    });
+  });
+  ['cover', 'summary', 'price', 'events', 'sector', 'appendix'].forEach(k => {
+    const el = $('sec-' + k);
+    if (el) el.addEventListener('change', () => { STATE.report.sections[k] = el.checked; });
+  });
+  $('wizardNext').addEventListener('click', () => {
+    if (STATE.wizardStep < 4) {
+      // Capture inputs on step 2
+      if (STATE.wizardStep === 2) {
+        STATE.report.title = $('rptTitle').value;
+        STATE.report.preparedBy = $('rptPreparedBy').value;
+        STATE.report.lang = $('rptLang').value;
+        STATE.report.start = $('rptStart').value;
+        STATE.report.end = $('rptEnd').value;
+      }
+      gotoWizardStep(STATE.wizardStep + 1);
+    } else {
+      setView('dashboard');
+    }
+  });
+  $('wizardBack').addEventListener('click', () => {
+    if (STATE.wizardStep > 1) gotoWizardStep(STATE.wizardStep - 1);
+  });
+  // Step click
+  document.querySelectorAll('.wizard-step').forEach(s => {
+    s.addEventListener('click', () => {
+      const step = parseInt(s.dataset.step);
+      if (step < STATE.wizardStep) gotoWizardStep(step);
+    });
+  });
+
+  // Export buttons
+  $('exportExcelBtn').addEventListener('click', exportToExcel);
+  $('exportPdfBtn').addEventListener('click', exportToPdf);
+  $('exportCopyBtn').addEventListener('click', copySummary);
+  $('exportLogBtn').addEventListener('click', () => {
+    if (STATE.exportLog.length) setView('history');
+    else showToast('ยังไม่มีรายการ — ลอง Export ก่อน');
+  });
+
+  // Top bar export menu
+  const exportMenu = $('exportMenu');
+  $('exportBtn').addEventListener('click', () => {
+    exportMenu.style.display = exportMenu.style.display === 'block' ? 'none' : 'block';
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#exportBtn') && !e.target.closest('#exportMenu')) {
+      exportMenu.style.display = 'none';
+    }
+  });
+  $('exportMenu').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-export]');
+    if (!t) return;
+    exportMenu.style.display = 'none';
+    const v = t.dataset.export;
+    if (v === 'excel') exportToExcel();
+    else if (v === 'pdf') exportToPdf();
+    else if (v === 'copy') copySummary();
+  });
+
+  // Note: File upload removed — app uses bundled sample_data.js only (demo data).
+
+  // Drag & drop is suppressed so drops don't navigate away from the page
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => e.preventDefault());
+
+  // Init active pill states
+  document.querySelectorAll('#rangePills .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.range === STATE.range);
+  });
+  document.querySelectorAll('#overlayPills .pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.overlay === STATE.overlay);
+  });
+
+  // Initial render — read ?view= from URL for deep linking / screenshots
+  const initialView = new URLSearchParams(location.search).get('view') || 'dashboard';
+  // Bootstrap: try to load data from backend; fall back to bundled SAMPLE_DATA.
+  (async () => {
+    try {
+      const [rows, meta] = await Promise.all([window.ASW_API.daily(), window.ASW_API.metadata()]);
+      if (rows && rows.length) {
+        DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+      }
+      if (meta && meta.lastFetchSource) {
+        CURRENT_FILE_NAME = meta.lastFetchSource === 'bundled' ? 'sample_data.js' : ('Live · ' + meta.lastFetchSource);
+      }
+      const lu = $('lastUpdated');
+      if (lu) {
+        lu.textContent = meta && meta.lastFetched
+          ? new Date(meta.lastFetched).toLocaleString('th-TH',
+              { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.'
+          : '—';
+      }
+      $('sbFile').textContent = CURRENT_FILE_NAME;
+    } catch (e) {
+      console.warn('bootstrap data load failed:', e);
+    }
+    initWizard();
+    setView(initialView);
+    updateStatusBar();
+    // Deep link helpers: ?wstep=N&wlang=th|en  (used by verification scripts)
+    const _qp = new URLSearchParams(location.search);
+    const _wstep = parseInt(_qp.get('wstep') || '0', 10);
+    const _wlang = _qp.get('wlang');
+    if (_wstep >= 1 && _wstep <= 4) {
+      gotoWizardStep(_wstep);
+    }
+    if (_wlang && (initialView === 'report' || _wstep >= 1)) {
+      const sel = $('rptLang');
+      if (sel) {
+        sel.value = _wlang;
+        STATE.report.lang = _wlang;
+        if (STATE.wizardStep === 3) renderReportPreview();
+      }
+    }
+    // Wire refresh + health controls
+    const rb = $('refreshBtn');
+    if (rb) rb.addEventListener('click', async () => {
+      const icon = $('refreshIcon');
+      if (icon) icon.classList.add('spin');
+      showToast('กำลังดึงข้อมูล...');
+      const r = await window.ASW_API.refresh();
+      if (!r || !r.ok) {
+        showToast('ดึงข้อมูลไม่สำเร็จ' + (r && r.error ? ': ' + r.error : ''));
+        if (icon) icon.classList.remove('spin');
+        return;
+      }
+      try {
+        const rows = await window.ASW_API.daily();
+        DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+        const meta2 = await window.ASW_API.metadata();
+        CURRENT_FILE_NAME = 'Live · ' + (meta2.lastFetchSource || 'yahoo');
+        $('sbFile').textContent = CURRENT_FILE_NAME;
+        const lu2 = $('lastUpdated');
+        if (lu2 && meta2.lastFetched) {
+          lu2.textContent = new Date(meta2.lastFetched).toLocaleString('th-TH',
+            { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
+        }
+        // Invalidate peer cache so buildPeerSnapshot re-pulls fresh prices.
+        if (typeof PEER_CACHE !== 'undefined') PEER_CACHE = null;
+        setView(STATE.view);
+        updateStatusBar();
+        showToast('อัปเดตข้อมูลแล้ว · ' + (r.added + r.updated) + ' แถว');
+      } catch (e) {
+        showToast('อัปเดตข้อมูลไม่สำเร็จ');
+      }
+      if (icon) icon.classList.remove('spin');
+    });
+    const hrb = $('healthRefillBtn');
+    if (hrb) hrb.addEventListener('click', async () => {
+      hrb.disabled = true;
+      showToast('กำลังเติมข้อมูลที่ขาด...');
+      const r = await window.ASW_API.healthRefresh();
+      hrb.disabled = false;
+      if (r && r.ok) {
+        showToast('เติมข้อมูลแล้ว · ' + (r.added + r.updated) + ' แถว');
+        await loadDataHealth();
+      } else {
+        showToast('เติมข้อมูลไม่สำเร็จ' + (r && r.error ? ': ' + r.error : ''));
+      }
+    });
+  })();
+});
+
+async function loadDataHealth() {
+  const h = await window.ASW_API.health();
+  if (!h) return;
+  const set = (id, t) => { const el = $(id); if (el) el.textContent = t; };
+  set('healthLastFetch', h.lastFetched ? new Date(h.lastFetched).toLocaleString('th-TH') + ' น.' : '—');
+  set('healthRows', h.stored + ' / ' + h.expected + ' วัน');
+  set('healthRange', (h.dateMin || '—') + ' → ' + (h.dateMax || '—'));
+  set('healthMissing', h.missingGaps === 0 ? 'ไม่มีข้อมูลขาด ✓' : (h.missingGaps + ' วัน'));
+  const list = $('healthMissingList');
+  if (list) {
+    const gaps = (h.missingDates || []).filter(d => d.reason === 'gap').slice(0, 50);
+    list.innerHTML = gaps.length
+      ? gaps.map(g => '<li>' + g.date + ' <span class="muted">(gap)</span></li>').join('')
+      : '<li class="muted">ครบถ้วน</li>';
+  }
+}
+
+</script>
+</body>
+</html>

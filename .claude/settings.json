@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR==508' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Read(//private/tmp/**)",
+      "Bash(npm install *)"
+    ]
+  }
+}

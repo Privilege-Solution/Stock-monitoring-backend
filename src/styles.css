@@ -1,0 +1,543 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply bg-surface text-text text-[15px] min-h-screen font-sans m-0;
+  }
+  h1, h2, h3, h4, h5 {
+    @apply font-semibold m-0;
+  }
+  button {
+    @apply cursor-pointer font-sans;
+  }
+  input, select, textarea {
+    @apply font-sans;
+  }
+  a {
+    @apply text-primary no-underline;
+  }
+  * {
+    @apply box-border;
+  }
+}
+
+@layer components {
+  /* === Layout shell === */
+  .app {
+    @apply grid min-h-screen;
+    grid-template-columns: 200px 1fr;
+    grid-template-rows: 48px 1fr 28px;
+    grid-template-areas:
+      "header header"
+      "sidebar main"
+      "status status";
+  }
+  .topbar {
+    @apply bg-card border-b border-border flex items-center justify-between px-4 z-10;
+    grid-area: header;
+  }
+  .topbar-brand {
+    @apply flex items-center gap-2.5;
+  }
+  .topbar-logo {
+    @apply w-7 h-7 bg-primary rounded-md flex items-center justify-center text-white font-bold text-[13px];
+  }
+  .topbar-title {
+    @apply text-[18px] font-bold text-text;
+  }
+  .topbar-sub {
+    @apply text-[13px] text-muted;
+  }
+  .topbar-actions {
+    @apply flex items-center gap-2.5;
+  }
+  .topbar-meta {
+    @apply text-[13px] text-muted flex items-center gap-1.5;
+  }
+
+  .sidebar {
+    @apply bg-sidebar-bg border-r border-border py-2 overflow-y-auto;
+    grid-area: sidebar;
+  }
+  .sidebar-group {
+    @apply py-2 pb-1;
+  }
+  .sidebar-group-title {
+    @apply text-[12px] font-bold uppercase tracking-wider text-sidebar-muted pt-1 px-3.5 pb-1.5;
+  }
+  .sidebar-item {
+    @apply flex items-center gap-2.5 py-2.5 px-3.5 my-px mx-2 rounded-md text-sidebar-text text-[15px] cursor-pointer transition-colors select-none;
+  }
+  .sidebar-item:hover {
+    @apply bg-surface;
+  }
+  .sidebar-item.active {
+    @apply bg-sidebar-active font-semibold;
+  }
+  .sidebar-item.active .sidebar-icon {
+    @apply text-primary;
+  }
+  .sidebar-icon {
+    @apply text-muted flex;
+  }
+  .sidebar-divider {
+    @apply border-0 border-t border-border mx-3.5 my-2;
+  }
+
+  .main {
+    @apply p-4 overflow-y-auto;
+    grid-area: main;
+  }
+  .statusbar {
+    @apply bg-card border-t border-border flex items-center justify-between px-4 text-[13px] text-muted;
+    grid-area: status;
+  }
+  .statusbar-left, .statusbar-right {
+    @apply flex items-center gap-3;
+  }
+
+  /* === Views === */
+  .view {
+    @apply hidden;
+  }
+  .view.active {
+    @apply block;
+  }
+  .view-title {
+    @apply text-[22px] font-bold mb-3 text-text;
+  }
+  .view-sub {
+    @apply text-[14px] text-muted mb-4;
+  }
+
+  /* === Cards === */
+  .card {
+    @apply bg-card border border-border rounded-lg py-3.5 px-4;
+  }
+  .card-title {
+    @apply text-[13px] font-medium text-muted mb-2;
+  }
+  .card-row {
+    @apply flex items-center gap-2;
+  }
+  .card-row + .card-row {
+    @apply mt-1.5;
+  }
+  .kpi-value {
+    @apply text-2xl font-semibold leading-tight;
+  }
+  .kpi-unit {
+    @apply text-[14px] text-muted ml-0.5;
+  }
+  .kpi-delta {
+    @apply text-[12px] font-medium;
+  }
+  .kpi-delta.pos {
+    @apply text-positive;
+  }
+  .kpi-delta.neg {
+    @apply text-negative;
+  }
+  .kpi-delta.mut {
+    @apply text-muted;
+  }
+
+  /* === Buttons === */
+  .btn {
+    @apply inline-flex items-center gap-1.5 border border-border bg-card text-text rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors;
+  }
+  .btn:hover {
+    @apply bg-surface;
+  }
+  .btn-primary {
+    @apply bg-primary text-white border-primary;
+  }
+  .btn-primary:hover {
+    @apply bg-[#347cbe];
+  }
+  .btn-ghost {
+    @apply bg-transparent border-transparent text-muted;
+  }
+  .btn-ghost:hover {
+    @apply bg-surface text-text;
+  }
+  .btn-icon {
+    @apply py-1.5 px-2;
+  }
+
+  /* === Pills / range buttons === */
+  .pill-row {
+    @apply inline-flex bg-surface border border-border rounded-md p-0.5 gap-px;
+  }
+  .pill {
+    @apply bg-transparent text-muted border-0 px-3 py-1.5 rounded text-[13px] font-medium transition-colors;
+  }
+  .pill:hover {
+    @apply text-text;
+  }
+  .pill.active {
+    @apply bg-card text-primary;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  /* === Tables === */
+  .data-table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .data-table th,
+  .data-table td {
+    @apply text-left py-2 px-2.5 border-b border-border;
+  }
+  .data-table th {
+    @apply text-muted font-semibold text-xs bg-surface sticky top-0 cursor-pointer select-none;
+  }
+  .data-table th:hover {
+    @apply text-text;
+  }
+  .data-table tr.has-remark {
+    @apply bg-[#FFFBEB];
+  }
+  .data-table tr.has-remark:hover {
+    @apply bg-[#FEF3C7];
+  }
+  .data-table tbody tr:hover {
+    @apply bg-surface;
+  }
+  .data-table .num {
+    @apply text-right tabular-nums;
+  }
+  .data-table .pos {
+    @apply text-positive;
+  }
+  .data-table .neg {
+    @apply text-negative;
+  }
+  .data-table-wrap {
+    @apply overflow-y-auto border border-border rounded-md;
+  }
+
+  /* === Tags / badges === */
+  .tag {
+    @apply inline-block py-0.5 px-2.5 rounded-full text-[11px] font-medium leading-[1.5] text-white;
+  }
+  .tag.interest_rate {
+    @apply bg-evt-rate;
+  }
+  .tag.corporate {
+    @apply bg-evt-corp;
+  }
+  .tag.political {
+    @apply bg-evt-pol text-text;
+  }
+  .tag.project {
+    @apply bg-evt-proj;
+  }
+  .tag.macro {
+    @apply bg-evt-macro;
+  }
+  .tag.other {
+    @apply bg-evt-other;
+  }
+  .tag.outline {
+    @apply bg-transparent border;
+    border-color: currentColor;
+  }
+
+  /* === News items === */
+  .news-item {
+    @apply grid items-start gap-3 p-2.5 border border-border rounded-md bg-card mb-2 cursor-pointer transition-colors;
+    grid-template-columns: 80px 1fr auto;
+  }
+  .news-item:hover {
+    @apply bg-surface;
+  }
+  .news-item.focused {
+    @apply border-primary;
+    background: rgba(59, 139, 212, 0.04);
+  }
+  .news-date {
+    @apply text-[12px] text-muted tabular-nums;
+  }
+  .news-text {
+    @apply text-[14px] leading-snug;
+  }
+  .news-meta {
+    @apply text-right text-[13px];
+  }
+  .news-meta .price {
+    @apply font-semibold;
+  }
+  .news-meta .chg {
+    @apply text-[11px];
+  }
+
+  /* === Sub-tabs === */
+  .subtabs {
+    @apply flex gap-0.5 border-b border-border mb-3;
+  }
+  .subtab {
+    @apply bg-transparent border-0 px-4 py-2.5 text-[14px] text-muted font-medium border-b-2 border-transparent -mb-px;
+  }
+  .subtab:hover {
+    @apply text-text;
+  }
+  .subtab.active {
+    @apply text-primary border-primary font-semibold;
+  }
+
+  /* === KPI grid + chart panels === */
+  .kpi-grid {
+    @apply grid gap-2.5 mb-3;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .chart-row {
+    @apply grid gap-3 mb-3;
+    grid-template-columns: 1fr 360px;
+  }
+  .bottom-row {
+    @apply grid gap-3 items-stretch;
+    grid-template-columns: 1.4fr 1fr;
+  }
+
+  /* === 52W range bar === */
+  .range-bar {
+    @apply relative h-2 bg-surface rounded-md mt-1.5;
+  }
+  .range-bar-fill {
+    @apply absolute h-full bg-primary rounded-md;
+  }
+  .range-bar-marker {
+    @apply absolute w-1 h-3.5 bg-text rounded-sm;
+    top: -3px;
+  }
+  .range-bar-labels {
+    @apply flex justify-between text-[11px] text-muted mt-1;
+  }
+
+  /* === Chart container === */
+  .chart-container {
+    @apply relative;
+    height: 360px;
+  }
+  .chart-container-tall {
+    @apply relative;
+    height: 440px;
+  }
+  .chart-toolbar {
+    @apply flex items-center justify-between mb-2 gap-2 flex-wrap;
+  }
+  .chart-legend {
+    @apply flex gap-3.5 flex-wrap text-[12px] text-muted mt-2;
+  }
+  .chart-legend-item {
+    @apply flex items-center gap-1.5;
+  }
+  .legend-swatch {
+    @apply inline-block w-[18px] h-1 rounded-sm;
+  }
+  .legend-pin {
+    @apply w-2.5 h-2.5 rounded-full;
+  }
+
+  /* === Wizard === */
+  .wizard-steps {
+    @apply flex gap-2 mb-4;
+  }
+  .wizard-step {
+    @apply flex-1 p-3 border border-border rounded-md bg-card text-muted text-[13px] font-medium;
+  }
+  .wizard-step.active {
+    @apply border-primary text-primary;
+    background: rgba(59, 139, 212, 0.04);
+  }
+  .wizard-step .num {
+    @apply inline-block w-[22px] h-[22px] rounded-full bg-border text-text text-center text-[12px] leading-[22px] mr-1.5;
+  }
+  .wizard-step.active .num {
+    @apply bg-primary text-white;
+  }
+  .template-grid {
+    @apply grid gap-3 mb-3;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .template-card {
+    @apply border-2 border-border rounded-lg p-4 bg-card cursor-pointer transition-colors;
+  }
+  .template-card:hover {
+    @apply border-primary;
+  }
+  .template-card.selected {
+    @apply border-primary;
+    background: rgba(59, 139, 212, 0.04);
+  }
+  .template-card h4 {
+    @apply text-[15px] mb-1.5 font-semibold;
+  }
+  .template-card p {
+    @apply text-[13px] text-muted;
+  }
+  .form-row {
+    @apply flex gap-3 mb-3 flex-wrap;
+  }
+  .form-field {
+    @apply flex flex-col gap-1 flex-1 min-w-[160px];
+  }
+  .form-field label {
+    @apply text-[12px] text-muted font-medium;
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    @apply border border-border rounded-md py-2 px-3 text-[14px] bg-card;
+  }
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    @apply border-primary;
+    outline: 2px solid rgba(59, 139, 212, 0.25);
+    outline-offset: 0;
+  }
+
+  /* === Toast === */
+  .toast {
+    @apply fixed left-1/2 bg-text text-white py-2.5 rounded-md text-[13px] z-[1000] opacity-0 pointer-events-none transition-opacity;
+    bottom: 50px;
+    padding-left: 18px;
+    padding-right: 18px;
+    transform: translateX(-50%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .toast.show {
+    @apply opacity-100;
+  }
+
+  /* === Misc === */
+  .grid-2 {
+    @apply grid gap-3;
+    grid-template-columns: 1fr 1fr;
+  }
+  .grid-3 {
+    @apply grid gap-3;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .mt-8  { @apply mt-2; }
+  .mt-12 { @apply mt-3; }
+  .mt-16 { @apply mt-4; }
+  .mb-8  { @apply mb-2; }
+  .mb-12 { @apply mb-3; }
+  .mb-16 { @apply mb-4; }
+  .row {
+    @apply flex items-center gap-2;
+  }
+  .row-between {
+    @apply flex items-center justify-between gap-2;
+  }
+  .scroll-y {
+    @apply overflow-y-auto;
+  }
+  .muted {
+    @apply text-muted;
+  }
+  .text-pos {
+    @apply text-positive;
+  }
+  .text-neg {
+    @apply text-negative;
+  }
+  .text-amber {
+    color: var(--amber);
+  }
+  .text-primary {
+    color: var(--primary);
+  }
+  .right {
+    @apply text-right;
+  }
+  .center {
+    @apply text-center;
+  }
+  .nowrap {
+    @apply whitespace-nowrap;
+  }
+  .empty-state {
+    @apply text-center py-[30px] px-4 text-muted text-[12px];
+  }
+
+  .timeline {
+    @apply relative pl-[18px];
+  }
+  .timeline::before {
+    content: '';
+    @apply absolute bg-border;
+    left: 5px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+  }
+  .timeline-item {
+    @apply relative mb-2.5 py-1;
+  }
+  .timeline-item::before {
+    content: '';
+    @apply absolute w-2 h-2 rounded-full bg-primary;
+    left: -16px;
+    top: 8px;
+  }
+  .timeline-date {
+    @apply text-[12px] text-muted;
+  }
+  .timeline-text {
+    @apply text-[14px];
+  }
+
+  /* Mini stat card */
+  .stat-list {
+    @apply flex flex-col gap-2.5;
+  }
+  .stat-row {
+    @apply flex justify-between text-[14px];
+  }
+  .stat-row .label {
+    @apply text-muted;
+  }
+  .stat-row .val {
+    @apply font-semibold;
+  }
+
+  /* Placeholder */
+  .placeholder {
+    @apply border border-dashed border-border rounded-md p-[18px] text-muted text-[14px] text-center;
+  }
+
+  /* Thai font shortcut (kept for backward-compat class hook) */
+  .th {
+    @apply font-thai;
+  }
+}
+
+/* === Breakpoints === */
+@layer components {
+  @media (max-width: 1400px) {
+    .kpi-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 1300px) {
+    .chart-row {
+      grid-template-columns: 1fr;
+    }
+    .bottom-row {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 1100px) {
+    .app {
+      grid-template-columns: 56px 1fr;
+    }
+    .sidebar .sidebar-label {
+      display: none;
+    }
+  }
+}

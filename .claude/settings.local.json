@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /tmp/asw_screenshot)",
+      "Bash(screencapture -x /tmp/asw_screenshot/light_mode.png)",
+      "Bash(open \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR==508 {start=1} NR>=508 && /^];$/ {print NR; exit}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR>=508 {if \\(match\\($0, /^[^;]*;/\\)\\) {print NR; exit}}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR==508 {print length\\($0\\), \"chars on line 508\"}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR==508 {n=split\\($0, a, \",\"\\); print n, \"fields\"}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR>=509 {if \\(match\\($0, /^[a-zA-Z]/\\)\\) {print NR\": \"substr\\($0, 1, 100\\); exit}}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(awk 'NR>=512 && NR<=1115 {print NR\": \"substr\\($0, 1, 200\\)}' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} bytes=%{size_download}\\\\n\" \"http://localhost:8765/index.html\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} bytes=%{size_download}\\\\n\" \"http://localhost:8765/dist/styles.css\")",
+      "Bash(node -e \"try { require\\('node:sqlite'\\); console.log\\('node:sqlite OK'\\); } catch\\(e\\) { console.log\\('node:sqlite missing:', e.code\\); }\")",
+      "Bash(curl -sS -m 5 http://localhost:3000/api/metadata)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('type:', d.get\\('type'\\), 'main:', d.get\\('main'\\), 'exports:', json.dumps\\(d.get\\('exports'\\)\\)[:200]\\)\")",
+      "Bash(node server.js)",
+      "Bash(curl -sS -m 5 'http://localhost:3000/api/daily')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('count:', d.get\\('count'\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -sS -m 5 http://localhost:3000/api/health)",
+      "Bash(python3 -c ' *)",
+      "Bash(pkill -f \"node server.js\")",
+      "Bash(awk '/^document\\\\.addEventListener..DOMContentLoaded/,/^}\\\\\\);/' \"/Users/minjai/Desktop/asset wise intern/wealth/asw-monitor/index.html\")",
+      "Bash(pkill -f \"node server.js\" 2>/dev/null; sleep 1; npm start > /tmp/asw-server.log 2>&1 & *)",
+      "Bash(curl -sS localhost:3000/api/metadata)",
+      "Bash(curl -sS localhost:3000/api/health)",
+      "Bash(python3 -c \"import json,sys; h=json.load\\(sys.stdin\\); print\\('expected=%d stored=%d gaps=%d missingDates=%d' % \\(h['expected'], h['stored'], h['missingGaps'], len\\(h['missingDates']\\)\\)\\)\")",
+      "Bash(ls -la /tmp/asw-chrome 2>/dev/null; which chromium 2>/dev/null; ls \"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" 2>/dev/null && echo \"chrome present\")",
+      "Read(//Applications/Google Chrome.app/Contents/MacOS/**)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
+    ]
+  }
+}

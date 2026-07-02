@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ASW Monitor · Yahoo Finance Edition — ASW.BK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  /* ============================================================
+   * ASW Monitor — Yahoo Finance Edition
+   * Single-file frontend. Same look as asw-monitor/index.html,
+   * but reads every OHLCV row from Yahoo Finance's public chart
+   * JSON API directly from the browser. No Node/Python/Postgres.
+   *
+   * USAGE: open this file in a browser, or serve over any static
+   * host (`python3 -m http.server`, etc.). The optional "Use CORS
+   * proxy" toggle in the top bar routes requests through
+   * https://corsproxy.io if your network/region blocks Yahoo's
+   * direct CORS response.
+   * ============================================================ */
+
+  :root {
+    --primary:  #3B8BD4;
+    --positive: #3B6D11;
+    --negative: #A32D2D;
+    --amber:    #EF9F27;
+    --teal:     #1D9E75;
+    --surface:  #F4F3EF;
+    --card:     #FFFFFF;
+    --border:   #D3D1C7;
+    --text:     #1A1A18;
+    --muted:    #888780;
+    --sidebar-bg:      #FFFFFF;
+    --sidebar-text:    #1A1A18;
+    --sidebar-muted:   #888780;
+    --sidebar-active:  #F4F3EF;
+    --sidebar-border:  #D3D1C7;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--surface);
+    color: var(--text);
+    font: 15px/1.5 'Inter', 'Sarabun', -apple-system, system-ui, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+  }
+  h1, h2, h3, h4, h5 { margin: 0; font-weight: 600; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+  a { color: var(--primary); text-decoration: none; }
+
+  .th { font-family: 'Sarabun', 'Inter', sans-serif; }
+
+  /* === Layout shell === */
+  .app {
+    display: grid;
+    min-height: 100vh;
+    grid-template-columns: 200px 1fr;
+    grid-template-rows: 48px 1fr 28px;
+    grid-template-areas:
+      "header header"
+      "sidebar main"
+      "status status";
+  }
+  .topbar {
+    grid-area: header;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 10;
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .topbar-logo {
+    width: 28px; height: 28px;
+    background: var(--primary);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; color: var(--text); }
+  .topbar-sub   { font-size: 13px; color: var(--muted); }
+  .topbar-actions {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .topbar-meta {
+    font-size: 13px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .sidebar {
+    grid-area: sidebar;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    padding: 8px 0;
+    overflow-y: auto;
+  }
+  .sidebar-group { padding: 8px 0 4px; }
+  .sidebar-group-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--sidebar-muted);
+    padding: 4px 14px 6px;
+  }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    margin: 1px 8px;
+    border-radius: 6px;
+    color: var(--sidebar-text);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background .15s;
+    user-select: none;
+  }
+  .sidebar-item:hover { background: var(--surface); }
+  .sidebar-item.active { background: var(--sidebar-active); font-weight: 600; }
+  .sidebar-item.active .sidebar-icon { color: var(--primary); }
+  .sidebar-icon { color: var(--muted); display: flex; }
+  .sidebar-divider {
+    border: 0; border-top: 1px solid var(--border);
+    margin: 8px 14px;
+  }
+
+  .main {
+    grid-area: main;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .statusbar {
+    grid-area: status;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    font-size: 13px; color: var(--muted);
+  }
+  .statusbar-left, .statusbar-right { display: flex; align-items: center; gap: 12px; }
+
+  /* === Views === */
+  .view { display: none; }
+  .view.active { display: block; }
+  .view-title { font-size: 22px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+  .view-sub   { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+
+  /* === Cards === */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 8px; }
+  .card-row { display: flex; align-items: center; gap: 8px; }
+  .kpi-value { font-size: 22px; font-weight: 600; line-height: 1.2; }
+  .kpi-unit  { font-size: 14px; color: var(--muted); margin-left: 2px; }
+  .kpi-delta { font-size: 12px; font-weight: 500; }
+  .kpi-delta.pos { color: var(--positive); }
+  .kpi-delta.neg { color: var(--negative); }
+  .kpi-delta.mut { color: var(--muted); }
+
+  /* === Buttons === */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px; font-weight: 500;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: var(--surface); }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .btn-primary:hover { background: #347cbe; }
+  .btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--muted);
+  }
+  .btn-ghost:hover { background: var(--surface); color: var(--text); }
+
+  /* === Pills / range buttons === */
+  .pill-row {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 1px;
+  }
+  .pill {
+    background: transparent;
+    color: var(--muted);
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px; font-weight: 500;
+    transition: background .15s, color .15s;
+  }
+  .pill:hover { color: var(--text); }
+  .pill.active {
+    background: var(--card);
+    color: var(--primary);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  /* === Tag (data-source badge) === */
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: #fff;
+    background: var(--primary);
+  }
+  .tag.outline { background: transparent; border: 1px solid currentColor; }
+
+  /* === Tables === */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .data-table th, .data-table td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table th {
+    color: var(--muted); font-weight: 600; font-size: 12px;
+    background: var(--surface);
+    position: sticky; top: 0;
+    cursor: pointer; user-select: none;
+  }
+  .data-table th:hover { color: var(--text); }
+  .data-table tbody tr:hover { background: var(--surface); }
+  .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .data-table .pos { color: var(--positive); }
+  .data-table .neg { color: var(--negative); }
+  .data-table-wrap {
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  /* === KPI grid + chart panels === */
+  .kpi-grid {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .chart-row {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 12px;
+    grid-template-columns: 1fr 360px;
+  }
+  .bottom-row {
+    display: grid;
+    gap: 12px;
+    align-items: stretch;
+    grid-template-columns: 1.4fr 1fr;
+  }
+
+  /* === 52W range bar === */
+  .range-bar {
+    position: relative;
+    height: 8px;
+    background: var(--surface);
+    border-radius: 6px;
+    margin-top: 6px;
+  }
+  .range-bar-fill {
+    position: absolute; height: 100%;
+    background: var(--primary);
+    border-radius: 6px;
+  }
+  .range-bar-marker {
+    position: absolute;
+    width: 4px; height: 14px;
+    background: var(--text);
+    border-radius: 2px;
+    top: -3px;
+  }
+  .range-bar-labels {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* === Chart container === */
+  .chart-container {
+    position: relative;
+    height: 360px;
+  }
+  .chart-container-tall {
+    position: relative;
+    height: 440px;
+  }
+  .chart-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    font-size: 12px; color: var(--muted);
+    margin-top: 8px;
+  }
+  .chart-legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-swatch {
+    display: inline-block;
+    width: 18px; height: 4px;
+    border-radius: 2px;
+  }
+  .legend-pin {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  /* === Toast === */
+  .toast {
+    position: fixed;
+    left: 50%; bottom: 50px;
+    background: var(--text);
+    color: #fff;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+    transform: translateX(-50%);
+  }
+  .toast.show { opacity: 1; }
+
+  /* === Misc === */
+  .grid-2 { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  .mt-8  { margin-top: 8px; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+  .mb-8  { margin-bottom: 8px; }
+  .mb-12 { margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .muted { color: var(--muted); }
+  .text-pos { color: var(--positive); }
+  .text-neg { color: var(--negative); }
+  .nowrap { white-space: nowrap; }
+  .empty-state {
+    text-align: center;
+    padding: 30px 16px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .data-source-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+    user-select: none;
+  }
+  .data-source-toggle input { margin: 0; }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* === Breakpoints === */
+  @media (max-width: 1400px) {
+    .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 1300px) {
+    .chart-row { grid-template-columns: 1fr; }
+    .bottom-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: 56px 1fr; }
+    .sidebar .sidebar-group-title { display: none; }
+    .sidebar .sidebar-label { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">A</div>
+      <div>
+        <div class="topbar-title">ASW Monitor · YF Edition</div>
+        <div class="topbar-sub th">อ่านข้อมูล ASW.BK จาก Yahoo Finance ตรง ไม่ต้องมี backend</div>
+      </div>
+      <span class="tag" style="background:var(--primary); margin-left:6px;">ASW.BK</span>
+      <span class="tag" style="background:var(--teal); margin-left:6px;">Yahoo Finance</span>
+    </div>
+    <div class="topbar-actions">
+      <label class="data-source-toggle" title="ส่ง request ผ่าน corsproxy.io (ใช้เมื่อเบราว์เซอร์บล็อก Yahoo CORS)">
+        <input type="checkbox" id="useProxy" />
+        <span class="th">ใช้ CORS proxy</span>
+      </label>
+      <div class="topbar-meta th">
+        <span>อัปเดตล่าสุด:</span>
+        <span id="lastUpdated" style="color:var(--text); font-weight:500;">—</span>
+      </div>
+      <button id="refreshBtn" class="btn btn-ghost" title="ดึงข้อมูลล่าสุด">
+        <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        <span class="th">รีเฟรช</span>
+      </button>
+      <button id="exportBtn" class="btn btn-primary">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-3-3v6m-7 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="th">ส่งออก Excel</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Sidebar (dashboard-only edition; the other views from the parent
+       project are intentionally omitted — this is the YF-only build) -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title th">Yahoo Finance Edition</div>
+      <div class="sidebar-item active" data-view="dashboard">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <span class="sidebar-label th">Dashboard</span>
+      </div>
+      <div class="sidebar-item" data-view="about">
+        <div class="sidebar-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        </div>
+        <span class="sidebar-label th">เกี่ยวกับ</span>
+      </div>
+    </div>
+    <hr class="sidebar-divider" />
+    <div class="sidebar-group">
+      <div class="sidebar-group-title th">Symbols</div>
+      <div style="padding: 6px 14px; font-size: 12px; color: var(--muted); line-height: 1.7;">
+        <div>ASW · <strong>ASW.BK</strong></div>
+        <div>SET · <strong>^SET.BK</strong></div>
+        <div>PROP · <strong>basket (10 tickers)</strong></div>
+        <div class="mt-8">
+          AP, LH, QH, SIRI, SPALI,<br>
+          NOBLE, ORI, ANAN, LPN, WHA
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- ====================== Dashboard View ====================== -->
+    <section class="view active" id="view-dashboard">
+
+      <!-- KPI cards -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="card">
+          <div class="card-title th">ราคาปิดล่าสุด</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiPrice">—</div>
+            <div class="kpi-unit">฿</div>
+          </div>
+          <div class="kpi-delta" id="kpiPriceCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title th">ปริมาณซื้อขาย vs 30d avg</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiVolume">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiVolumeCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">SET Index</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiSet">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiSetCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title">PROP Index</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpiProp">—</div>
+          </div>
+          <div class="kpi-delta" id="kpiPropCh">—</div>
+        </div>
+        <div class="card">
+          <div class="card-title th">52W Range</div>
+          <div class="card-row">
+            <div class="kpi-value" id="kpi52Price">—</div>
+            <div class="kpi-unit">฿</div>
+          </div>
+          <div class="range-bar" id="rangeBar">
+            <div class="range-bar-fill"></div>
+            <div class="range-bar-marker"></div>
+          </div>
+          <div class="range-bar-labels">
+            <span id="rangeLow">—</span>
+            <span id="rangeHigh">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main chart + side panel -->
+      <div class="chart-row">
+        <div class="card">
+          <div class="chart-toolbar">
+            <div class="row">
+              <h3 class="th" style="font-size:13px;">กราฟราคา · Yahoo Finance</h3>
+              <span class="muted th" id="chartPeriodLabel" style="font-size:11px;">—</span>
+            </div>
+            <div class="row" style="gap:6px;">
+              <div class="pill-row" id="overlayPills">
+                <button class="pill active" data-overlay="price">Price</button>
+                <button class="pill" data-overlay="set">+ SET</button>
+                <button class="pill" data-overlay="prop">+ PROP</button>
+                <button class="pill" data-overlay="all">All</button>
+              </div>
+              <div class="pill-row" id="rangePills">
+                <button class="pill" data-range="1M">1M</button>
+                <button class="pill" data-range="3M">3M</button>
+                <button class="pill active" data-range="6M">6M</button>
+                <button class="pill" data-range="1Y">1Y</button>
+                <button class="pill" data-range="2Y">2Y</button>
+                <button class="pill" data-range="5Y">5Y</button>
+              </div>
+            </div>
+          </div>
+          <div class="chart-container-tall">
+            <canvas id="dashChart"></canvas>
+          </div>
+          <div class="chart-legend">
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--primary)"></span> ASW Close</div>
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--muted); border-top:1px dashed var(--muted)"></span> SET Index</div>
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--teal); border-top:1px dashed var(--teal)"></span> PROP (peer basket)</div>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column;">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">สถานะข้อมูล</h3>
+          </div>
+          <div id="infoPanel" class="muted" style="font-size:12px; line-height:1.7;">
+            <div>แหล่งข้อมูล: <span id="infoSource">Yahoo Finance</span></div>
+            <div>จำนวน tickers ที่โหลด: <span id="infoCount">—</span></div>
+            <div>ช่วงวันที่: <span id="infoRange">—</span></div>
+            <div class="mt-8">
+              <span class="tag outline" style="color:var(--primary)">SET</span> ดึงจาก <code>^SET.BK</code>
+            </div>
+            <div class="mt-8">
+              <span class="tag outline" style="color:var(--teal)">PROP</span> คำนวณจาก 10 peer tickers (เท่ากัน)
+            </div>
+            <div class="mt-12" style="font-size:11px;">
+              หาก Yahoo ตอบ CORS error ให้ติ๊ก "ใช้ CORS proxy"
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: data table + peer table -->
+      <div class="bottom-row">
+        <div class="card" style="display:flex; flex-direction:column;">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">ตารางข้อมูลรายวัน</h3>
+            <span class="muted th" id="tableSummary" style="font-size:11px;">—</span>
+          </div>
+          <div class="data-table-wrap" style="flex:1; min-height:0; max-height:380px;">
+            <table class="data-table" id="dataTable">
+              <thead>
+                <tr>
+                  <th data-sort="date" class="th">วันที่</th>
+                  <th data-sort="close" class="num th">ราคาปิด</th>
+                  <th data-sort="change" class="num th">%เปลี่ยนแปลง</th>
+                  <th data-sort="volume" class="num th">ปริมาณ (พันหุ้น)</th>
+                  <th data-sort="value" class="num th">มูลค่า (ลบ.)</th>
+                  <th data-sort="setIdx" class="num">SET</th>
+                  <th data-sort="propIdx" class="num">PROP</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div class="row-between mt-8">
+            <button class="btn btn-ghost" id="tablePrev">‹ ก่อนหน้า</button>
+            <span class="muted th" id="tablePageInfo" style="font-size:11px;">หน้า —</span>
+            <button class="btn btn-ghost" id="tableNext">ถัดไป ›</button>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column;">
+          <div class="row-between mb-8">
+            <h3 class="th" style="font-size:13px;">หุ้นอสังหาฯ ไทย — วันล่าสุด</h3>
+            <span class="muted th" id="peerSnapshotDate" style="font-size:11px;">—</span>
+          </div>
+          <div class="muted th mb-8" style="font-size:11px;">เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์</div>
+          <table class="data-table" id="peerTable">
+            <thead>
+              <tr>
+                <th class="th">Ticker</th>
+                <th class="th">บริษัท</th>
+                <th class="num th">ราคาปิด</th>
+                <th class="num th">%เปลี่ยนแปลง</th>
+              </tr>
+            </thead>
+            <tbody id="peerTableBody"></tbody>
+          </table>
+          <div class="muted th mt-8" style="font-size:10px;">* ข้อมูลจาก Yahoo Finance · อัปเดตทุกครั้งที่กดรีเฟรช</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================== About View ====================== -->
+    <section class="view" id="view-about">
+      <h2 class="view-title th">เกี่ยวกับ — ASW Monitor · YF Edition</h2>
+      <div class="view-sub th">Single-file frontend. ไม่มี Node, Python, Postgres, Express — แค่เปิด HTML ในเบราว์เซอร์</div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="th mb-12" style="font-size:13px;">Data Pipeline</h3>
+          <pre style="font-size:12px; line-height:1.7; background:var(--surface); padding:12px; border-radius:6px; overflow-x:auto;">
+ASW.BK  ──┐
+^SET.BK ──┤
+peers[10]─┤
+          ├─► Yahoo Finance
+          │   /v8/finance/chart/{symbol}
+          │   ─────────────────────► JSON
+          ▼
+   joinByDate()
+   computePropBasket()    (สร้าง PROP index เอง)
+   computeChange()        (% day-to-day)
+   computeValue()         (close × volume ÷ 1e6)
+          │
+          ▼
+   UI state (DATA, KPIs, chart, table)
+          </pre>
+        </div>
+        <div class="card">
+          <h3 class="th mb-12" style="font-size:13px;">CORS / แหล่งข้อมูล</h3>
+          <div class="muted th" style="font-size:12px; line-height:1.7;">
+            <p>Yahoo Finance อนุญาต CORS สำหรับ <code>/v8/finance/chart/</code> endpoint ในหลายเบราว์เซอร์/region. ถ้าโหลดไม่สำเร็จ ให้ติ๊ก "ใช้ CORS proxy" ในแถบบน — request จะถูกส่งผ่าน <code>corsproxy.io</code> แทน</p>
+            <p class="mt-12">เครื่องหมาย <code>YF</code> ในสถานะข้อมูล หมายถึงใช้ Yahoo Finance โดยตรง · <code>PROXY</code> หมายถึงผ่าน proxy</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-16">
+        <h3 class="th mb-8" style="font-size:13px;">สิ่งที่ต่างจาก asw-monitor/index.html</h3>
+        <ul class="th" style="font-size:12px; line-height:1.7; padding-left:18px;">
+          <li>ไม่มี <code>server.js</code>, <code>db.js</code>, Supabase, Postgres</li>
+          <li>ไม่มี News API / Tavily remarks (Yahoo ไม่มี Thai news feed) — แสดง "ไม่มีข้อมูลข่าว"</li>
+          <li>ไม่มี Wizard / Report Builder / History / Settings — เหลือแค่ Dashboard</li>
+          <li>PROP Index คำนวณเองจาก equal-weighted peer basket เหมือน <code>lib/prop-basket.js</code></li>
+          <li>SET Index อ่านจาก <code>^SET.BK</code> ถ้ามี มิเช่นนั้นข้ามไป</li>
+          <li>Volume ใน Yahoo คือจำนวนหุ้น ไม่ใช่พันหุ้น — แสดงผลในหน่วยพันหุ้นเพื่อให้ตรงกับ template เดิม</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Status bar -->
+  <footer class="statusbar">
+    <div class="statusbar-left">
+      <span class="th">แหล่ง:</span>
+      <span id="sbSource" style="color:var(--text);">Yahoo Finance</span>
+      <span>·</span>
+      <span class="th">ช่วง:</span>
+      <span id="sbRange" style="color:var(--text);">—</span>
+      <span>·</span>
+      <span class="th">Tickers:</span>
+      <span id="sbCount" style="color:var(--text);">—</span>
+    </div>
+    <div class="statusbar-right">
+      <span class="th">ASW.BK</span>
+      <span>·</span>
+      <span id="sbView" style="color:var(--text);">Dashboard</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ====================================================================
+ * ASW Monitor — Yahoo Finance Edition
+ * Frontend-only build. Reads OHLCV data straight from Yahoo's public
+ * `/v8/finance/chart/` JSON endpoint (the same data source the
+ * `yfinance` Python package uses under the hood), so no Node/Python
+ * backend is required.
+ *
+ *   • ASW.BK           (Asia Wealth Corp)
+ *   • ^SET.BK          (SET Index — may be missing on Yahoo; we skip)
+ *   • 10 peer tickers  →  derive PROP index = equal-weighted basket
+ *
+ * Series shape after parsing: { date: 'YYYY-MM-DD', close, volume }
+ * Joined row shape: { date, close, change, volume, value, setIdx, propIdx }
+ * ==================================================================== */
+
+const SYMBOLS = {
+  asw: 'ASW.BK',
+  set: '^SET.BK',
+  peers: ['AP.BK','LH.BK','QH.BK','SIRI.BK','SPALI.BK','NOBLE.BK','ORI.BK','ANAN.BK','LPN.BK','WHA.BK'],
+};
+const PEER_NAMES = {
+  AP:'AP Thailand', LH:'Land & Houses', QH:'Quality Houses', SIRI:'Siri Vanachroen',
+  SPALI:'Supalai', NOBLE:'Noble Development', ORI:'Origin Property',
+  ANAN:'Ananda Development', LPN:'L.P.N. Development', WHA:'WHA Corporation',
+  ASW:'Asia Wealth Corporation',
+};
+const CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+/* ============== State ============== */
+const STATE = {
+  view: 'dashboard',
+  range: '6M',
+  overlay: 'price',
+  tablePage: 0,
+  tableSort: { key: 'date', dir: 'desc' },
+  useProxy: false,
+};
+let DATA = [];           // [{date, close, change, volume, value, setIdx, propIdx}]
+let ASW_SERIES = [];     // raw Yahoo series for ASW (for peer snapshot & 52W)
+let SET_SERIES = [];     // raw Yahoo series for SET (if available)
+let PEER_SERIES = {};    // { 'AP.BK': [{date, close}, ...], ... }
+let ASW_LAST = null;     // last close + change for ASW
+let CHART = null;
+let LAST_FETCH_TS = null;
+
+const $ = (id) => document.getElementById(id);
+const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const fmtNum = (n, dp = 2) => n == null ? '—' : Number(n).toFixed(dp);
+const fmtPct = (n, dp = 2) => {
+  if (n == null) return '—';
+  const s = n > 0 ? '+' : '';
+  return s + Number(n).toFixed(dp) + '%';
+};
+const fmtBigNum = (n) => {
+  if (n == null) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return (n/1e3).toFixed(2) + 'K';
+  return n.toFixed(2);
+};
+const fmtDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+};
+const fmtThaiShort = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.getDate() + '/' + (dt.getMonth()+1) + '/' + (dt.getFullYear()+543-2500);
+};
+const fmtThaiDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.getDate() + ' ' + thaiMonths[dt.getMonth()] + ' ' + (dt.getFullYear() + 543);
+};
+const showToast = (msg) => {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2400);
+};
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/* ============== Yahoo fetch (with optional proxy) ============== */
+async function fetchSeries(symbol, period1, period2) {
+  const yahooUrl = CHART_URL + encodeURIComponent(symbol)
+    + '?period1=' + period1 + '&period2=' + period2
+    + '&interval=1d&includeAdjustedClose=true&events=history';
+  const url = STATE.useProxy ? (CORS_PROXY + encodeURIComponent(yahooUrl)) : yahooUrl;
+
+  // For corsproxy.io & raw direct, browser controls the headers. We still
+  // send an explicit Accept so static hosts that proxy via curl don't
+  // aggressively cache stale data.
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + symbol);
+  const json = await res.json();
+  const r = json.chart && json.chart.result && json.chart.result[0];
+  if (!r) throw new Error('No result for ' + symbol + (json.chart && json.chart.error ? ': ' + JSON.stringify(json.chart.error) : ''));
+  const ts = r.timestamp || [];
+  const q = r.indicators && r.indicators.quote && r.indicators.quote[0] || {};
+  const adj = (r.indicators && r.indicators.adjclose && r.indicators.adjclose[0] && r.indicators.adjclose[0].adjclose) || [];
+  const closes = q.close || [];
+  const vols = q.volume || [];
+  const rows = [];
+  for (let i = 0; i < ts.length; i++) {
+    const c = adj[i] != null ? adj[i] : closes[i];
+    if (c == null) continue;
+    rows.push({
+      date: new Date(ts[i] * 1000).toISOString().slice(0, 10),
+      close: c,
+      volume: vols[i] != null ? vols[i] : 0,
+    });
+  }
+  return rows;
+}
+
+/* ============== PROP basket (equal-weighted, base 100) ============== */
+function computePropBasket(peerSeries) {
+  const sorted = Object.fromEntries(
+    Object.entries(peerSeries).map(([k, v]) => [k, v.slice().sort((a, b) => a.date.localeCompare(b.date))])
+  );
+  const seriesList = Object.values(sorted).filter(s => s.length >= 2);
+  if (!seriesList.length) return [];
+  const firstDates = seriesList.map(s => s[1] && s[1].date).filter(Boolean);
+  if (!firstDates.length) return [];
+  const startDate = firstDates.sort().slice(-1)[0];
+  const dateSets = seriesList.map(s => new Set(s.map(r => r.date)));
+  const indices = seriesList.map(s => {
+    let i = 0;
+    while (i < s.length && s[i].date < startDate) i++;
+    return i;
+  });
+  const maxDate = seriesList.map(s => s[s.length-1].date).sort().slice(-1)[0];
+  const out = [];
+  let level = 100.00;
+  for (let d = new Date(startDate + 'T00:00:00'); d <= new Date(maxDate + 'T00:00:00'); d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    const pcts = [];
+    let allHave = true;
+    for (let t = 0; t < seriesList.length; t++) {
+      const s = seriesList[t];
+      while (indices[t] + 1 < s.length && s[indices[t] + 1].date <= iso) indices[t]++;
+      const cur = s[indices[t]];
+      const prev = indices[t] > 0 ? s[indices[t] - 1] : null;
+      if (!cur || !prev || !dateSets[t].has(iso) || !dateSets[t].has(prev.date)) { allHave = false; break; }
+      pcts.push((cur.close - prev.close) / prev.close);
+    }
+    if (!allHave) continue;
+    const mean = pcts.reduce((a, b) => a + b, 0) / pcts.length;
+    level = level * (1 + mean);
+    out.push({ date: iso, close: Number(level.toFixed(4)) });
+  }
+  return out;
+}
+
+/* ============== Join series by date → DATA ============== */
+function joinSeries({ asw, setSeries, propSeries }) {
+  const aIdx = new Map(asw.map(r => [r.date, r]));
+  const sIdx = setSeries ? new Map(setSeries.map(r => [r.date, r])) : new Map();
+  const pIdx = new Map(propSeries.map(r => [r.date, r]));
+  const dates = [...new Set([...aIdx.keys(), ...sIdx.keys(), ...pIdx.keys()])].sort();
+  const out = [];
+  for (let i = 0; i < dates.length; i++) {
+    const d = dates[i];
+    const prev = i > 0 ? out[i - 1] : null;
+    const aswRow = aIdx.get(d);
+    const close = aswRow ? aswRow.close : null;
+    const volume = aswRow ? aswRow.volume : null;
+    let change = null;
+    if (close != null && prev && prev.close != null) {
+      change = Number((((close - prev.close) / prev.close) * 100).toFixed(4));
+    }
+    // value in millions of baht (Yahoo volume is in shares)
+    let value = null;
+    if (close != null && volume != null) value = Number(((close * volume) / 1e6).toFixed(4));
+    out.push({
+      date: d,
+      close, change, volume, value,
+      setIdx: (sIdx.get(d) && sIdx.get(d).close) || null,
+      propIdx: (pIdx.get(d) && pIdx.get(d).close) || null,
+    });
+  }
+  return out;
+}
+
+/* ============== Range filter ============== */
+function filterByRange(data, range) {
+  if (!data.length || range === 'ALL' || range === '5Y') return data;
+  const withPrice = data.filter(r => r.close != null);
+  if (!withPrice.length) return data;
+  const last = new Date(withPrice[withPrice.length-1].date + 'T00:00:00');
+  const start = new Date(last);
+  const map = { '1W': 7, '1M': 31, '3M': 92, '6M': 183, '1Y': 365, '2Y': 730 };
+  if (map[range]) start.setDate(last.getDate() - map[range]);
+  return data.filter(r => new Date(r.date + 'T00:00:00') >= start);
+}
+
+function pctChange(arr, key) {
+  if (!arr.length) return null;
+  const first = arr[0][key], last = arr[arr.length-1][key];
+  if (first == null || last == null || first === 0) return null;
+  return ((last - first) / first) * 100;
+}
+
+/* ============== Boot ============== */
+async function boot() {
+  // We want the most-recent ~5y for the 52W range and full chart context.
+  // Yahoo chart endpoint ignores `period1`/`period2` if symbol has limited history.
+  const period2 = Math.floor(Date.now() / 1000);
+  const period1 = period2 - 60 * 60 * 24 * 365 * 5;
+
+  showToast('กำลังโหลดข้อมูลจาก Yahoo Finance...');
+  try {
+    // ASW first
+    ASW_SERIES = await fetchSeries(SYMBOLS.asw, period1, period2);
+    await sleep(150);
+    // SET Index — optional
+    try { SET_SERIES = await fetchSeries(SYMBOLS.set, period1, period2); }
+    catch (e) { console.warn('SET index unavailable:', e.message); SET_SERIES = []; }
+    // Peers — small jitter between each to avoid 429
+    PEER_SERIES = {};
+    for (const t of SYMBOLS.peers) {
+      try {
+        PEER_SERIES[t] = await fetchSeries(t, period1, period2);
+      } catch (e) {
+        console.warn('peer fetch failed for', t, e.message);
+        PEER_SERIES[t] = [];
+      }
+      await sleep(120);
+    }
+
+    const propSeries = computePropBasket(PEER_SERIES);
+    DATA = joinSeries({ asw: ASW_SERIES, setSeries: SET_SERIES, propSeries });
+
+    // Last close + change for ASW peer snapshot row
+    const aswWithClose = ASW_SERIES.filter(r => r.close != null);
+    if (aswWithClose.length >= 2) {
+      const last = aswWithClose[aswWithClose.length-1];
+      const prev = aswWithClose[aswWithClose.length-2];
+      ASW_LAST = {
+        date: last.date, close: last.close,
+        change: Number((((last.close - prev.close) / prev.close) * 100).toFixed(2)),
+      };
+    }
+
+    LAST_FETCH_TS = new Date();
+    $('lastUpdated').textContent = LAST_FETCH_TS.toLocaleString('th-TH',
+      { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
+    $('infoSource').textContent = STATE.useProxy ? 'Yahoo Finance · via corsproxy.io' : 'Yahoo Finance · direct';
+    $('infoCount').textContent = (1 + SET_SERIES.length + SYMBOLS.peers.length) + ' tickers';
+    $('infoRange').textContent = DATA.length
+      ? fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date) + ' (' + DATA.length + ' วัน)'
+      : '—';
+    $('sbSource').textContent = STATE.useProxy ? 'Yahoo Finance (proxy)' : 'Yahoo Finance';
+    $('sbRange').textContent = DATA.length
+      ? fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date)
+      : '—';
+    $('sbCount').textContent = DATA.length;
+
+    refreshDashboard();
+    renderPeerSnapshot();
+    showToast('โหลดข้อมูลสำเร็จ · ' + DATA.length + ' วัน');
+  } catch (e) {
+    console.error(e);
+    showToast('โหลดไม่สำเร็จ: ' + (e.message || e) + ' — ลองติ๊ก "ใช้ CORS proxy"');
+  }
+}
+
+/* ============== KPI rendering ============== */
+function renderKPIs(filtered) {
+  const withPrice = filtered.filter(r => r.close != null);
+  const last = withPrice.length ? withPrice[withPrice.length-1] : null;
+  const prev = withPrice.length >= 2 ? withPrice[withPrice.length-2] : null;
+
+  // 1) Price
+  if (last) {
+    $('kpiPrice').textContent = fmtNum(last.close);
+    const ch = prev && prev.close ? ((last.close - prev.close) / prev.close) * 100 : (last.change || 0);
+    const el = $('kpiPriceCh');
+    el.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + (ch || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
+  } else {
+    $('kpiPrice').textContent = '—';
+    $('kpiPriceCh').textContent = '—';
+    $('kpiPriceCh').className = 'kpi-delta mut';
+  }
+
+  // 2) Volume vs 30d avg
+  if (last && last.volume != null) {
+    // Yahoo volume is in shares — show as K shares (consistent with existing template).
+    const v = last.volume / 1000;
+    $('kpiVolume').textContent = v >= 1000 ? (v / 1000).toFixed(2) + 'M' : v.toFixed(2) + 'K';
+    const withVol = DATA.filter(r => r.volume != null);
+    const last30 = withVol.slice(-31);
+    const avg30 = last30.length ? last30.reduce((a,b) => a + b.volume, 0) / last30.length : null;
+    const el = $('kpiVolumeCh');
+    if (avg30 && avg30 > 0) {
+      const ratio = last.volume / avg30;
+      el.textContent = ratio.toFixed(2) + '× 30d avg (' + (v >= 1000 ? (v/1000).toFixed(2)+'M' : v.toFixed(2)+'K') + ')';
+      el.className = 'kpi-delta ' + (ratio > 1.2 ? 'pos' : ratio < 0.8 ? 'neg' : 'mut');
+    } else {
+      el.textContent = '—';
+      el.className = 'kpi-delta mut';
+    }
+  } else {
+    $('kpiVolume').textContent = '—';
+    $('kpiVolumeCh').textContent = '—';
+    $('kpiVolumeCh').className = 'kpi-delta mut';
+  }
+
+  // 3) SET
+  const setPts = DATA.filter(r => r.setIdx != null);
+  const lastSet = setPts.length ? setPts[setPts.length-1].setIdx : null;
+  if (lastSet != null) {
+    $('kpiSet').textContent = fmtNum(lastSet);
+    const setCh = pctChange(setPts, 'setIdx');
+    const el = $('kpiSetCh');
+    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '▼ ' : '') + (setCh || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (setCh > 0 ? 'pos' : setCh < 0 ? 'neg' : 'mut');
+  } else {
+    $('kpiSet').textContent = '—';
+    $('kpiSetCh').textContent = '—';
+    $('kpiSetCh').className = 'kpi-delta mut';
+  }
+
+  // 4) PROP
+  const propPts = DATA.filter(r => r.propIdx != null);
+  const lastProp = propPts.length ? propPts[propPts.length-1].propIdx : null;
+  if (lastProp != null) {
+    $('kpiProp').textContent = fmtNum(lastProp);
+    const propCh = pctChange(propPts, 'propIdx');
+    const el = $('kpiPropCh');
+    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '▼ ' : '') + (propCh || 0).toFixed(2) + '%';
+    el.className = 'kpi-delta ' + (propCh > 0 ? 'pos' : propCh < 0 ? 'neg' : 'mut');
+  } else {
+    $('kpiProp').textContent = '—';
+    $('kpiPropCh').textContent = '—';
+    $('kpiPropCh').className = 'kpi-delta mut';
+  }
+
+  // 5) 52W range
+  const last252 = DATA.slice(-252);
+  const prices252 = last252.filter(r => r.close != null).map(r => r.close);
+  if (prices252.length && last) {
+    const lo = Math.min(...prices252);
+    const hi = Math.max(...prices252);
+    const pos = hi > lo ? ((last.close - lo) / (hi - lo)) * 100 : 50;
+    $('kpi52Price').textContent = fmtNum(last.close);
+    $('rangeLow').textContent = 'Lo ฿' + fmtNum(lo);
+    $('rangeHigh').textContent = 'Hi ฿' + fmtNum(hi);
+    $('rangeBar').querySelector('.range-bar-fill').style.width = pos + '%';
+    $('rangeBar').querySelector('.range-bar-marker').style.left = pos + '%';
+  } else {
+    $('kpi52Price').textContent = '—';
+    $('rangeLow').textContent = '—';
+    $('rangeHigh').textContent = '—';
+  }
+}
+
+/* ============== Main chart ============== */
+function buildChart(filtered) {
+  const ctx = $('dashChart').getContext('2d');
+  const priceData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
+  const setData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.setIdx }));
+  const propData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
+
+  const priceVals = priceData.map(p => p.y).filter(v => v != null);
+  const pMin = priceVals.length ? Math.min(...priceVals) : 0;
+  const pMax = priceVals.length ? Math.max(...priceVals) : 1;
+  const pad = (pMax - pMin) * 0.15 || 0.5;
+  const yMin = Math.max(0, pMin - pad);
+  const yMax = pMax + pad;
+
+  const datasets = [{
+    label: 'ASW Close', data: priceData,
+    borderColor: getCSS('--primary'),
+    backgroundColor: 'rgba(59,139,212,0.06)',
+    borderWidth: 4,
+    pointRadius: 0, pointHoverRadius: 4,
+    spanGaps: true, tension: 0.18, fill: true,
+    yAxisID: 'yPrice',
+  }];
+
+  const ov = STATE.overlay;
+  if (ov === 'set' || ov === 'all') datasets.push({
+    label: 'SET Index', data: setData,
+    borderColor: getCSS('--muted'), borderDash: [5, 4],
+    borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    yAxisID: 'yIdx',
+  });
+  if (ov === 'prop' || ov === 'all') datasets.push({
+    label: 'PROP Index', data: propData,
+    borderColor: getCSS('--teal'), borderDash: [3, 3],
+    borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    yAxisID: 'yIdx',
+  });
+
+  if (CHART) CHART.destroy();
+  CHART = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 300 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: getCSS('--border'),
+          borderWidth: 1,
+          padding: 10,
+          titleColor: getCSS('--text'),
+          bodyColor: getCSS('--text'),
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              return new Date(items[0].parsed.x).toLocaleDateString('en-GB',
+                { day:'2-digit', month:'short', year:'numeric' });
+            },
+            label: (item) => {
+              const v = item.parsed.y;
+              if (item.dataset.label === 'ASW Close') return 'ASW: ฿' + v.toFixed(2);
+              if (item.dataset.label === 'SET Index') return 'SET: ' + v.toFixed(2);
+              if (item.dataset.label === 'PROP Index') return 'PROP: ' + v.toFixed(2);
+              return item.dataset.label + ': ' + v;
+            },
+          }
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--muted'), font: { size: 13 } },
+        },
+        yPrice: {
+          position: 'left',
+          grid: { color: 'rgba(0,0,0,0.04)' },
+          ticks: { color: getCSS('--primary'), font: { size: 13, weight: '500' },
+            callback: (v) => '฿' + v.toFixed(2) },
+          min: yMin,
+          max: yMax,
+        },
+        yIdx: {
+          position: 'right',
+          grid: { display: false },
+          ticks: { color: getCSS('--muted'), font: { size: 12 } },
+        }
+      }
+    }
+  });
+}
+function getCSS(v) {
+  return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+}
+
+/* ============== Data table ============== */
+function renderDataTable() {
+  const filtered = filterByRange(DATA, STATE.range);
+  const sortKey = STATE.tableSort.key;
+  const dir = STATE.tableSort.dir === 'asc' ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv)) * dir;
+  });
+  const PAGE = 12;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE));
+  if (STATE.tablePage >= totalPages) STATE.tablePage = totalPages - 1;
+  if (STATE.tablePage < 0) STATE.tablePage = 0;
+  const start = STATE.tablePage * PAGE;
+  const page = sorted.slice(start, start + PAGE);
+  $('tableSummary').textContent = sorted.length + ' วัน · หน้า ' + (STATE.tablePage+1) + '/' + totalPages;
+  $('tablePageInfo').textContent = 'หน้า ' + (STATE.tablePage+1) + ' / ' + totalPages;
+  $('dataTableBody').innerHTML = page.map(r => {
+    const chg = r.change;
+    const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
+    const volK = r.volume != null ? (r.volume / 1000) : null;
+    return `<tr>
+      <td class="th nowrap">${fmtThaiShort(r.date)}</td>
+      <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
+      <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
+      <td class="num">${volK != null ? fmtBigNum(volK) : '—'}</td>
+      <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
+      <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
+      <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty-state th">ไม่พบข้อมูล</td></tr>';
+}
+
+/* ============== Peer snapshot ============== */
+function renderPeerSnapshot() {
+  const body = $('peerTableBody');
+  const lastDate = ASW_LAST ? ASW_LAST.date : (DATA.filter(r => r.close != null).slice(-1)[0] || {}).date;
+  if (!lastDate) { body.innerHTML = '<tr><td colspan="4" class="empty-state th">ไม่พบข้อมูล</td></tr>'; return; }
+  $('peerSnapshotDate').textContent = 'ณ ' + new Date(lastDate + 'T00:00:00').toLocaleDateString('th-TH',
+    { day:'2-digit', month:'short', year:'numeric' });
+
+  const peerRows = SYMBOLS.peers.map(t => {
+    const ticker = t.replace('.BK', '');
+    const name = PEER_NAMES[ticker] || ticker;
+    const s = (PEER_SERIES[t] || []).filter(r => r.close != null);
+    if (s.length < 2) {
+      return { ticker, name, close: null, change: null };
+    }
+    const last = s[s.length-1], prev = s[s.length-2];
+    const change = Number((((last.close - prev.close) / prev.close) * 100).toFixed(2));
+    return { ticker, name, close: last.close, change };
+  });
+
+  if (ASW_LAST) {
+    peerRows.splice(4, 0, {
+      ticker: 'ASW', name: PEER_NAMES.ASW,
+      close: ASW_LAST.close, change: ASW_LAST.change, isASW: true,
+    });
+  }
+
+  body.innerHTML = peerRows.map(r => {
+    const hasData = r.close != null && r.change != null;
+    const arrow = !hasData ? '─ ' : r.change > 0.05 ? '▲ ' : r.change < -0.05 ? '▼ ' : '─ ';
+    const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); margin-left:6px;">ASW</span>' : '';
+    const closeText = hasData ? '฿' + r.close.toFixed(2) : '—';
+    const colorStyle = !hasData
+      ? 'color:var(--muted)'
+      : r.change > 0.05 ? 'color:var(--positive)' : r.change < -0.05 ? 'color:var(--negative)' : 'color:var(--muted)';
+    const chgText = !hasData ? '—' : arrow + (r.change >= 0 ? '+' : '') + r.change.toFixed(2) + '%';
+    return `<tr style="${r.isASW ? 'background:var(--sidebar-active); font-weight:600;' : ''}">
+      <td><strong>${r.ticker}</strong>${aswBadge}</td>
+      <td class="th muted">${r.name}</td>
+      <td class="num">${closeText}</td>
+      <td class="num" style="${colorStyle}; font-weight:500;">${chgText}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ============== Refresh dashboard glue ============== */
+function refreshDashboard() {
+  const filtered = filterByRange(DATA, STATE.range);
+  renderKPIs(filtered);
+  buildChart(filtered);
+  renderDataTable();
+  if (filtered.length) {
+    const first = new Date(filtered[0].date + 'T00:00:00');
+    const last = new Date(filtered[filtered.length-1].date + 'T00:00:00');
+    $('chartPeriodLabel').textContent = thaiMonths[first.getMonth()] + ' ' + (first.getFullYear()+543)
+      + ' – ' + thaiMonths[last.getMonth()] + ' ' + (last.getFullYear()+543);
+  }
+}
+
+/* ============== Export to Excel ============== */
+function exportToExcel() {
+  if (!DATA.length) { showToast('ยังไม่มีข้อมูล — กดรีเฟรชก่อน'); return; }
+  const wb = XLSX.utils.book_new();
+  const filtered = filterByRange(DATA, STATE.range);
+  const sheet = [['Date', 'Close', '%Change', 'Volume (shares)', 'Value (M THB)', 'SET Index', 'PROP Index']];
+  filtered.forEach(r => {
+    sheet.push([r.date, r.close, r.change, r.volume, r.value, r.setIdx, r.propIdx]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet), 'ASW Daily');
+  const fname = 'ASW_YF_' + STATE.range + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  showToast('ส่งออก Excel: ' + fname);
+}
+
+/* ============== View routing (dashboard / about) ============== */
+function setView(view) {
+  STATE.view = view;
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  $('view-' + view).classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+  $('sbView').textContent = view === 'dashboard' ? 'Dashboard' : 'เกี่ยวกับ';
+}
+
+/* ============== Wire up UI ============== */
+document.addEventListener('DOMContentLoaded', () => {
+  // sidebar
+  document.querySelectorAll('.sidebar-item').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      const v = b.dataset.view;
+      if (v) setView(v);
+    });
+  });
+
+  // range pills
+  document.querySelectorAll('#rangePills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.range = b.dataset.range;
+      STATE.tablePage = 0;
+      document.querySelectorAll('#rangePills .pill').forEach(x => x.classList.toggle('active', x === b));
+      refreshDashboard();
+    });
+  });
+
+  // overlay pills
+  document.querySelectorAll('#overlayPills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.overlay = b.dataset.overlay;
+      document.querySelectorAll('#overlayPills .pill').forEach(x => x.classList.toggle('active', x === b));
+      refreshDashboard();
+    });
+  });
+
+  // table sort
+  document.querySelectorAll('#dataTable th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (STATE.tableSort.key === k) STATE.tableSort.dir = STATE.tableSort.dir === 'asc' ? 'desc' : 'asc';
+      else STATE.tableSort = { key: k, dir: 'desc' };
+      renderDataTable();
+    });
+  });
+
+  // table pagination
+  $('tablePrev').addEventListener('click', () => { STATE.tablePage--; renderDataTable(); });
+  $('tableNext').addEventListener('click', () => { STATE.tablePage++; renderDataTable(); });
+
+  // refresh
+  $('refreshBtn').addEventListener('click', async () => {
+    const icon = $('refreshIcon');
+    if (icon) icon.style.animation = 'spin .7s linear infinite';
+    STATE.useProxy = $('useProxy').checked;
+    await boot();
+    if (icon) icon.style.animation = '';
+  });
+
+  // proxy toggle
+  $('useProxy').addEventListener('change', (e) => {
+    STATE.useProxy = e.target.checked;
+    showToast('โหมด: ' + (STATE.useProxy ? 'CORS proxy' : 'Yahoo ตรง') + ' · กดรีเฟรชเพื่อโหลดใหม่');
+  });
+
+  // export
+  $('exportBtn').addEventListener('click', exportToExcel);
+
+  // initial boot
+  boot();
+});
+</script>
+</body>
+</html>

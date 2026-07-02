@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><title>debug</title></head>
+<body>
+<iframe id="f" src="http://localhost:8765/index.html?range=1M&overlay=price" style="width:1500px;height:1100px;border:0;"></iframe>
+<pre id="out" style="white-space:pre-wrap;font-size:11px"></pre>
+<script>
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const f = document.getElementById('f');
+    const w = f.contentWindow;
+    const filtered = w.filterByRange(w.DATA, '1M');
+    const withClose = filtered.filter(r => r.close != null);
+    const lines = [
+      'TOTAL filtered: ' + filtered.length,
+      'WITH CLOSE: ' + withClose.length,
+      'First 3 with close:',
+      ...withClose.slice(0,3).map(r => '  ' + JSON.stringify(r)),
+      'Last 3 with close:',
+      ...withClose.slice(-3).map(r => '  ' + JSON.stringify(r)),
+      'CHART datasets: ' + JSON.stringify(w.CHART?.data.datasets.map(d => ({label: d.label, len: d.data.length, first: d.data[0], last: d.data[d.data.length-1]}))),
+      'CHART xScale min/max: ' + JSON.stringify({min: w.CHART?.options.scales.x.min, max: w.CHART?.options.scales.x.max})
+    ];
+    document.getElementById('out').textContent = lines.join('\n');
+  }, 2000);
+});
+</script>
+</body></html>
