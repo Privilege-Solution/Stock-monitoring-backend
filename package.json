@@ -9,9 +9,8 @@
     "dev": "npm run build && node server.js"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.0",
-    "@supabase/supabase-js": "^2.110.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "node-cron": "^3.0.3",
     "pg": "^8.22.0"

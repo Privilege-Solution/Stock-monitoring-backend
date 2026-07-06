@@ -8,6 +8,7 @@ data/*.db-shm
 *.log
 .env
 .env.*
+!.env.example
 test-*.js
 debug.html
 asw-yfinance.html

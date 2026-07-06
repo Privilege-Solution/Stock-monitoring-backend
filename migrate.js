@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const { Pool } = require('pg');
+const { classifySingle } = require('./lib/remark-bucket');
 
 const SQLITE_PATH = path.join(__dirname, 'data', 'asw.db');
 const PG_URL = process.env.DATABASE_URL;
@@ -29,23 +30,61 @@ const SCHEMA = `
 -- Drop existing tables so we get a clean schema with proper camelCase columns.
 -- Re-running migrate.js is idempotent — DROP + CREATE is safe here because
 -- every row is reproducible from data/asw.db.
-DROP TABLE IF EXISTS news_articles CASCADE;
+-- news_articles was dropped when we replaced NewsAPI with Gemini grounded
+-- search (commit "Migrate from SQLite to Postgres + AI remarks pipeline").
+-- Pipeline refactor (migrate-v2): daily.remark is now a SINGLE column +
+-- single category. The old 3-column shape (remark_company/sector/macro) is
+-- gone for fresh installs.
+-- Gemini-search pipeline (migrate-v3): daily also holds a Monday morning
+-- brief (morning_brief/morning_watch/morning_remark/morning_weekly_at);
+-- news_feed holds pipeline/impact/severity/show_pin per row so the chart
+-- can filter event pins precisely.
+-- For live-DB upgrades from earlier shapes, run migrate-v2.js then
+-- migrate-v3.js — those scripts add the new columns without dropping data.
 DROP TABLE IF EXISTS fetch_log CASCADE;
 DROP TABLE IF EXISTS peer_prices CASCADE;
+DROP TABLE IF EXISTS news_feed CASCADE;
 DROP TABLE IF EXISTS daily CASCADE;
 
 CREATE TABLE daily (
-  date        TEXT PRIMARY KEY,
-  close       DOUBLE PRECISION,
-  "change"    DOUBLE PRECISION,
-  volume      DOUBLE PRECISION,
-  value       DOUBLE PRECISION,
-  "setIdx"    DOUBLE PRECISION,
-  "propIdx"   DOUBLE PRECISION,
-  remark      TEXT,
-  fetched_at  TEXT NOT NULL
+  date              TEXT PRIMARY KEY,
+  close             DOUBLE PRECISION,
+  "change"          DOUBLE PRECISION,
+  volume            DOUBLE PRECISION,
+  value             DOUBLE PRECISION,
+  "setIdx"          DOUBLE PRECISION,
+  "propIdx"         DOUBLE PRECISION,
+  remark            TEXT,
+  category          TEXT,
+  -- Monday morning brief (Gemini-search pipeline, migrate-v3)
+  morning_brief     TEXT,
+  morning_watch     TEXT,
+  morning_remark    TEXT,
+  morning_weekly_at TEXT,
+  fetched_at        TEXT NOT NULL
 );
 CREATE INDEX daily_date_idx ON daily(date);
+
+CREATE TABLE news_feed (
+  id            SERIAL PRIMARY KEY,
+  title         TEXT NOT NULL,
+  date          TEXT NOT NULL,
+  category      TEXT NOT NULL,
+  source_url    TEXT NOT NULL,
+  source_label  TEXT NOT NULL,
+  title_hash    TEXT NOT NULL,
+  -- Gemini-search pipeline enrichment (migrate-v3)
+  pipeline      TEXT,                 -- 'company' | 'sector' | 'macro'
+  impact        TEXT,                 -- 'positive' | 'negative' | 'neutral'
+  severity      TEXT,                 -- 'high' | 'medium' | 'low'
+  show_pin      BOOLEAN,              -- true → also render as event pin on chart
+  fetched_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX news_feed_title_hash_idx ON news_feed (title_hash);
+CREATE INDEX news_feed_date_idx     ON news_feed (date DESC);
+CREATE INDEX news_feed_category_idx ON news_feed (category);
+CREATE INDEX news_feed_show_pin_idx ON news_feed (date DESC) WHERE show_pin = TRUE;
+CREATE INDEX news_feed_pipeline_idx ON news_feed (pipeline);
 
 CREATE TABLE peer_prices (
   date        TEXT NOT NULL,
@@ -68,20 +107,6 @@ CREATE TABLE fetch_log (
   rows_updated INTEGER,
   error        TEXT
 );
-
-CREATE TABLE news_articles (
-  id           SERIAL PRIMARY KEY,
-  published_at TEXT NOT NULL,
-  title        TEXT NOT NULL,
-  description  TEXT,
-  url          TEXT,
-  source_name  TEXT,
-  query_tag    TEXT,
-  fetched_at   TEXT NOT NULL,
-  UNIQUE(url, published_at)
-);
-CREATE INDEX news_articles_pub_idx ON news_articles(published_at);
-CREATE INDEX news_articles_tag_idx ON news_articles(query_tag);
 `;
 
 // pg-format-style batch INSERT. Builds `$1,$2,...,$N`,($N+1,...) for `rows`.
@@ -144,18 +169,72 @@ async function main() {
   await pool.query(SCHEMA);
   console.log('[migrate] schema ensured');
 
-  // 2. daily — upsert by date
-  await copyTable(pool, sqlite, 'daily',
-    ['date', 'close', 'change', 'volume', 'value', 'setIdx', 'propIdx', 'remark', 'fetched_at'],
-    `ON CONFLICT (date) DO UPDATE SET
-       close = EXCLUDED.close,
-       "change" = EXCLUDED."change",
-       volume = EXCLUDED.volume,
-       value = EXCLUDED.value,
-       "setIdx" = EXCLUDED."setIdx",
-       "propIdx" = EXCLUDED."propIdx",
-       remark = EXCLUDED.remark,
-       fetched_at = EXCLUDED.fetched_at`);
+  // 2. daily — read legacy rows from SQLite, collapse the single `remark`
+  // text into one remark column + one category column via classifySingle().
+  // Then upsert into Postgres by date. Pipeline refactor: 1 row → 1 remark
+  // (was 3 columns in the v1 schema).
+  const dailyRows = sqlite.prepare(
+    `SELECT date, close, change, volume, value, setIdx, propIdx, remark, fetched_at FROM daily`
+  ).all();
+  console.log(`[migrate] daily: ${dailyRows.length} rows`);
+  const DAILY_COLS = ['date','close','change','volume','value','setIdx','propIdx','remark','category','morning_brief','morning_watch','morning_remark','morning_weekly_at','fetched_at'];
+  let dailyWritten = 0;
+  for (let i = 0; i < dailyRows.length; i += BATCH) {
+    const slice = dailyRows.slice(i, i + BATCH);
+    const split = slice.map(r => {
+      const b = classifySingle(r.remark || '');
+      return {
+        date: r.date,
+        close: r.close,
+        change: r.change,
+        volume: r.volume,
+        value: r.value,
+        setIdx: r.setIdx,
+        propIdx: r.propIdx,
+        remark: b.text,
+        category: b.category,
+        // morning-brief columns — SQLite source has none, leave null. The
+        // Monday morning-brief fetcher (gemini-search.mjs) will populate them
+        // on the next Monday cron run.
+        morning_brief: null,
+        morning_watch: null,
+        morning_remark: null,
+        morning_weekly_at: null,
+        fetched_at: r.fetched_at,
+      };
+    });
+    const placeholders = [];
+    const params = [];
+    let p = 1;
+    for (const row of split) {
+      const tup = DAILY_COLS.map(_ => `$${p++}`).join(', ');
+      placeholders.push(`(${tup})`);
+      for (const c of DAILY_COLS) params.push(row[c]);
+    }
+    await pool.query(`
+      INSERT INTO daily (date, close, "change", volume, value, "setIdx", "propIdx",
+                         remark, category,
+                         morning_brief, morning_watch, morning_remark, morning_weekly_at,
+                         fetched_at)
+      VALUES ${placeholders.join(', ')}
+      ON CONFLICT (date) DO UPDATE SET
+        close             = EXCLUDED.close,
+        "change"          = EXCLUDED."change",
+        volume            = EXCLUDED.volume,
+        value             = EXCLUDED.value,
+        "setIdx"          = EXCLUDED."setIdx",
+        "propIdx"         = EXCLUDED."propIdx",
+        remark            = EXCLUDED.remark,
+        category          = EXCLUDED.category,
+        morning_brief     = EXCLUDED.morning_brief,
+        morning_watch     = EXCLUDED.morning_watch,
+        morning_remark    = EXCLUDED.morning_remark,
+        morning_weekly_at = EXCLUDED.morning_weekly_at,
+        fetched_at        = EXCLUDED.fetched_at
+    `, params);
+    dailyWritten += slice.length;
+  }
+  console.log(`[migrate] daily: ${dailyWritten} rows written`);
 
   // 3. peer_prices — upsert by (date, ticker)
   await copyTable(pool, sqlite, 'peer_prices',
@@ -170,23 +249,17 @@ async function main() {
   await copyTable(pool, sqlite, 'fetch_log',
     ['id', 'started_at', 'finished_at', 'ok', 'source', 'rows_added', 'rows_updated', 'error']);
 
-  // 5. news_articles — dedupe by (url, published_at)
-  await copyTable(pool, sqlite, 'news_articles',
-    ['id', 'published_at', 'title', 'description', 'url', 'source_name', 'query_tag', 'fetched_at']);
-
-  // 6. Reset SERIAL sequences past MAX(id) so future INSERTs don't collide.
+  // 5. Reset SERIAL sequences past MAX(id) so future INSERTs don't collide.
   await pool.query(`SELECT setval(pg_get_serial_sequence('fetch_log','id'),
                        COALESCE((SELECT MAX(id) FROM fetch_log), 1))`);
-  await pool.query(`SELECT setval(pg_get_serial_sequence('news_articles','id'),
-                       COALESCE((SELECT MAX(id) FROM news_articles), 1))`);
 
-  // 7. Verify counts
+  // 6. Verify counts
   const counts = await pool.query(`
     SELECT
-      (SELECT COUNT(*) FROM daily)         AS daily,
-      (SELECT COUNT(*) FROM peer_prices)   AS peer_prices,
-      (SELECT COUNT(*) FROM fetch_log)     AS fetch_log,
-      (SELECT COUNT(*) FROM news_articles) AS news_articles
+      (SELECT COUNT(*) FROM daily)       AS daily,
+      (SELECT COUNT(*) FROM peer_prices) AS peer_prices,
+      (SELECT COUNT(*) FROM fetch_log)   AS fetch_log,
+      (SELECT COUNT(*) FROM news_feed)   AS news_feed
   `);
   console.log('[migrate] final counts:', counts.rows[0]);
 

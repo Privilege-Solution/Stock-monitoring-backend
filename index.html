@@ -41,6 +41,30 @@
     --sidebar-active:  #F4F3EF;
     --sidebar-border:  #D3D1C7;
   }
+
+  /* Live-ticker badge under the #kpiPrice card. Pulses while market is open. */
+  .kpi-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--teal);
+    margin-top: 0.35rem;
+    font-weight: 500;
+  }
+  .kpi-live::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--teal);
+    animation: kpiPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes kpiPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.7); }
+  }
+  .kpi-value.dim { opacity: 0.55; }   /* visual hint when KPI shows stale EOD close */
 </style>
 </head>
 <body>
@@ -146,6 +170,7 @@
             <div class="kpi-unit">฿</div>
           </div>
           <div class="kpi-delta" id="kpiPriceCh">—</div>
+          <div id="kpiPriceLive"></div>
         </div>
         <div class="card">
           <div class="card-title th">ปริมาณซื้อขาย vs 30d avg</div>
@@ -376,6 +401,8 @@
         <button class="subtab th" data-ntab="prop">อสังหาฯ</button>
         <button class="subtab th" data-ntab="econ">เศรษฐกิจ</button>
         <button class="subtab th" data-ntab="pol">การเมือง</button>
+        <button class="subtab th" data-ntab="feed">Feed</button>
+        <button class="subtab th" data-ntab="morning">Morning Brief</button>
       </div>
 
       <!-- ASW tab -->
@@ -405,10 +432,8 @@
             <div id="propStats" class="mt-8" style="font-size:11px;"></div>
           </div>
           <div class="card">
-            <div class="row-between mb-8">
-              <h3 class="th" style="font-size:13px;">ข่าวอสังหาฯ ล่าสุด</h3>
-              <button id="propNewsRefresh" class="pill th" style="font-size:11px;">↻ รีเฟรช</button>
-            </div>
+            <h3 class="th mb-8" style="font-size:13px;">ข่าวอสังหาฯ — จาก Gemini Search</h3>
+            <div class="muted th mb-8" style="font-size:11px;">ข่าว sector + headlines ที่ Gemini สืบค้น (อัปเดต 17:45 น.)</div>
             <div id="propNewsList"></div>
             <div class="mt-12">
               <h4 class="th mb-8" style="font-size:12px;">เหตุการณ์โครงการใน ASW</h4>
@@ -434,6 +459,52 @@
           <div class="muted th mb-12" style="font-size:11px;">สกัดจาก Remark column</div>
           <div id="polTimeline" class="timeline"></div>
         </div>
+      </div>
+
+      <!-- Feed tab (Gemini-search pipeline: gemini-sector + gemini-macro) -->
+      <div class="ntab" id="ntab-feed" style="display:none;">
+        <div class="row-between mb-12">
+          <div class="row" style="gap:6px; flex-wrap:wrap;">
+            <span class="muted th" style="font-size:11px;">หมวด:</span>
+            <div class="pill-row" id="feedCategoryFilter">
+              <button class="pill active" data-feed-cat="all">ทั้งหมด</button>
+              <!-- company (5) -->
+              <button class="pill th" data-feed-cat="corporate">ผลประกอบการ</button>
+              <button class="pill th" data-feed-cat="project">โครงการใหม่</button>
+              <button class="pill th" data-feed-cat="dividend">ปันผล/ทุน</button>
+              <button class="pill th" data-feed-cat="fundraise">หุ้นกู้/เพิ่มทุน</button>
+              <button class="pill th" data-feed-cat="insider">Insider</button>
+              <!-- sector (3) -->
+              <button class="pill th" data-feed-cat="sector_policy">นโยบาย</button>
+              <button class="pill th" data-feed-cat="sector_data">ข้อมูล</button>
+              <button class="pill th" data-feed-cat="peer_news">Peer</button>
+              <!-- macro (5) -->
+              <button class="pill th" data-feed-cat="interest_rate">ดอกเบี้ย</button>
+              <button class="pill th" data-feed-cat="economic_data">ตัวเลข ศก.</button>
+              <button class="pill th" data-feed-cat="political">การเมือง</button>
+              <button class="pill th" data-feed-cat="disaster">ภัยพิบัติ</button>
+              <button class="pill th" data-feed-cat="global">ปัจจัยโลก</button>
+            </div>
+          </div>
+          <button class="btn btn-ghost" id="feedRefreshBtn" title="ดึงข่าวใหม่จาก Gemini Search">
+            <span class="th">รีเฟรช</span>
+          </button>
+        </div>
+        <div class="muted th mb-8" style="font-size:11px;">
+          Gemini Search grounding: sector ทุก 17:50 ICT · macro ทุก 17:55 ICT (severity=high → แสดงเป็น event pin)
+        </div>
+        <div id="feedList" class="feed-list"></div>
+      </div>
+
+      <!-- Morning Brief tab (Monday 08:00 ICT, weekly summary) -->
+      <div class="ntab" id="ntab-morning" style="display:none;">
+        <div class="row-between mb-12">
+          <span class="muted th" style="font-size:11px;">สรุปสัปดาห์โดย Gemini · อัปเดตจันทร์ 08:00 ICT</span>
+          <button class="btn btn-ghost" id="morningRefreshBtn" title="เรียก Gemini สรุปสัปดาห์ใหม่">
+            <span class="th">รีเฟรช</span>
+          </button>
+        </div>
+        <div id="morningBriefContent"></div>
       </div>
 
       <!-- News-Price Correlation -->
@@ -708,6 +779,14 @@ window.ASW_API = {
     try { const r = await fetch('/api/peers'); if (!r.ok) throw 0; const d = await r.json(); return d; }
     catch (e) { return { date: null, rows: [], count: 0 }; }
   },
+  // Live ticker (intraday 1-min partial close). Returns
+  // { price, prevClose, ts, marketOpen, source, cacheAgeMs, lastError }.
+  // The KPI falls back to the last DATA close when marketOpen=false or
+  // when price is null (e.g. cold cache, server restart).
+  async intraday() {
+    try { const r = await fetch('/api/intraday'); if (!r.ok) throw 0; return await r.json(); }
+    catch (e) { return { price: null, prevClose: null, ts: null, marketOpen: false, source: null, cacheAgeMs: null, lastError: 'offline' }; }
+  },
   async refresh() {
     try {
       const r = await fetch('/api/refresh', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' });
@@ -720,6 +799,26 @@ window.ASW_API = {
   },
   async healthRefresh() {
     try { const r = await fetch('/api/health/refresh', { method:'POST' }); return await r.json(); }
+    catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  async newsFeed() {
+    try { const r = await fetch('/api/news?limit=200'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
+    catch (e) { return []; }
+  },
+  async newsRefresh(source) {
+    try {
+      const body = source ? JSON.stringify({ source }) : undefined;
+      const r = await fetch('/api/news/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  async morningBrief() {
+    try { const r = await fetch('/api/morning-brief'); if (!r.ok) throw 0; return await r.json(); }
+    catch (e) { return { date: null, morning_brief: null }; }
+  },
+  async morningBriefRefresh() {
+    try { const r = await fetch('/api/morning-brief/refresh', { method: 'POST' }); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { ok: false, error: 'offline' }; }
   },
 };
@@ -764,7 +863,7 @@ window.ASW_EXEC = (function () {
     if (/ดอกเบี้ย|กนง|ปรับขึ้นดอกเบี้ย/i.test(r)) return 'ดอกเบี้ย';
     if (/presale/i.test(r)) return 'presale';
     if (/งบ|ปันผล|รางวัล|จ่ายเงินปันผล/i.test(r)) return 'งบ';
-    if (/โครงการ|เปิดโครงการ|ยอดจอง|openday|site visit|oppday/i.test(r)) return 'โครงการ';
+    if (/โครงการ|เปิดโครงการ|ยอดจอง|openday|site visit|oppday|jv|atmoz|talis|kave|embryo|honor/i.test(r)) return 'โครงการ';
     if (/การเมือง|เลือกตั้ง|กกต|ทักษิณ|นายก|สภา|โหวต|เศรษฐา/i.test(r)) return 'การเมือง';
     return null;
   }
@@ -786,7 +885,7 @@ window.ASW_EXEC = (function () {
     if (avg30 > 0 && last.volume > 2 * avg30) {
       bullets.push(t.volume(last.volume / avg30));
     }
-    const withRemark = withPrice.filter(r => r.remark && r.setIdx != null);
+    const withRemark = withPrice.filter(r => hasRemark(r) && r.setIdx != null);
     if (withRemark.length) {
       const idxMap = new Map(withPrice.map((r, i) => [r.date, i]));
       const ranked = withRemark.map(r => {
@@ -796,7 +895,7 @@ window.ASW_EXEC = (function () {
           ? ((r.setIdx - prev.setIdx) / prev.setIdx) * 100 : 0;
         return { r, impact: Math.abs((r.change || 0) - setPct) };
       }).sort((a, b) => b.impact - a.impact);
-      if (ranked[0]?.impact > 0) bullets.push(t.event(ranked[0].r.remark));
+      if (ranked[0]?.impact > 0) bullets.push(t.event(combinedRemark(ranked[0].r)));
     }
     const lookback = withPrice.slice(-252);
     if (lookback.length) {
@@ -808,9 +907,13 @@ window.ASW_EXEC = (function () {
       }
     }
     const counts = {};
-    for (const r of withPrice.filter(r => r.remark)) {
-      const k = classifyEventType(r.remark);
-      if (k) counts[k] = (counts[k] || 0) + 1;
+    for (const r of withPrice.filter(r => hasRemark(r))) {
+      // Each of the 3 columns may classify into a different bucket — count
+      // each one independently.
+      eachRemark(r).forEach(it => {
+        const k = classifyEventType(it.text);
+        if (k) counts[k] = (counts[k] || 0) + 1;
+      });
     }
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     if (top) bullets.push(t.wins(top[1], t.eventLabels[top[0]] || top[0]));
@@ -844,6 +947,7 @@ const STATE = {
   priceFilter: null, // { start, end } override
   newsSort: 'newest',
   focusedDate: null,
+  feedCategory: 'all',  // NEW — Pipeline B news-feed filter
   wizardStep: 1,
   report: {
     template: 'summary',
@@ -891,7 +995,7 @@ const fmtThaiDate = (d) => {
 const fmtThaiShort = (d) => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
-  return dt.getDate() + '/' + (dt.getMonth()+1) + '/' + (dt.getFullYear()+543-2500);
+  return dt.getDate() + '/' + (dt.getMonth()+1) + '/' + ((dt.getFullYear()+543) % 100);
 };
 const showToast = (msg) => {
   const t = $('toast');
@@ -900,10 +1004,55 @@ const showToast = (msg) => {
   setTimeout(() => t.classList.remove('show'), 2500);
 };
 
-/* ============== Event Classification (per spec) ============== */
-function classifyEvent(remark) {
-  if (!remark || !String(remark).trim()) return null;
-  const r = String(remark);
+/* ============== Event Classification (per spec) ==============
+ *
+ * Pipeline refactor: a row can carry an EXPLICIT `category` (string set by
+ * gemini-search.mjs 'gemini-company' pipeline) and a `remark` text. The
+ * keyword-regex fallback is kept so the bundled `sample_data.js` offline
+ * mode and any old client still surfaces colour pins without the backend.
+ *
+ * Accepts either a plain string (legacy) or an object `{ text, category }`
+ * (the new shape produced by eachRemark()).
+ */
+function classifyEvent(x) {
+  const text = (typeof x === 'string') ? x : (x && x.text);
+  const explicitCat = (typeof x === 'object') ? (x && x.category) : null;
+  if (!text || !String(text).trim()) return null;
+
+  // Explicit category — direct map to chart `type`. The 13 Gemini-search
+  // categories + 4 legacy shims all map to one of the 6 chart buckets
+  // (corporate / project / interest_rate / political / macro / other).
+  if (explicitCat) {
+    const map = {
+      // legacy shims (5)
+      company: { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'ผลประกอบการ' },
+      sector:  { type: 'project',      color: getCSS('--evt-proj'),  label: 'โครงการ' },
+      macro:   { type: 'macro',        color: getCSS('--evt-macro'), label: 'มหภาค' },
+      pol:     { type: 'political',    color: getCSS('--evt-pol'),   label: 'การเมือง' },
+      other:   { type: 'other',        color: getCSS('--evt-other'), label: 'อื่นๆ' },
+      // company pipeline (5)
+      corporate:     { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'ผลประกอบการ' },
+      project:       { type: 'project',      color: getCSS('--evt-proj'),  label: 'โครงการใหม่' },
+      dividend:      { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'ปันผล/ทุน' },
+      fundraise:     { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'หุ้นกู้/เพิ่มทุน' },
+      insider:       { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'Insider' },
+      // sector pipeline (3) — sector news groups with project pins on chart
+      sector_policy: { type: 'project',      color: getCSS('--evt-proj'),  label: 'นโยบาย sector' },
+      sector_data:   { type: 'project',      color: getCSS('--evt-proj'),  label: 'ข้อมูล sector' },
+      peer_news:     { type: 'project',      color: getCSS('--evt-proj'),  label: 'ข่าว peer' },
+      // macro pipeline (5)
+      interest_rate: { type: 'interest_rate',color: getCSS('--evt-rate'),  label: 'ดอกเบี้ย' },
+      economic_data: { type: 'macro',        color: getCSS('--evt-macro'), label: 'ตัวเลข ศก.' },
+      political:     { type: 'political',    color: getCSS('--evt-pol'),   label: 'การเมือง' },
+      disaster:      { type: 'macro',        color: getCSS('--evt-macro'), label: 'ภัยพิบัติ' },
+      global:        { type: 'macro',        color: getCSS('--evt-macro'), label: 'ปัจจัยโลก' },
+    };
+    if (map[explicitCat]) return map[explicitCat];
+  }
+
+  // Legacy keyword scan — kept for bundled sample_data.js (single `remark`
+  // text without category) and any backwards-compatible callers.
+  const r = String(text);
   if (r.includes('ดอกเบี้ย') || r.includes('กนง') || r.includes('ปรับขึ้นดอกเบี้ย'))
     return { type: 'interest_rate', color: getCSS('--evt-rate'), label: 'ดอกเบี้ย' };
   if (/presale|งบ|รางวัล|q2|q3|q4|ปันผล|จ่ายเงินปันผล/i.test(r))
@@ -918,6 +1067,77 @@ function classifyEvent(remark) {
       r.includes('สคบ') || r.includes('ปิดแคมป์'))
     return { type: 'macro', color: getCSS('--evt-macro'), label: 'มหภาค' };
   return { type: 'other', color: getCSS('--evt-other'), label: 'อื่นๆ' };
+}
+
+// Each row produces 0-1 "remark item" in the v2 schema (single column +
+// category). The legacy 3-column shape (remark_company/sector/macro) and the
+// bundled single `remark` text are still honoured as fallbacks so sample_data.js
+// and any external consumer keep working during the transition release.
+//
+// Pipeline refactor (Gemini-search pipeline, v3): 13 explicit categories
+// from the user-authored prompt spec — 5 company + 3 sector + 5 macro.
+// Each badge has a Thai label, a CSS class (for color), and a hex color
+// (for inline rendering). The 4 legacy keys (company / sector / macro /
+// other) stay as compatibility shims.
+const REMARK_CATEGORIES = ['company', 'sector', 'macro'];
+const REMARK_BADGE = {
+  // legacy compatibility shims (kept so tables + offline fallback still color)
+  company: { label: 'บริษัท',  cls: 'company',   color: '#3B6D11' },
+  sector:  { label: 'อสังหาฯ', cls: 'sector',    color: '#3B8BD4' },
+  macro:   { label: 'มหภาค',  cls: 'macro',     color: '#EF9F27' },
+  other:   { label: 'อื่นๆ',  cls: 'other',     color: '#888780' },
+  // company pipeline (Gemini)
+  corporate:     { label: 'ผลประกอบการ',    cls: 'corporate',     color: '#3B6D11' },
+  project:       { label: 'โครงการใหม่',    cls: 'project',       color: '#3B8BD4' },
+  dividend:      { label: 'ปันผล/ทุน',     cls: 'dividend',      color: '#1D9E75' },
+  fundraise:     { label: 'หุ้นกู้/เพิ่มทุน', cls: 'fundraise',  color: '#7F77DD' },
+  insider:       { label: 'Insider trade',  cls: 'insider',       color: '#EF9F27' },
+  // sector pipeline
+  sector_policy: { label: 'นโยบาย sector', cls: 'sector_policy', color: '#EF9F27' },
+  sector_data:   { label: 'ข้อมูล sector', cls: 'sector_data',   color: '#185FA5' },
+  peer_news:     { label: 'ข่าว peer',     cls: 'peer_news',     color: '#888780' },
+  // macro pipeline
+  interest_rate: { label: 'ดอกเบี้ย',     cls: 'interest_rate', color: '#A32D2D' },
+  economic_data: { label: 'ตัวเลขเศรษฐกิจ', cls: 'economic_data', color: '#888780' },
+  political:     { label: 'การเมือง',     cls: 'political',     color: '#EF9F27' },
+  disaster:      { label: 'ภัยพิบัติ',     cls: 'disaster',      color: '#A32D2D' },
+  global:        { label: 'ปัจจัยโลก',    cls: 'global',        color: '#888780' },
+};
+function eachRemark(row) {
+  if (!row) return [];
+  // v2: single remark + category (the main path going forward).
+  if (row.remark) {
+    return [{
+      date: row.date,
+      category: row.category || 'other',
+      text: row.remark,
+      close: row.close,
+      change: row.change,
+    }];
+  }
+  // Legacy transition: 3-column shape (still in the SELECT for one release).
+  const out = [];
+  for (const cat of REMARK_CATEGORIES) {
+    const text = row[`remark_${cat}`];
+    if (text) out.push({
+      date: row.date,
+      category: cat,
+      text,
+      close: row.close,
+      change: row.change,
+    });
+  }
+  if (out.length) return out;
+  return [];
+}
+// Joined string of all non-empty remark text — used by the search box and
+// the table "Remark" cell when a single-line summary is wanted.
+function combinedRemark(row) {
+  return eachRemark(row).map(r => r.text).join(' | ');
+}
+// True if the row carries at least one remark in any shape.
+function hasRemark(row) {
+  return eachRemark(row).length > 0;
 }
 function getCSS(v) {
   return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -959,24 +1179,77 @@ function pctChange(arr, key) {
 }
 
 /* ============== KPI Rendering ============== */
+// Latest intraday tick from /api/intraday (kept in a module-level cache so
+// the 90-s pollIntraday() interval can refresh only the #kpiPrice card
+// without re-running renderKPIs for every other KPI).
+const LIVE_TICK = { price: null, prevClose: null, ts: null, marketOpen: false };
+
+// Format ISO ms timestamp as HH:MM:SS in Asia/Bangkok.
+function fmtThaiTime(ms) {
+  if (!ms) return '';
+  return new Date(ms).toLocaleTimeString('th-TH', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Bangkok',
+  });
+}
+
+// Update only the #kpiPrice card. Three modes:
+//   live  — intraday tick is fresh and market is open; show tick + ● Live badge
+//   stale — no fresh tick (server restart, network blip); dim the value
+//   eod   — market closed, show yesterday's close; no badge
+function applyKpiPriceLive() {
+  const card = $('kpiPriceLive');
+  const priceEl = $('kpiPrice');
+  const chEl = $('kpiPriceCh');
+  const fresh = LIVE_TICK.price != null && LIVE_TICK.ts
+    && (Date.now() - LIVE_TICK.ts) < 10 * 60 * 1000;
+  const live = fresh && LIVE_TICK.marketOpen;
+
+  // Always start from the EOD fallback values, then overlay the live tick.
+  const last = DATA.filter(r => r.close != null).slice(-1)[0] || null;
+  const fallbackPrice = last ? last.close : null;
+  const fallbackPrev  = (() => {
+    const arr = DATA.filter(r => r.close != null);
+    return arr.length >= 2 ? arr[arr.length - 2].close : (last && last.change != null ? last.close / (1 + last.change/100) : null);
+  })();
+
+  const displayPrice = live ? LIVE_TICK.price : fallbackPrice;
+  const refPrice     = live ? LIVE_TICK.prevClose : fallbackPrev;
+
+  if (displayPrice == null) {
+    priceEl.textContent = '—';
+    chEl.textContent = '—';
+    chEl.className = 'kpi-delta mut';
+    priceEl.classList.add('dim');
+    if (card) card.innerHTML = '';
+    return;
+  }
+  priceEl.textContent = fmtNum(displayPrice);
+  const ch = refPrice ? ((displayPrice - refPrice) / refPrice) * 100 : 0;
+  chEl.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + ch.toFixed(2) + '%';
+  chEl.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
+
+  if (live) {
+    priceEl.classList.remove('dim');
+    if (card) {
+      const ageSec = Math.round((Date.now() - LIVE_TICK.ts) / 1000);
+      card.innerHTML = `<span class="kpi-live">Live · ${fmtThaiTime(LIVE_TICK.ts)} · ${ageSec}s ago</span>`;
+    }
+  } else {
+    priceEl.classList.add('dim');
+    if (card) card.innerHTML = '';
+  }
+}
+
 function renderKPIs(filtered) {
   const withPrice = filtered.filter(r => r.close != null);
   const last = withPrice.length ? withPrice[withPrice.length-1] : null;
   const prev = withPrice.length >= 2 ? withPrice[withPrice.length-2] : null;
 
-  // 1. Price
-  if (last) {
-    $('kpiPrice').textContent = fmtNum(last.close);
-    const ch = prev && prev.close ? ((last.close - prev.close) / prev.close) * 100 : (last.change || 0);
-    const el = $('kpiPriceCh');
-    el.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + (ch || 0).toFixed(2) + '%';
-    el.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
-    // lastUpdated is now a wall-clock timestamp set by loadMetadata(); no per-render write here.
-  } else {
-    $('kpiPrice').textContent = '—';
-    $('kpiPriceCh').textContent = '—';
-    $('kpiPriceCh').className = 'kpi-delta mut';
-  }
+  // 1. Price — applyKpiPriceLive() owns this card now (called separately on
+  // every 90-s poll, but also called here so initial render has correct values
+  // even before the first poll completes).
+  applyKpiPriceLive();
+  // (legacy code path for KPI #1 removed; other KPIs continue unchanged below.)
 
   // 2. Volume vs 30d avg
   if (last && last.volume != null) {
@@ -1051,24 +1324,32 @@ function renderKPIs(filtered) {
   }
 }
 
-/* ============== Event Pin Annotations ============== */
+/* ============== Event Pin Annotations ==============
+ * Pipeline refactor: 1 pin per day (the new schema carries one remark + one
+ * category). eachRemark() returns either 0 or 1 item in the v2 path; we use
+ * the first item so the legacy 3-column samples keep showing all 3 pins
+ * during the transition release.
+ */
 function buildPinAnnotations(rows, showOnlyTypes) {
   const ann = {};
-  rows.filter(r => r.remark).forEach((r, i) => {
-    const c = classifyEvent(r.remark);
-    if (!c) return;
-    if (showOnlyTypes && !showOnlyTypes.includes(c.type)) return;
-    const x = r.date + 'T00:00:00';
-    // Pin marker only (no vertical line — minimal style)
-    ann['evtPin_' + i] = {
-      type: 'point',
-      xValue: x,
-      yValue: r.close,
-      backgroundColor: c.color,
-      borderColor: '#ffffff',
-      borderWidth: 2,
-      radius: 6,
-    };
+  let i = 0;
+  rows.forEach(r => {
+    for (const item of eachRemark(r)) {
+      const c = classifyEvent(item);
+      if (!c) continue;
+      if (showOnlyTypes && !showOnlyTypes.includes(c.type)) continue;
+      const x = r.date + 'T00:00:00';
+      // Pin marker only (no vertical line — minimal style)
+      ann['evtPin_' + (i++)] = {
+        type: 'point',
+        xValue: x,
+        yValue: r.close,
+        backgroundColor: c.color,
+        borderColor: '#ffffff',
+        borderWidth: 2,
+        radius: 6,
+      };
+    }
   });
   return ann;
 }
@@ -1163,9 +1444,13 @@ function buildDashChart(filtered) {
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
               const row = DATA.find(r => r.date === ymd);
-              if (row && row.remark) {
-                const c = classifyEvent(row.remark);
-                return ['', (c ? '[' + c.label + '] ' : '📰 ') + row.remark];
+              if (row) {
+                const items_ = eachRemark(row);
+                if (items_.length) {
+                  const it = items_[0];
+                  const c = classifyEvent(it);
+                  return ['', (c ? '[' + c.label + '] ' : '📰 ') + it.text];
+                }
               }
               return '';
             }
@@ -1219,37 +1504,95 @@ function focusDashOnDate(dateStr) {
   DASH_CHART.update();
 }
 
-/* ============== News Lists ============== */
+/* ============== News Lists ==============
+ *
+ * Pipeline refactor (Gemini-search v3): the dashboard "ข่าวล่าสุด" sidebar
+ * merges two streams:
+ *   (A) daily.remark items  — 1/trading day from gemini-company pipeline
+ *                             click focuses chart on date
+ *   (B) news_feed items     — many/day from gemini-sector + gemini-macro
+ *                             click opens source_url in new tab
+ *
+ * Sort newest-first, cap at 15 visible. Search box filters both streams.
+ */
 function renderDashNews(filtered) {
-  const items = filtered.filter(r => r.remark);
-  $('dashNewsCount').textContent = items.length + ' รายการ';
-  const search = ($('dashNewsSearch').value || '').toLowerCase().trim();
-  const filtered2 = search ? items.filter(r => r.remark.toLowerCase().includes(search)) : items;
-  const list = $('dashNewsList');
+  // Stream (A): remark items from eachRemark() — 1 per trading day
+  const remarkItems = [];
+  filtered.forEach(r => eachRemark(r).forEach(item => remarkItems.push({
+    source: 'remark',
+    date: item.date,
+    category: item.category,
+    text: item.text,
+    close: item.close,
+    change: item.change,
+  })));
 
-  if (!filtered2.length) {
+  // Stream (B): news_feed items from /api/news (loaded into NEWS_DATA
+  // by loadNewsFeed(); lazily fetched when Dashboard or Feed tab opens)
+  const feedItems = (window.NEWS_DATA || []).map(n => ({
+    source: 'feed',
+    date: (n.date || '').slice(0, 10),
+    category: n.category || 'other',
+    text: n.title || '',
+    url: n.source_url,
+    sourceLabel: n.source_label,
+    impact: n.impact,
+    severity: n.severity,
+  })).filter(it => it.text);
+
+  const merged = [...remarkItems, ...feedItems];
+
+  const search = ($('dashNewsSearch').value || '').toLowerCase().trim();
+  const filteredItems = search
+    ? merged.filter(i => (i.text || '').toLowerCase().includes(search))
+    : merged;
+
+  // Newest first by date string (YYYY-MM-DD sort works as lexical compare)
+  const sorted = [...filteredItems].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  $('dashNewsCount').textContent = sorted.length + ' รายการ';
+
+  const list = $('dashNewsList');
+  if (!sorted.length) {
     list.innerHTML = '<div class="empty-state th">ไม่พบข่าวในช่วงเวลานี้</div>';
     return;
   }
 
-  const sorted = [...filtered2].reverse(); // newest first
-  list.innerHTML = sorted.map(r => {
-    const c = classifyEvent(r.remark);
+  const visible = sorted.slice(0, 15);
+  list.innerHTML = visible.map(item => {
+    if (item.source === 'feed') {
+      // (B) news_feed item — clickable link, no chart focus
+      const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
+      const dateStr = fmtThaiShort(item.date);
+      const url = item.url || '';
+      const linkInner = url
+        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a>`
+        : `<span class="th">${escapeHtml(item.text)}</span>`;
+      return `<div class="news-item feed-dash-item">
+        <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span></div>
+        <div>
+          <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+          ${linkInner}
+        </div>
+      </div>`;
+    }
+    // (A) remark item — click focuses chart on date
+    const c = classifyEvent({ text: item.text, category: item.category });
     const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
-    return `<div class="news-item ${r.date === STATE.focusedDate ? 'focused' : ''}" data-date="${r.date}">
-      <div class="news-date th">${fmtThaiShort(r.date)}</div>
+    return `<div class="news-item ${item.date === STATE.focusedDate ? 'focused' : ''}" data-date="${item.date}">
+      <div class="news-date th">${fmtThaiShort(item.date)}</div>
       <div>
-        <div class="news-text th">${escapeHtml(r.remark)}</div>
+        <div class="news-text th">${escapeHtml(item.text)}</div>
         <div class="mt-8">${tag}</div>
       </div>
       <div class="news-meta">
-        <div class="price">฿${fmtNum(r.close)}</div>
-        <div class="chg ${r.change > 0 ? 'text-pos' : r.change < 0 ? 'text-neg' : 'muted'}">${r.change != null ? fmtPct(r.change) : '—'}</div>
+        <div class="price">฿${fmtNum(item.close)}</div>
+        <div class="chg ${item.change > 0 ? 'text-pos' : item.change < 0 ? 'text-neg' : 'muted'}">${item.change != null ? fmtPct(item.change) : '—'}</div>
       </div>
     </div>`;
   }).join('');
 
-  list.querySelectorAll('.news-item').forEach(el => {
+  // Click handlers — only on remark items (feed items are <a> with their own click)
+  list.querySelectorAll('.news-item:not(.feed-dash-item)').forEach(el => {
     el.addEventListener('click', () => {
       STATE.focusedDate = el.dataset.date;
       focusDashOnDate(STATE.focusedDate);
@@ -1259,7 +1602,9 @@ function renderDashNews(filtered) {
 }
 
 function renderAswNews() {
-  const items = DATA.filter(r => r.remark && r.close != null);
+  // Flatten 3 remark columns → each is its own list item.
+  const items = [];
+  DATA.forEach(r => { if (r.close != null) eachRemark(r).forEach(it => items.push(it)); });
   $('aswCount').textContent = items.length + ' เหตุการณ์';
 
   let sorted;
@@ -1268,66 +1613,82 @@ function renderAswNews() {
   else sorted = [...items].sort((a,b) => Math.abs(b.change || 0) - Math.abs(a.change || 0));
 
   const list = $('aswNewsList');
-  list.innerHTML = sorted.map(r => {
-    const c = classifyEvent(r.remark);
+  list.innerHTML = sorted.map(item => {
+    const c = classifyEvent(item);
     const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
-    return `<div class="news-item" data-date="${r.date}">
-      <div class="news-date th">${fmtThaiShort(r.date)}</div>
+    return `<div class="news-item" data-date="${item.date}">
+      <div class="news-date th">${fmtThaiShort(item.date)}</div>
       <div>
-        <div class="news-text th">${escapeHtml(r.remark)}</div>
+        <div class="news-text th">${escapeHtml(item.text)}</div>
         <div class="mt-8">${tag}</div>
       </div>
       <div class="news-meta">
-        <div class="price">฿${fmtNum(r.close)}</div>
-        <div class="chg ${r.change > 0 ? 'text-pos' : r.change < 0 ? 'text-neg' : 'muted'}">${r.change != null ? fmtPct(r.change) : '—'}</div>
+        <div class="price">฿${fmtNum(item.close)}</div>
+        <div class="chg ${item.change > 0 ? 'text-pos' : item.change < 0 ? 'text-neg' : 'muted'}">${item.change != null ? fmtPct(item.change) : '—'}</div>
       </div>
     </div>`;
   }).join('');
 }
 
 function renderProjectNews() {
-  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'project')
-    .sort((a,b) => b.date.localeCompare(a.date));
+  // Filter across all 3 remark columns for project-classified text.
+  const items = [];
+  DATA.forEach(r => {
+    eachRemark(r).forEach(it => {
+      if (classifyEvent(it)?.type === 'project') items.push(it);
+    });
+  });
+  items.sort((a,b) => b.date.localeCompare(a.date));
   const list = $('projectNewsList');
   if (!items.length) {
     list.innerHTML = '<div class="muted th" style="font-size:11px;">ไม่พบเหตุการณ์โครงการ</div>';
     return;
   }
-  list.innerHTML = items.slice(0, 20).map(r => {
+  list.innerHTML = items.slice(0, 20).map(it => {
     return `<div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
-      <div class="timeline-text th">${escapeHtml(r.remark)}</div>
+      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
+      <div class="timeline-text th">${escapeHtml(it.text)}</div>
     </div>`;
   }).join('');
 }
 
 function renderRateTimeline() {
-  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'interest_rate')
-    .sort((a,b) => a.date.localeCompare(b.date));
+  const items = [];
+  DATA.forEach(r => {
+    eachRemark(r).forEach(it => {
+      if (classifyEvent(it)?.type === 'interest_rate') items.push(it);
+    });
+  });
+  items.sort((a,b) => a.date.localeCompare(b.date));
   const list = $('rateTimeline');
   if (!items.length) {
     list.innerHTML = '<div class="muted th">ไม่พบข้อมูลอัตราดอกเบี้ย</div>';
     return;
   }
-  list.innerHTML = items.map(r => `
+  list.innerHTML = items.map(it => `
     <div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
-      <div class="timeline-text th"><span class="tag interest_rate">ดอกเบี้ย</span> ${escapeHtml(r.remark)}</div>
+      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
+      <div class="timeline-text th"><span class="tag interest_rate">ดอกเบี้ย</span> ${escapeHtml(it.text)}</div>
     </div>`).join('');
 }
 
 function renderPolTimeline() {
-  const items = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === 'political')
-    .sort((a,b) => b.date.localeCompare(a.date));
+  const items = [];
+  DATA.forEach(r => {
+    eachRemark(r).forEach(it => {
+      if (classifyEvent(it)?.type === 'political') items.push(it);
+    });
+  });
+  items.sort((a,b) => b.date.localeCompare(a.date));
   const list = $('polTimeline');
   if (!items.length) {
     list.innerHTML = '<div class="muted th">ไม่พบเหตุการณ์การเมือง</div>';
     return;
   }
-  list.innerHTML = items.map(r => `
+  list.innerHTML = items.map(it => `
     <div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(r.date)} · ฿${fmtNum(r.close)}</div>
-      <div class="timeline-text th"><span class="tag political">การเมือง</span> ${escapeHtml(r.remark)}</div>
+      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
+      <div class="timeline-text th"><span class="tag political">การเมือง</span> ${escapeHtml(it.text)}</div>
     </div>`).join('');
 }
 
@@ -1343,7 +1704,10 @@ function renderDataTable() {
   const sortKey = STATE.tableSort.key;
   const dir = STATE.tableSort.dir === 'asc' ? 1 : -1;
   const sorted = [...filtered].sort((a, b) => {
-    let av = a[sortKey], bv = b[sortKey];
+    // Virtual key for sorting the joined remark text — `r.remark` no longer
+    // exists since the column split; combinedRemark() joins the 3 buckets.
+    const get = (r) => sortKey === 'remark' ? combinedRemark(r) : r[sortKey];
+    let av = get(a), bv = get(b);
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
@@ -1365,7 +1729,8 @@ function renderDataTable() {
   body.innerHTML = page.map(r => {
     const chg = r.change;
     const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
-    return `<tr class="${r.remark ? 'has-remark' : ''}">
+    const has = hasRemark(r);
+    return `<tr class="${has ? 'has-remark' : ''}">
       <td class="th nowrap">${fmtThaiShort(r.date)}</td>
       <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
       <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
@@ -1373,7 +1738,7 @@ function renderDataTable() {
       <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
       <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
       <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
-      <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+      <td class="th">${has ? (() => { const items = eachRemark(r); const it = items[0]; const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other; return `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r)); })() : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -1386,7 +1751,7 @@ function renderPriceTable() {
     filtered = filterByRange(filtered, STATE.priceRange);
   }
   const search = ($('priceTableSearch').value || '').toLowerCase().trim();
-  if (search) filtered = filtered.filter(r => r.remark && r.remark.toLowerCase().includes(search));
+  if (search) filtered = filtered.filter(r => hasRemark(r) && combinedRemark(r).toLowerCase().includes(search));
 
   const sortKey = STATE.priceTableSort.key;
   const dir = STATE.priceTableSort.dir === 'asc' ? 1 : -1;
@@ -1403,7 +1768,8 @@ function renderPriceTable() {
   body.innerHTML = sorted.slice(0, 100).map(r => {
     const chg = r.change;
     const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
-    return `<tr class="${r.remark ? 'has-remark' : ''}">
+    const has = hasRemark(r);
+    return `<tr class="${has ? 'has-remark' : ''}">
       <td class="th nowrap">${fmtThaiShort(r.date)}</td>
       <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
       <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
@@ -1411,7 +1777,7 @@ function renderPriceTable() {
       <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
       <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
       <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
-      <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+      <td class="th">${has ? (() => { const items = eachRemark(r); const it = items[0]; const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other; return `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r)); })() : ''}</td>
     </tr>`;
   }).join('');
   if (!sorted.length) body.innerHTML = '<tr><td colspan="8" class="empty-state th">ไม่พบข้อมูล</td></tr>';
@@ -1597,9 +1963,13 @@ function buildPriceChart() {
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
               const row = DATA.find(r => r.date === ymd);
-              if (row && row.remark) {
-                const c = classifyEvent(row.remark);
-                return ['', (c ? '[' + c.label + '] ' : '') + row.remark];
+              if (row) {
+                const items_ = eachRemark(row);
+                if (items_.length) {
+                  const it = items_[0];
+                  const c = classifyEvent(it);
+                  return ['', (c ? '[' + c.label + '] ' : '') + it.text];
+                }
               }
               return '';
             }
@@ -1682,7 +2052,7 @@ function renderPriceStats(filtered) {
   const ret = ((last - first) / first) * 100;
   const vols = filtered.filter(r => r.volume != null).map(r => r.volume);
   const avgVol = vols.length ? vols.reduce((a,b) => a+b, 0) / vols.length : 0;
-  const events = filtered.filter(r => r.remark).length;
+  const events = filtered.reduce((n, r) => n + eachRemark(r).length, 0);
   $('priceStats').innerHTML = `
     <div class="stat-row"><span class="label th">ผลตอบแทน (%)</span>
       <span class="val ${ret > 0 ? 'text-pos' : ret < 0 ? 'text-neg' : ''}">${fmtPct(ret)}</span></div>
@@ -1744,81 +2114,180 @@ function buildPropChart() {
   }
 }
 
-// --- Live news (NewsAPI.org) for the อสังหาฯ tab ---
+// --- Sector headlines for the อสังหาฯ tab (Gemini-driven) ---
 
-const TAG_LABELS = {
-  asw: 'ASW', ap: 'AP', lh: 'LH', qh: 'QH', siri: 'SIRI', spali: 'SPALI',
-  noble: 'NOBLE', ori: 'ORI', anan: 'ANAN', lpn: 'LPN', wha: 'WHA',
-  'prop-th': 'Thai RE', 'prop-bkk': 'Bangkok',
-};
-
-async function fetchNews({ from, tag, limit = 30 } = {}) {
-  const params = new URLSearchParams();
-  if (from) params.set('from', from);
-  if (tag)  params.set('tag',  tag);
-  if (limit) params.set('limit', String(limit));
-  const r = await fetch('/api/news?' + params.toString());
-  if (!r.ok) return { rows: [], error: 'fetch_failed' };
-  return r.json();
-}
-
-function fmtNewsDate(iso) {
-  if (!iso) return '';
-  // NewsAPI returns "2025-06-30T14:22:00Z" — render as local dd MMM HH:mm.
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-async function renderPropNews() {
+function renderPropNews() {
+  // Pull the past 30 days of sector / project headlines straight from DATA
+  // (already loaded by /api/daily). Pipeline refactor: each row now has 1
+  // remark + 1 category; we surface 'sector' rows as อสังหาฯ and any row
+  // whose remark classifies as 'project' as โครงการ.
   const el = $('propNewsList');
   if (!el) return;
-  el.innerHTML = '<div class="muted th" style="font-size:11px;">กำลังโหลด...</div>';
 
-  // 30-day window keeps the list snappy and matches the cron overlap.
-  const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const data = await fetchNews({ from, limit: 25 });
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const items = [];
+  DATA.forEach(r => {
+    if (r.date < cutoff) return;
+    eachRemark(r).forEach(it => {
+      // Direct sector category → bucket as 'sector'.
+      if (it.category === 'sector') {
+        items.push({ date: r.date, category: 'sector', text: it.text, close: r.close, change: r.change });
+        return;
+      }
+      // Otherwise fall back to the keyword classifier — 'project' in the
+      // legacy sense (โครงการ / JV / presale) still belongs here.
+      if (classifyEvent(it)?.type === 'project') {
+        items.push({ date: r.date, category: 'project', text: it.text, close: r.close, change: r.change });
+      }
+    });
+  });
+  items.sort((a, b) => b.date.localeCompare(a.date));
 
-  if (data.error) {
-    el.innerHTML = '<div class="empty-state th">โหลดข่าวไม่สำเร็จ</div>';
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state th">ยังไม่มีข่าวอสังหาฯ — รอ Gemini cron 17:45 หรือกดรีเฟรชจาก Server</div>';
     return;
   }
-  if (!data.rows || !data.rows.length) {
-    el.innerHTML = '<div class="empty-state th">ยังไม่มีข่าว — กดปุ่มรีเฟรช หรือตั้งค่า NEWSAPI_KEY ที่เซิร์ฟเวอร์</div>';
-    return;
-  }
 
-  el.innerHTML = data.rows.map(a => {
-    const tagLabel = TAG_LABELS[a.query_tag] || a.query_tag || 'News';
-    const src = a.source_name ? `<span class="muted" style="font-size:10px;"> · ${escapeHtml(a.source_name)}</span>` : '';
+  el.innerHTML = items.slice(0, 30).map(it => {
+    const badge = REMARK_BADGE[it.category] || REMARK_BADGE.sector;
     return `<div class="news-item">
-      <div class="news-date th">${fmtNewsDate(a.published_at)}</div>
+      <div class="news-date th">${fmtThaiShort(it.date)}</div>
       <div>
-        <a class="news-text th" href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">${escapeHtml(a.title)}</a>
-        ${src}
+        <div class="news-text th">${escapeHtml(it.text)}</div>
+        <div class="mt-8"><span class="tag ${badge.cls}">${escapeHtml(badge.label)}</span></div>
       </div>
-      <div class="news-meta"><span class="tag ${a.query_tag}">${escapeHtml(tagLabel)}</span></div>
+      <div class="news-meta">
+        <div class="price">฿${fmtNum(it.close)}</div>
+      </div>
     </div>`;
   }).join('');
 }
 
+// Kept as a no-op so any leftover UI hook still works — the panel now reads
+// from DATA on every render.
 async function refreshPropNews() {
-  const btn = $('propNewsRefresh');
-  if (btn) { btn.disabled = true; btn.textContent = 'กำลังรีเฟรช...'; }
+  await renderPropNews();
+}
+
+/* ============== News Feed (Gemini-search v3) ==============
+ * Reads from /api/news (backed by the news_feed table populated by
+ * lib/fetchers/gemini-search.mjs 'gemini-sector' + 'gemini-macro'
+ * pipelines). Each row has a TITLE (no remark rewrite) plus a source_url
+ * the user can click through, and an explicit 13-value category.
+ */
+// news_feed cache — lives on window so both renderDashNews() (dashboard
+// sidebar) and renderNewsFeed() (Feed tab) can read the same data without
+// re-fetching. Set initially by the boot Promise.all() and refreshed by
+// loadNewsFeed() / refresh handlers.
+window.NEWS_DATA = window.NEWS_DATA || [];
+
+async function loadNewsFeed() {
   try {
-    const r = await fetch('/api/news/refresh', { method: 'POST' });
-    const j = await r.json();
-    if (!j.ok) {
-      const el = $('propNewsList');
-      if (el) el.innerHTML = `<div class="empty-state th">รีเฟรชไม่สำเร็จ: ${escapeHtml(j.error || 'unknown')}</div>`;
-      return;
-    }
-    await renderPropNews();
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '↻ รีเฟรช'; }
+    const r = await fetch('/api/news?limit=200');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    window.NEWS_DATA = d.rows || [];
+  } catch (e) {
+    console.warn(`[feed] failed: ${e.message || e}`);
+    window.NEWS_DATA = [];
   }
+  renderNewsFeed();
+}
+
+function renderNewsFeed() {
+  const list = $('feedList');
+  if (!list) return;
+  const cat = STATE.feedCategory || 'all';
+  const items = (cat === 'all') ? window.NEWS_DATA : window.NEWS_DATA.filter(n => n.category === cat);
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state th">ยังไม่มีข่าว — รอ cron 17:50 น. (sector) / 17:55 น. (macro) หรือกด "รีเฟรช"</div>`;
+    return;
+  }
+  list.innerHTML = items.map(n => {
+    const d = (n.date || '').slice(0, 10);
+    const dt = d ? new Date(d + 'T00:00:00') : null;
+    const dateStr = dt ? dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    const catBadge = REMARK_BADGE[n.category] || REMARK_BADGE.other;
+    const sev = n.severity ? ` · <span class="muted">${escapeHtml(n.severity)}</span>` : '';
+    const impact = n.impact && n.impact !== 'neutral'
+      ? ` · <span class="muted th">${escapeHtml(n.impact)}</span>`
+      : '';
+    return `
+      <div class="news-item feed-item">
+        <div class="news-date th">${escapeHtml(dateStr)} · <span class="muted">${escapeHtml(n.source_label || '')}</span>${sev}</div>
+        <div>
+          <span class="tag ${catBadge.cls}" style="background:${catBadge.color}1a;color:${catBadge.color};">${escapeHtml(catBadge.label)}</span>${impact}
+          ${n.source_url
+            ? `<a href="${escapeHtml(n.source_url)}" target="_blank" rel="noopener noreferrer" class="th">${escapeHtml(n.title)}</a>`
+            : `<span class="th">${escapeHtml(n.title)}</span>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// =============================================================================
+// Morning Brief (Gemini-search pipeline, Monday 08:00 ICT)
+// =============================================================================
+//
+// Reads from /api/morning-brief (the latest non-null brief). Renders 3
+// sections: LAST_WEEK bullets, THIS_WEEK_WATCH bullets, and a tone badge
+// (bullish/bearish/neutral) with the model's one-line reason.
+
+async function loadMorningBrief() {
+  const brief = await window.ASW_API.morningBrief();
+  window.MORNING_BRIEF = brief;
+  renderMorningBrief();
+}
+
+function renderMorningBrief() {
+  const el = $('morningBriefContent');
+  if (!el) return;
+  const b = window.MORNING_BRIEF || {};
+  if (!b || !b.date) {
+    el.innerHTML = '<div class="empty-state th">ยังไม่มี Morning Brief — รอ cron จันทร์ 08:00 ICT หรือกด "รีเฟรช"</div>';
+    return;
+  }
+  const lastWeekBullets = (b.morning_brief || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const watchBullets    = (b.morning_watch || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const tone = (b.morning_remark || 'neutral').toLowerCase();
+  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
+  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const dt = new Date(b.date + 'T00:00:00');
+  const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  el.innerHTML = `
+    <div class="card mb-12">
+      <div class="row-between mb-12">
+        <div>
+          <span class="muted th" style="font-size:11px;">สัปดาห์ของวันที่</span>
+          <h3 class="th" style="font-size:15px;margin:4px 0 0 0;">${escapeHtml(dateStr)}</h3>
+        </div>
+        <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:13px;padding:6px 12px;">${escapeHtml(toneLabel)}</span>
+      </div>
+      ${b.morning_brief
+        ? `<div class="card mb-8" style="background:var(--surface-2);">
+            <h4 class="th mb-8" style="font-size:13px;">📋 สัปดาห์ที่ผ่านมา</h4>
+            <ul class="th" style="margin:0;padding-left:20px;line-height:1.7;">
+              ${lastWeekBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('')}
+            </ul>
+          </div>`
+        : ''}
+      ${b.morning_watch
+        ? `<div class="card" style="background:var(--surface-2);">
+            <h4 class="th mb-8" style="font-size:13px;">👀 สัปดาห์นี้ต้องติดตาม</h4>
+            <ul class="th" style="margin:0;padding-left:20px;line-height:1.7;">
+              ${watchBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('')}
+            </ul>
+          </div>`
+        : ''}
+      ${b.morning_brief || b.morning_watch
+        ? `<div class="muted th mt-12" style="font-size:11px;font-style:italic;">
+            🤖 ${escapeHtml((b.morning_remark || ''))}${b.morning_weekly_at ? ' · อัปเดตล่าสุด ' + new Date(b.morning_weekly_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) + ' น.' : ''}
+          </div>`
+        : ''}
+    </div>
+  `;
 }
 
 function buildImpactChart() {
@@ -1831,14 +2300,35 @@ function buildImpactChart() {
   const colors = [];
 
   categories.forEach(cat => {
-    const events = DATA.filter(r => r.remark && classifyEvent(r.remark)?.type === cat && r.close != null);
+    // Build the flat list of event items belonging to this category from
+    // ALL 3 remark columns.
+    const events = [];
+    DATA.forEach(r => {
+      if (r.close == null) return;
+      eachRemark(r).forEach(it => {
+        if (classifyEvent(it)?.type === cat) events.push({ row: r, item: it });
+      });
+    });
+    // Union Stream B: high-severity news_feed items (Gemini sector/macro).
+    // Macro severity=high is also mirrored into daily.remark, so dedup by date
+    // to avoid double-counting the same underlying event.
+    const seenDates = new Set(events.map(ev => ev.row.date));
+    (window.NEWS_DATA || []).forEach(n => {
+      if (n.severity !== 'high' || seenDates.has(n.date)) return;
+      const it = { text: n.title, category: n.category };
+      if (classifyEvent(it)?.type !== cat) return;
+      const row = DATA.find(r => r.date === n.date && r.close != null);
+      if (!row) return; // need a price row to measure impact
+      seenDates.add(n.date);
+      events.push({ row, item: it });
+    });
     if (!events.length) return;
     let sumDay0 = 0, sumDay3 = 0, n0 = 0, n3 = 0;
     events.forEach(ev => {
       // Day 0: %change on event day
-      if (typeof ev.change === 'number') { sumDay0 += ev.change; n0++; }
+      if (typeof ev.row.change === 'number') { sumDay0 += ev.row.change; n0++; }
       // Day 3: cumulative %change from event day to 3 trading days later
-      const idx = DATA.findIndex(r => r.date === ev.date);
+      const idx = DATA.findIndex(r => r.date === ev.row.date);
       if (idx >= 0) {
         const future = DATA.slice(idx, idx + 4).filter(r => r.close != null);
         if (future.length >= 2) {
@@ -1847,7 +2337,7 @@ function buildImpactChart() {
         }
       }
     });
-    const c = classifyEvent(events[0].remark);
+    const c = classifyEvent(events[0].item);
     labels.push(c.label);
     day0.push(n0 ? sumDay0 / n0 : 0);
     day3.push(n3 ? sumDay3 / n3 : 0);
@@ -1921,7 +2411,10 @@ function renderReportPreview() {
   const withPrice = data.filter(r => r.close != null);
   const first = withPrice[0], last = withPrice[withPrice.length-1];
   const ret = ((last.close - first.close) / first.close) * 100;
-  const events = data.filter(r => r.remark);
+  // Flat list of all remarks across all 3 columns in the report range.
+  const events = [];
+  data.forEach(r => eachRemark(r).forEach(it => events.push(it)));
+  events.sort((a,b) => a.date.localeCompare(b.date));
   const lo = Math.min(...withPrice.map(r => r.close));
   const hi = Math.max(...withPrice.map(r => r.close));
   const t = STATE.report;
@@ -2011,11 +2504,11 @@ function renderReportPreview() {
     if (!events.length) {
       html += `<div class="muted ${isEn ? '' : 'th'}">${LBL.noEventsRange}</div>`;
     } else {
-      html += '<div class="timeline">' + events.slice(0, 25).map(r => {
-        const c = classifyEvent(r.remark);
+      html += '<div class="timeline">' + events.slice(0, 25).map(it => {
+        const c = classifyEvent(it);
         return `<div class="timeline-item">
-          <div class="timeline-date th">${fmtThaiShort(r.date)} · ฿${fmtNum(r.close)}</div>
-          <div class="timeline-text th">${c ? `<span class="tag ${c.type}">${c.label}</span> ` : ''}${escapeHtml(r.remark)}</div>
+          <div class="timeline-date th">${fmtThaiShort(it.date)} · ฿${fmtNum(it.close)}</div>
+          <div class="timeline-text th">${c ? `<span class="tag ${c.type}">${c.label}</span> ` : ''}${escapeHtml(it.text)}</div>
         </div>`;
       }).join('') + '</div>';
     }
@@ -2039,12 +2532,13 @@ function renderReportPreview() {
       <thead><tr><th class="th">วันที่</th><th class="num th">ราคา</th><th class="num th">%Chg</th><th class="num th">ปริมาณ</th><th class="th">Remark</th></tr></thead>
       <tbody>`;
     data.slice(-50).reverse().forEach(r => {
-      html += `<tr class="${r.remark ? 'has-remark' : ''}">
+      const has = hasRemark(r);
+      html += `<tr class="${has ? 'has-remark' : ''}">
         <td class="th">${fmtThaiShort(r.date)}</td>
         <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
         <td class="num ${r.change > 0 ? 'pos' : r.change < 0 ? 'neg' : ''}">${r.change != null ? fmtPct(r.change) : '—'}</td>
         <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
-        <td class="th">${r.remark ? escapeHtml(r.remark) : ''}</td>
+        <td class="th">${has ? (() => { const items = eachRemark(r); const it = items[0]; const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other; return `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r)); })() : ''}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -2084,7 +2578,8 @@ function buildReportData() {
   const withPrice = data.filter(r => r.close != null);
   const first = withPrice[0], last = withPrice[withPrice.length-1];
   const ret = first && last ? ((last.close - first.close) / first.close) * 100 : 0;
-  const events = data.filter(r => r.remark);
+  const events = [];
+  data.forEach(r => eachRemark(r).forEach(it => events.push(it)));
   const t = STATE.report;
   return { data, withPrice, first, last, ret, events, title: t.title || 'ASW.BK รายงาน', preparedBy: t.preparedBy || '—', lang: t.lang };
 }
@@ -2117,7 +2612,7 @@ function exportToExcel() {
     dataSheet.push([
       d.date, d.close, d.change, d.volume, d.value,
       d.setIdx, d.propIdx, d.remark || '',
-      classifyEvent(d.remark)?.label || '',
+      classifyEvent({ text: d.remark, category: d.category })?.label || '',
     ]);
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dataSheet), 'Data');
@@ -2126,7 +2621,7 @@ function exportToExcel() {
   if (r.events.length) {
     const evSheet = [['วันที่', 'หมวด', 'ราคาปิด', '%เปลี่ยนแปลง', 'Remark']];
     r.events.forEach(e => {
-      evSheet.push([e.date, classifyEvent(e.remark)?.label || '', e.close, e.change, e.remark]);
+      evSheet.push([e.date, classifyEvent(e)?.label || '', e.close, e.change, e.text]);
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evSheet), 'Events');
   }
@@ -2195,12 +2690,12 @@ async function exportToPdf() {
   pdf.text('Date', 15, y); pdf.text('Cat', 40, y); pdf.text('Price', 60, y); pdf.text('%Chg', 80, y); pdf.text('Remark', 100, y); y += 5;
   r.events.slice(0, 60).forEach(e => {
     if (y > pageH - 20) { pdf.addPage(); y = 20; }
-    const c = classifyEvent(e.remark);
+    const c = classifyEvent(e);
     pdf.text(fmtThaiShort(e.date), 15, y);
     pdf.text(c?.label || '', 40, y);
     pdf.text('฿' + fmtNum(e.close), 60, y);
     pdf.text(fmtPct(e.change), 80, y);
-    const txt = String(e.remark || '').slice(0, 60);
+    const txt = String(e.text || '').slice(0, 60);
     pdf.text(txt, 100, y);
     y += 5;
   });
@@ -2250,7 +2745,7 @@ function updateStatusBar() {
   $('sbFile').textContent = CURRENT_FILE_NAME;
   if (DATA.length) {
     $('sbRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
-    $('sbEvents').textContent = DATA.filter(r => r.remark).length;
+    $('sbEvents').textContent = DATA.reduce((n, r) => n + eachRemark(r).length, 0);
   }
   const viewNames = { dashboard: 'Dashboard', price: 'ราคาย้อนหลัง', news: 'ข่าวและปัจจัย', report: 'สร้างรายงาน', history: 'ประวัติ', settings: 'ตั้งค่า' };
   $('sbView').textContent = viewNames[STATE.view] || STATE.view;
@@ -2276,7 +2771,7 @@ function renderSettingsInfo() {
   $('currentFileName').textContent = CURRENT_FILE_NAME;
   if (DATA.length) {
     $('currentFileRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
-    $('currentFileEvents').textContent = DATA.filter(r => r.remark).length + ' รายการ';
+    $('currentFileEvents').textContent = DATA.reduce((n, r) => n + eachRemark(r).length, 0) + ' รายการ';
   }
   // Trigger async Data Health fetch
   loadDataHealth();
@@ -2429,11 +2924,74 @@ document.addEventListener('DOMContentLoaded', () => {
         window.__propNewsLoaded = true;
         renderPropNews();
       }
+      // Lazy-load the Gemini-search news feed the first time the user opens
+      // the Feed tab. Subsequent opens reuse the cached NEWS_DATA so the
+      // tab opens instantly. (Also pre-loaded at boot, so this is a safety
+      // net for offline / failed-bootstrap cases.)
+      if (t === 'feed') {
+        if (!window.__newsFeedLoaded) {
+          window.__newsFeedLoaded = true;
+          loadNewsFeed();
+        } else {
+          renderNewsFeed();
+        }
+      }
+      // Morning Brief tab — lazy-load only on first open
+      if (t === 'morning' && !window.__morningLoaded) {
+        window.__morningLoaded = true;
+        loadMorningBrief();
+      } else if (t === 'morning') {
+        renderMorningBrief();
+      }
     });
   });
   // Live news refresh button (อสังหาฯ tab).
   const propRefresh = $('propNewsRefresh');
   if (propRefresh) propRefresh.addEventListener('click', refreshPropNews);
+  // Feed category pills (Pipeline B)
+  document.querySelectorAll('[data-feed-cat]').forEach(p => {
+    p.addEventListener('click', () => {
+      document.querySelectorAll('[data-feed-cat]').forEach(x => x.classList.toggle('active', x === p));
+      STATE.feedCategory = p.dataset.feedCat;
+      renderNewsFeed();
+    });
+  });
+  // Feed refresh button — POST /api/news/refresh then reload.
+  const feedRefresh = $('feedRefreshBtn');
+  if (feedRefresh) {
+    feedRefresh.addEventListener('click', async () => {
+      feedRefresh.disabled = true;
+      try {
+        const r = await window.ASW_API.newsRefresh();
+        if (!r || !r.ok) {
+          showToast('รีเฟรชไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
+        } else {
+          showToast('รีเฟรช Gemini Search แล้ว');
+        }
+        await loadNewsFeed();
+      } finally {
+        feedRefresh.disabled = false;
+      }
+    });
+  }
+  // Morning Brief refresh button — POST /api/morning-brief/refresh then reload.
+  const morningRefresh = $('morningRefreshBtn');
+  if (morningRefresh) {
+    morningRefresh.addEventListener('click', async () => {
+      morningRefresh.disabled = true;
+      try {
+        const r = await window.ASW_API.morningBriefRefresh();
+        if (!r.ok) {
+          showToast('รีเฟรชไม่สำเร็จ: ' + (r.error || 'unknown'));
+        } else {
+          showToast('รีเฟรช Morning Brief แล้ว');
+        }
+        await loadMorningBrief();
+      } finally {
+        morningRefresh.disabled = false;
+      }
+    });
+  }
   // News sort
   document.querySelectorAll('#newsSort .pill').forEach(b => {
     b.addEventListener('click', () => {
@@ -2549,11 +3107,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial render — read ?view= from URL for deep linking / screenshots
   const initialView = new URLSearchParams(location.search).get('view') || 'dashboard';
   // Bootstrap: try to load data from backend; fall back to bundled SAMPLE_DATA.
+  // Pipeline refactor (Gemini-search v3): also fetch /api/news (Pipeline B
+  // headlines) and /api/morning-brief in parallel so the Dashboard
+  // "ข่าวล่าสุด" sidebar and the Morning Brief tab both render with real
+  // data on first paint (no need to wait for the user to click Feed tab).
   (async () => {
     try {
-      const [rows, meta] = await Promise.all([window.ASW_API.daily(), window.ASW_API.metadata()]);
+      const [rows, meta, newsRows, brief] = await Promise.all([
+        window.ASW_API.daily(),
+        window.ASW_API.metadata(),
+        window.ASW_API.newsFeed(),
+        window.ASW_API.morningBrief(),
+      ]);
       if (rows && rows.length) {
         DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+      }
+      // Cache news_feed items + morning brief globally so renderDashNews() and
+      // the Morning Brief tab can read them without an extra round-trip.
+      if (newsRows) {
+        window.NEWS_DATA = newsRows;
+        window.__newsFeedLoaded = true;
+      }
+      if (brief && brief.date) {
+        window.MORNING_BRIEF = brief;
       }
       if (meta && meta.lastFetchSource) {
         CURRENT_FILE_NAME = meta.lastFetchSource === 'bundled' ? 'sample_data.js' : ('Live · ' + meta.lastFetchSource);
@@ -2634,6 +3210,60 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   })();
+
+  // Auto-poll /api/metadata every 60s; refetch DATA when the backend
+  // reports a newer lastFetched (i.e. the 15-min cron or a manual refresh
+  // has written new rows). User no longer needs to hit the refresh button
+  // for prices to feel "live". Browser tab throttling is fine — cron
+  // already runs server-side, this is just for catching up the UI.
+  let _lastFetchedSeen = null;
+  async function autoPollOnce() {
+    try {
+      const m = await window.ASW_API.metadata();
+      if (!m || !m.lastFetched) return;
+      if (_lastFetchedSeen === null) { _lastFetchedSeen = m.lastFetched; return; }
+      if (m.lastFetched === _lastFetchedSeen) return;
+      _lastFetchedSeen = m.lastFetched;
+      const rows = await window.ASW_API.daily();
+      DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+      if (typeof PEER_CACHE !== 'undefined') PEER_CACHE = null;
+      const lu = $('lastUpdated');
+      if (lu) {
+        lu.textContent = new Date(m.lastFetched).toLocaleString('th-TH',
+          { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
+      }
+      CURRENT_FILE_NAME = 'Live · ' + (m.lastFetchSource || 'yahoo');
+      const sb = $('sbFile'); if (sb) sb.textContent = CURRENT_FILE_NAME;
+      setView(STATE.view);
+      updateStatusBar();
+    } catch (e) { /* silent — keep current view */ }
+  }
+  setInterval(autoPollOnce, 60_000);
+
+  // Live-ticker poll — every 90s. Independent from autoPollOnce because
+  // it updates only the #kpiPrice DOM nodes (cheap, no chart re-render).
+  // Distinct from the chart's "real-time" semantics: the chart still reads
+  // DATA (EOD closes); only the KPI displays the intraday partial.
+  async function pollIntraday() {
+    try {
+      const j = await window.ASW_API.intraday();
+      if (j) {
+        LIVE_TICK.price = j.price;
+        LIVE_TICK.prevClose = j.prevClose;
+        LIVE_TICK.ts = j.ts;
+        LIVE_TICK.marketOpen = !!j.marketOpen;
+        LIVE_TICK.lastError = j.lastError || null;
+      }
+      // Always re-apply: even when market closes mid-poll, the KPI dims and
+      // the badge disappears. This also handles "first poll after boot"
+      // correctly — falls back to DATA[last].close until the cron warms up.
+      if (typeof STATE !== 'undefined') applyKpiPriceLive();
+    } catch (e) { /* silent — keep current */ }
+  }
+  // Stagger the first live poll (immediately) so users see the tick without
+  // waiting 90 s on first load; subsequent polls every 90 s.
+  setTimeout(pollIntraday, 1500);
+  setInterval(pollIntraday, 90_000);
 });
 
 async function loadDataHealth() {
