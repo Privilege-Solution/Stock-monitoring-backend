@@ -18,7 +18,15 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+// Static: serve the frontend/ dir (HTML/CSS), plus an explicit route for the
+// repo-root `sample_data.js` (the frontend loads it via <script src> and the
+// seed function below reads it from disk — both need an exact path).
+const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
+const REPO_ROOT    = path.join(__dirname, '..');
+app.get('/sample_data.js', (req, res) =>
+  res.sendFile('sample_data.js', { root: REPO_ROOT })
+);
+app.use(express.static(FRONTEND_DIR));
 
 // In-memory live-ticker cache. Decoupled from `daily.close` so the chart's
 // ASW line shows only end-of-day closes while the KPI shows the latest
@@ -38,7 +46,7 @@ const INTRADAY = {
 // last-resort seed ONLY when the DB is empty AND Postgres is unreachable.
 // In the Postgres-only world this is rarely hit, but kept for offline dev.
 function seedFromSampleData() {
-  const samplePath = path.join(__dirname, 'sample_data.js');
+  const samplePath = path.join(__dirname, '..', 'sample_data.js');
   if (!fs.existsSync(samplePath)) return 0;
   const txt = fs.readFileSync(samplePath, 'utf8');
   const match = txt.match(/window\.SAMPLE_DATA\s*=\s*(\[[\s\S]*\])\s*;?/);
