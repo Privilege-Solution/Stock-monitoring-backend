@@ -413,6 +413,18 @@
             <span id="newsRefreshIcon"></span><span class="th"> รีเฟรช</span>
           </button>
         </div>
+        <div class="feed-cat-row">
+          <span class="muted th feed-cat-label">หมวด:</span>
+          <div class="pill-row feed-cat-pills" id="newsCatPills">
+            <button class="pill th active" data-cat="__all">ทั้งหมด</button>
+            <button class="pill th" data-cat="company_filing">SET filing</button>
+            <button class="pill th" data-cat="broker">โบรกเกอร์</button>
+            <button class="pill th" data-cat="insider_trade">Insider</button>
+            <button class="pill th" data-cat="investor_alert">SET alert</button>
+            <button class="pill th" data-cat="macro_fx">ค่าเงิน</button>
+            <button class="pill th" data-cat="debt_rating">อันดับเครดิต</button>
+          </div>
+        </div>
       </div>
 
       <!-- 5 bucket sections (severity-first sort within each) -->
@@ -952,6 +964,7 @@ const STATE = {
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
   newsRange: '1M',       // 'Today' | '1W' | '1M' | '3M' | 'ALL'
+  newsCats: new Set(),   // empty = all categories shown (migrate-v8 news-cat filter chips)
   newsCollapsed: { last_week: true, older: true },  // today/yesterday/this_week expanded by default
   // User-action state (migrate-v6): hide toggle, note cache, toast timer.
   newsShowHidden: false, // when true, buildMergedNewsItems() includes hidden rows
@@ -2206,6 +2219,19 @@ function buildMergedNewsItems() {
   );
 }
 
+// Migrate-v8: paint the .active state on category chips based on
+// STATE.newsCats. Multi-select: real chips are active when their value is in
+// the Set. The "ทั้งหมด" sentinel chip is active only when the Set is empty.
+function syncNewsCatPills() {
+  document.querySelectorAll('#newsCatPills .pill').forEach(b => {
+    const cat = b.dataset.cat;
+    const active = cat === '__all'
+      ? STATE.newsCats.size === 0
+      : STATE.newsCats.has(cat);
+    b.classList.toggle('active', active);
+  });
+}
+
 function renderUnifiedNews() {
   const today = new Date().toISOString().slice(0, 10);
   let items = buildMergedNewsItems();
@@ -2214,6 +2240,10 @@ function renderUnifiedNews() {
   // Search filter (text contains, case-insensitive, both streams).
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
+  // Migrate-v8: category OR-filter (multi-select chips above). Empty Set = all.
+  if (STATE.newsCats.size > 0) {
+    items = items.filter(it => STATE.newsCats.has(it.category));
+  }
   // Sort: priority desc, then date desc.
   items.sort((a, b) => {
     const pa = (a.display_priority != null) ? a.display_priority : priorityForItem(a);
@@ -3191,6 +3221,32 @@ document.addEventListener('DOMContentLoaded', () => {
       renderUnifiedNews();
     });
   });
+  // Migrate-v8: paint the 6 category chips with REMARK_BADGE colors so they
+  // match the badges inside news cards (which already render via the same
+  // REMARK_BADGE color tokens).
+  document.querySelectorAll('#newsCatPills .pill[data-cat]').forEach(b => {
+    const cat = b.dataset.cat;
+    if (cat === '__all') return;
+    const badge = REMARK_BADGE[cat];
+    if (!badge) return;
+    b.style.setProperty('--cat-color', badge.color);
+  });
+  // Migrate-v8: category chips — multi-select OR. "ทั้งหมด" is the reset
+  // sentinel (not a real category). Empty Set means "show all".
+  document.querySelectorAll('#newsCatPills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      const cat = b.dataset.cat;
+      if (cat === '__all') {
+        STATE.newsCats = new Set();
+      } else {
+        if (STATE.newsCats.has(cat)) STATE.newsCats.delete(cat);
+        else STATE.newsCats.add(cat);
+      }
+      syncNewsCatPills();
+      renderUnifiedNews();
+    });
+  });
+  syncNewsCatPills();
   document.querySelectorAll('.feed-bucket-toggle').forEach(b => {
     b.addEventListener('click', () => {
       const key = b.dataset.bucket;

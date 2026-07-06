@@ -645,6 +645,26 @@
   .feed-toolbar .input {
     @apply px-3 py-2 rounded-md border border-border bg-surface text-text;
   }
+  /* Migrate-v8 — category-filter chip row inside the News toolbar.
+     Wraps below .feed-toolbar so the search field stays on the first line. */
+  .feed-cat-row {
+    @apply flex items-center gap-2 mt-2 flex-wrap;
+  }
+  .feed-cat-label {
+    @apply text-xs;
+  }
+  /* Per-chip accent color is set inline at boot via the --cat-color custom
+     property (pulled from REMARK_BADGE.color). Hover + .active states use
+     this so chips match the badges inside news cards. */
+  .pill[data-cat]:not([data-cat="__all"]):hover {
+    border-color: var(--cat-color);
+    color: var(--cat-color);
+  }
+  .pill[data-cat]:not([data-cat="__all"]).active {
+    background: color-mix(in srgb, var(--cat-color) 14%, transparent);
+    border-color: var(--cat-color);
+    color: var(--cat-color);
+  }
 
   /* Collapsible bucket section (Today / Yesterday / etc.). */
   .feed-bucket {
