@@ -638,11 +638,6 @@
 
 /* === Unified News Feed (migrate-v4 rebuild) === */
 @layer components {
-  /* Morning Brief banner sits above the 2-col grid; full-width card. */
-  .feed-mb-banner {
-    @apply p-4;
-  }
-
   /* Toolbar row inside the search/range card — wrap on narrow screens. */
   .feed-toolbar {
     @apply flex gap-2 items-center flex-wrap;

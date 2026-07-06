@@ -394,42 +394,6 @@
     <!-- ====================== News & Factors View (unified feed, migrate-v4) ====================== -->
     <section class="view" id="view-news">
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
-      <div class="view-sub th">รวมข่าวจาก Daily Remark + Gemini Search — เรียงตาม severity แล้วแบ่งตามช่วงเวลา</div>
-
-      <!-- Morning Brief banner (Monday weekly summary, pinned at top) -->
-      <div class="card feed-mb-banner mb-16" id="feedMbBanner">
-        <div class="row-between mb-8">
-          <div>
-            <span class="muted th" style="font-size:11px;">📋 Morning Brief — สรุปสัปดาห์โดย Gemini</span>
-            <h3 class="th" id="mbDate" style="font-size:14px;margin:4px 0 0 0;">—</h3>
-          </div>
-          <div class="row" style="gap:8px;align-items:center;">
-            <span id="mbTone" class="tag th" style="font-size:12px;padding:6px 12px;">—</span>
-            <button class="btn btn-ghost" id="morningRefreshBtn" title="เรียก Gemini สรุปสัปดาห์ใหม่">
-              <span class="th">รีเฟรช</span>
-            </button>
-          </div>
-        </div>
-        <div id="mbContent" class="muted th" style="font-size:12px;">ยังไม่มี Morning Brief — รอ cron จันทร์ 08:00 ICT</div>
-      </div>
-
-      <!-- 2-column grid: PROP chart (left) + Impact chart (right) -->
-      <div class="grid-2 mb-16">
-        <div class="card">
-          <h3 class="th mb-8" style="font-size:13px;">Property Sector Index (PROP)</h3>
-          <div class="chart-container" style="height:220px;">
-            <canvas id="propChart"></canvas>
-          </div>
-          <div id="propStats" class="mt-8" style="font-size:11px;"></div>
-        </div>
-        <div class="card">
-          <h3 class="th mb-8" style="font-size:13px;">News-Price Correlation — Avg Impact by Event Type</h3>
-          <div class="muted th mb-12" style="font-size:11px;">%เปลี่ยนแปลงราคาเฉลี่ย (วันเกิดเหตุการณ์ + 3 วันถัดไป)</div>
-          <div class="chart-container" style="height:200px;">
-            <canvas id="impactChart"></canvas>
-          </div>
-        </div>
-      </div>
 
       <!-- Feed toolbar: search + range pills + refresh -->
       <div class="card mb-16">
@@ -1007,7 +971,7 @@ const STATE = {
 };
 
 let DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompare(b.date));
-let DASH_CHART = null, VOL_CHART = null, PRICE_CHART = null, PROP_CHART = null, IMPACT_CHART = null;
+let DASH_CHART = null, VOL_CHART = null, PRICE_CHART = null;
 let CURRENT_FILE_NAME = 'sample_data.js';
 
 /* ============== Utilities ============== */
@@ -2151,57 +2115,6 @@ function renderPriceStats(filtered) {
   `;
 }
 
-/* ============== News View Charts (PROP + Impact) ============== */
-function buildPropChart() {
-  const ctx = $('propChart').getContext('2d');
-  const filtered = filterByRange(DATA, STATE.range);
-  const data = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
-
-  if (PROP_CHART) PROP_CHART.destroy();
-  PROP_CHART = new Chart(ctx, {
-    type: 'line',
-    data: { datasets: [{
-      label: 'PROP Index', data,
-      borderColor: getCSS('--teal'),
-      backgroundColor: 'rgba(29,158,117,0.08)',
-      borderWidth: 2, pointRadius: 0, tension: 0.18, fill: true,
-    }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 200 },
-      plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
-          borderColor: getCSS('--border'), borderWidth: 1,
-          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
-          callbacks: {
-            label: (item) => 'PROP: ' + (item.parsed.y != null ? item.parsed.y.toFixed(2) : '—'),
-          }
-        }
-      },
-      scales: {
-        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
-          grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 10 } } },
-        y: { grid: { color: 'rgba(0,0,0,0.04)' },
-          ticks: { color: getCSS('--teal'), font: { size: 10 } } },
-      }
-    }
-  });
-
-  const valid = filtered.filter(r => r.propIdx != null);
-  if (valid.length) {
-    const ch = pctChange(valid, 'propIdx');
-    const first = valid[0].propIdx, last = valid[valid.length-1].propIdx;
-    $('propStats').innerHTML = `
-      <div class="row-between"><span class="th muted">ช่วง:</span> <span>${fmtThaiShort(valid[0].date)} → ${fmtThaiShort(valid[valid.length-1].date)}</span></div>
-      <div class="row-between mt-8"><span class="th muted">เปลี่ยนแปลง:</span>
-        <span class="${ch > 0 ? 'text-pos' : ch < 0 ? 'text-neg' : 'muted'}">${fmtPct(ch)}</span></div>
-      <div class="row-between mt-8"><span class="th muted">ค่าสุดท้าย:</span> <strong>${fmtNum(last)}</strong></div>
-    `;
-  }
-}
-
-
 /* ============== News Feed (Stream B) ==============
  * The Gemini-search pipeline (gemini-sector + gemini-macro) writes to the
  * news_feed table in Postgres. /api/news returns rows already sorted
@@ -2502,47 +2415,9 @@ async function loadNewsStatus() {
   `;
 }
 
-// Morning Brief banner — top of the unified feed. Reuses MORNING_BRIEF cache
-// loaded by loadMorningBrief() at boot or on first view visit.
-function renderMorningBriefBanner() {
-  const b = window.MORNING_BRIEF || {};
-  const dateEl = $('mbDate');
-  const toneEl = $('mbTone');
-  const contentEl = $('mbContent');
-  if (!dateEl || !toneEl || !contentEl) return;
-  if (!b || !b.date) {
-    dateEl.textContent = '—';
-    toneEl.textContent = '—';
-    toneEl.style.cssText = 'background:var(--muted);color:#fff;font-size:12px;padding:6px 12px;';
-    contentEl.textContent = 'ยังไม่มี Morning Brief — รอ cron จันทร์ 08:00 ICT';
-    return;
-  }
-  const tone = (b.morning_remark || 'neutral').toLowerCase();
-  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
-  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
-  const dt = new Date(b.date + 'T00:00:00');
-  const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  dateEl.textContent = 'สัปดาห์ของวันที่ ' + dateStr;
-  toneEl.textContent = toneLabel;
-  toneEl.style.cssText = `background:${toneColor}1a;color:${toneColor};font-size:12px;padding:6px 12px;`;
-  const lastWeekBullets = (b.morning_brief || '').split('\n').map(s => s.trim()).filter(Boolean);
-  const watchBullets = (b.morning_watch || '').split('\n').map(s => s.trim()).filter(Boolean);
-  let html = '';
-  if (lastWeekBullets.length) {
-    html += `<div class="mb-8"><strong class="th">📋 สัปดาห์ที่ผ่านมา</strong><ul class="th" style="margin:6px 0 0 0;padding-left:20px;line-height:1.6;">`
-      + lastWeekBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('') + `</ul></div>`;
-  }
-  if (watchBullets.length) {
-    html += `<div><strong class="th">👀 สัปดาห์นี้ต้องติดตาม</strong><ul class="th" style="margin:6px 0 0 0;padding-left:20px;line-height:1.6;">`
-      + watchBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('') + `</ul></div>`;
-  }
-  if (!html) html = '<div class="muted th">— ไม่มีรายละเอียด —</div>';
-  if (b.morning_weekly_at) {
-    html += `<div class="muted th mt-8" style="font-size:10px;font-style:italic;">อัปเดตล่าสุด ${new Date(b.morning_weekly_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })} น.</div>`;
-  }
-  contentEl.innerHTML = html;
-}
-
+// Morning Brief (Report view tab) — kept after the Migrate-v8 cleanup that
+// removed the News-view banner. Same data source (`/api/morning-brief`),
+// different DOM target (`#morningBriefContent`).
 async function loadMorningBrief() {
   const brief = await window.ASW_API.morningBrief();
   window.MORNING_BRIEF = brief;
@@ -2597,90 +2472,6 @@ function renderMorningBrief() {
         : ''}
     </div>
   `;
-}
-
-function buildImpactChart() {
-  const ctx = $('impactChart').getContext('2d');
-  // For each event category, find events where close is available; compute avg %change on event day + 3 days after
-  const categories = ['interest_rate', 'corporate', 'political', 'project', 'macro', 'other'];
-  const labels = [];
-  const day0 = []; // event day
-  const day3 = []; // 3 days after
-  const colors = [];
-
-  categories.forEach(cat => {
-    // Build the flat list of event items belonging to this category from
-    // ALL 3 remark columns.
-    const events = [];
-    DATA.forEach(r => {
-      if (r.close == null) return;
-      eachRemark(r).forEach(it => {
-        if (classifyEvent(it)?.type === cat) events.push({ row: r, item: it });
-      });
-    });
-    // Union Stream B: high-severity news_feed items (Gemini sector/macro).
-    // Macro severity=high is also mirrored into daily.remark, so dedup by date
-    // to avoid double-counting the same underlying event.
-    const seenDates = new Set(events.map(ev => ev.row.date));
-    (window.NEWS_DATA || []).forEach(n => {
-      if (n.severity !== 'high' || seenDates.has(n.date)) return;
-      const it = { text: n.title, category: n.category };
-      if (classifyEvent(it)?.type !== cat) return;
-      const row = DATA.find(r => r.date === n.date && r.close != null);
-      if (!row) return; // need a price row to measure impact
-      seenDates.add(n.date);
-      events.push({ row, item: it });
-    });
-    if (!events.length) return;
-    let sumDay0 = 0, sumDay3 = 0, n0 = 0, n3 = 0;
-    events.forEach(ev => {
-      // Day 0: %change on event day
-      if (typeof ev.row.change === 'number') { sumDay0 += ev.row.change; n0++; }
-      // Day 3: cumulative %change from event day to 3 trading days later
-      const idx = DATA.findIndex(r => r.date === ev.row.date);
-      if (idx >= 0) {
-        const future = DATA.slice(idx, idx + 4).filter(r => r.close != null);
-        if (future.length >= 2) {
-          const cum = ((future[future.length-1].close - future[0].close) / future[0].close) * 100;
-          sumDay3 += cum; n3++;
-        }
-      }
-    });
-    const c = classifyEvent(events[0].item);
-    labels.push(c.label);
-    day0.push(n0 ? sumDay0 / n0 : 0);
-    day3.push(n3 ? sumDay3 / n3 : 0);
-    colors.push(c.color);
-  });
-
-  if (IMPACT_CHART) IMPACT_CHART.destroy();
-  IMPACT_CHART = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'วันเกิดเหตุการณ์', data: day0, backgroundColor: colors.map(c => c + 'AA') },
-        { label: 'สะสม 3 วัน', data: day3, backgroundColor: colors },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: { duration: 200 },
-      plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 11 }, color: getCSS('--text') } },
-        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
-          borderColor: getCSS('--border'), borderWidth: 1,
-          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
-          callbacks: { label: (item) => item.dataset.label + ': ' + fmtPct(item.parsed.y) } }
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: getCSS('--text'), font: { size: 11 } } },
-        y: { grid: { color: 'rgba(0,0,0,0.04)' },
-          ticks: { color: getCSS('--muted'), font: { size: 10 },
-            callback: (v) => v + '%' } },
-      }
-    }
-  });
 }
 
 /* ============== Report Builder Wizard ============== */
@@ -3140,12 +2931,9 @@ function refreshPrice() {
 
 function refreshNews() {
   // Unified feed (migrate-v4): one scroll, severity-first sort, 5 buckets.
-  // Wrap each step so a chart failure (e.g. canvas missing in jsdom) doesn't
-  // take down loadNewsStatus() — the status row should still populate.
+  // Wrap each step so a UI failure (e.g. canvas missing) doesn't take down
+  // loadNewsStatus() — the status row should still populate.
   try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
-  try { buildPropChart(); } catch (e) { console.warn('refreshNews: buildPropChart failed:', e.message); }
-  try { buildImpactChart(); } catch (e) { console.warn('refreshNews: buildImpactChart failed:', e.message); }
-  try { renderMorningBriefBanner(); } catch (e) { console.warn('refreshNews: renderMorningBriefBanner failed:', e.message); }
   loadNewsStatus();
   refreshHiddenCount();
 }
@@ -3457,25 +3245,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   refreshHiddenCount();
-  // Morning Brief refresh button (banner top of unified feed).
-  const morningRefresh = $('morningRefreshBtn');
-  if (morningRefresh) {
-    morningRefresh.addEventListener('click', async () => {
-      morningRefresh.disabled = true;
-      try {
-        const r = await window.ASW_API.morningBriefRefresh();
-        if (!r.ok) {
-          showToast('รีเฟรชไม่สำเร็จ: ' + (r.error || 'unknown'));
-        } else {
-          showToast('รีเฟรช Morning Brief แล้ว');
-        }
-        await loadMorningBrief();
-        renderMorningBriefBanner();
-      } finally {
-        morningRefresh.disabled = false;
-      }
-    });
-  }
   // Report language toggle — re-render preview on change
   const rptLang = $('rptLang');
   if (rptLang) rptLang.addEventListener('change', () => {
