@@ -155,7 +155,8 @@ async function readAllRows(start, end) {
                   "setIdx" AS "setIdx", "propIdx" AS "propIdx",
                   remark, category,
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
-                  remark_company, remark_sector, remark_macro
+                  remark_company, remark_sector, remark_macro,
+                  user_note
            FROM daily WHERE date BETWEEN $1 AND $2 ORDER BY date ASC`;
     params = [start, end];
   } else {
@@ -163,7 +164,8 @@ async function readAllRows(start, end) {
                   "setIdx" AS "setIdx", "propIdx" AS "propIdx",
                   remark, category,
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
-                  remark_company, remark_sector, remark_macro
+                  remark_company, remark_sector, remark_macro,
+                  user_note
            FROM daily ORDER BY date ASC`;
     params = [];
   }
@@ -259,6 +261,21 @@ async function appendRemarkPin(date, text, category = null) {
   );
 }
 
+// Migrate-v7: User-remark popover on the Daily Price Table.
+// Save a user's personal remark on a specific date's daily row.
+// `note === ''` or null/whitespace → clears to NULL. The Gemini-generated
+// `remark` column is NOT touched — both coexist on the same row.
+async function setDailyRemark(date, note) {
+  if (!date || typeof date !== 'string') {
+    throw new Error('setDailyRemark: date (YYYY-MM-DD) required');
+  }
+  const trimmed = (note && typeof note === 'string') ? note.trim() : '';
+  await getPool().query(
+    `UPDATE daily SET user_note = $1 WHERE date = $2`,
+    [trimmed || null, date]
+  );
+}
+
 // =============================================================================
 // Morning brief (Monday-only, gemini-search.mjs 'gemini-morning-brief' source)
 //
@@ -347,6 +364,24 @@ async function readLatestPeers() {
 
 // ── news_feed ──────────────────────────────────────────────────────────────
 
+// Derived priority used by the unified-feed sort (mirrors migrate-v4 SQL and
+// index.html#priorityForItem). Range 0..150, fits SMALLINT.
+//
+//   severity: high=100 | medium=50 | low/null=25
+//   impact:   positive=25 | negative=15 | neutral/null=5
+//   pin:      show_pin=TRUE → +10
+function priorityForItem(it) {
+  if (!it) return 0;
+  const sev = it.severity === 'high' ? 100
+            : it.severity === 'medium' ? 50
+            : 25;
+  const imp = it.impact === 'positive' ? 25
+            : it.impact === 'negative' ? 15
+            : 5;
+  const pin = it.show_pin ? 10 : 0;
+  return sev + imp + pin;
+}
+
 // Multi-row INSERT with ON CONFLICT (title_hash) DO NOTHING. The unique index
 // on title_hash (created by migrate-v2.js) is the second line of dedup; the
 // in-memory Set in gemini-search.mjs is the first.
@@ -355,6 +390,14 @@ async function readLatestPeers() {
 // severity, show_pin — populated from Gemini's parseAIResult() output. The
 // 7-column insert became an 11-column insert; older items without those keys
 // (manual INSERTs, legacy data) get NULL/FALSE defaults and still parse fine.
+//
+// Pipeline refactor (migrate-v4): 12th column — display_priority — derived
+// at insert time via priorityForItem() so a fresh row never lands with a 0.
+// On conflict (title_hash DO NOTHING) the existing row's priority is kept.
+//
+// Pipeline refactor (migrate-v5): 13th column — summary — optional 1-2
+// sentence Thai body text from the Gemini prompt. NULL for old rows; the
+// UI falls back to the title when summary is missing.
 async function writeNewsItems(items) {
   if (!items || !items.length) return { inserted: 0 };
   const p = getPool();
@@ -362,8 +405,8 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 11;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11})`);
+    const base = i * 13;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13})`);
     params.push(
       it.title,
       it.date,
@@ -376,34 +419,151 @@ async function writeNewsItems(items) {
       it.severity   ?? null,
       it.show_pin   ?? false,
       now,
+      // 12th column — RSS/Gemini sources that score relevance (rss-property)
+      // pre-compute `display_priority` and pass it in directly. Sources that
+      // only know severity/impact (older Gemini pipelines) fall back to
+      // priorityForItem() which derives 50/55/125 from those fields.
+      (typeof it.display_priority === 'number' && it.display_priority > 0)
+        ? it.display_priority
+        : priorityForItem(it),
+      it.summary    ?? null,         // 13th column (migrate-v5)
     );
   });
   const r = await p.query(`
     INSERT INTO news_feed (title, date, category, source_url, source_label, title_hash,
                            pipeline, impact, severity, show_pin,
-                           fetched_at)
+                           fetched_at, display_priority, summary)
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
   return { inserted: r.rowCount };
 }
 
-// Read recent news items, newest first. Optional category/since filters
-// (since is an ISO timestamp string — pass the value from `date` column).
-async function readNewsFeed({ category = null, since = null, limit = 100 } = {}) {
+// Read recent news items, sorted severity-first then newest-first. Optional
+// category/since filters (since is an ISO date string from `date` column).
+//
+// Pipeline refactor (migrate-v4): replaced plain `ORDER BY date DESC` with
+// the composite index hint `ORDER BY display_priority DESC, date DESC, id
+// DESC`. High-severity items surface first; same priority keeps date order;
+// id tiebreaks identical timestamps deterministically.
+async function readNewsFeed({ category = null, since = null, limit = 100, includeHidden = false } = {}) {
   const p = getPool();
   const where = [];
   const params = [];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
+  // Pipeline refactor (migrate-v6): hidden items are user-dismissed and
+  // dropped by default. Pass `includeHidden: true` to fetch them anyway
+  // (used by /api/news?showHidden=1 for the "Show hidden" toggle).
+  if (!includeHidden) where.push('hidden = FALSE');
   params.push(Math.min(limit || 100, 500));
-  const sql = `SELECT id, title, date, category, source_url, source_label, fetched_at
+  const sql = `SELECT id, title, date, category, source_url, source_label,
+                      pipeline, impact, severity, show_pin, display_priority, summary,
+                      hidden, hidden_at, user_note
                FROM news_feed
                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-               ORDER BY date DESC
+               ORDER BY display_priority DESC, date DESC, id DESC
                LIMIT $${params.length}`;
   const r = await p.query(sql, params);
   return r.rows;
+}
+
+// Read just the user-hidden rows (newest hide first) for the "Show hidden"
+// toggle. Backs GET /api/news/hidden.
+async function readHiddenNews(limit = 100) {
+  const p = getPool();
+  const sql = `SELECT id, title, date, category, source_url, source_label,
+                      pipeline, impact, severity, show_pin, display_priority, summary,
+                      hidden, hidden_at, user_note
+               FROM news_feed
+               WHERE hidden = TRUE
+               ORDER BY hidden_at DESC
+               LIMIT $1`;
+  const r = await p.query(sql, [Math.min(limit || 100, 500)]);
+  return r.rows;
+}
+
+// Set the hidden flag for a single row by id. Toggles `hidden_at` to NOW()
+// on hide, NULL on unhide. Returns nothing — caller just awaits.
+async function setNewsHidden(id, hidden = true) {
+  if (!Number.isFinite(parseInt(id, 10))) {
+    throw new Error('setNewsHidden: id must be an integer');
+  }
+  await getPool().query(
+    `UPDATE news_feed
+       SET hidden = $1,
+           hidden_at = CASE WHEN $1 = TRUE THEN NOW() ELSE NULL END
+     WHERE id = $2`,
+    [!!hidden, id]
+  );
+}
+
+// Set/clear the user_note for a single row by id. Empty / null / whitespace
+// clears the note. Caller just awaits — return value is discarded.
+async function setNewsNote(id, note) {
+  if (!Number.isFinite(parseInt(id, 10))) {
+    throw new Error('setNewsNote: id must be an integer');
+  }
+  const trimmed = (note && typeof note === 'string') ? note.trim() : '';
+  await getPool().query(
+    `UPDATE news_feed SET user_note = $1 WHERE id = $2`,
+    [trimmed || null, id]
+  );
+}
+
+// Aggregate status for the unified-feed header. Reads from `fetch_log` (last
+// run per Gemini sub-pipeline) and counts the news_feed table for the badge.
+//
+// Used by GET /api/news/status — added in step 4 of the unified-feed rebuild.
+// Returns:
+//   {
+//     lastRuns: {
+//       company: { source, started_at, finished_at, ok, rows_added, error } | null,
+//       sector:  ...,
+//       macro:   ...,
+//       brief:   ...
+//     },
+//     counts:  { total, high, high_priority },
+//     fetchedAt: <now ISO>
+//   }
+//
+// "high_priority" is display_priority >= 75 (high severity OR positive impact
+// + medium severity), the bar the unified feed renders as a pin.
+async function readNewsStatus() {
+  const p = getPool();
+  const sources = ['gemini-company', 'gemini-sector', 'gemini-macro', 'gemini-morning-brief'];
+  const lastRuns = {};
+  // 4 simple queries — fetch_log is small (append-only). Could be combined
+  // into one LATERAL but readability wins here.
+  for (const source of sources) {
+    const r = await p.query(
+      `SELECT source, started_at, finished_at, ok, rows_added, error
+       FROM fetch_log
+       WHERE source = $1
+       ORDER BY id DESC LIMIT 1`,
+      [source]
+    );
+    const key = source.replace('gemini-', '').replace('-brief', ''); // company/sector/macro/brief
+    lastRuns[key] = r.rows[0] || null;
+  }
+  const c = await p.query(`
+    SELECT
+      COUNT(*)                                                  AS total,
+      COUNT(*) FILTER (WHERE severity = 'high')                 AS high,
+      COUNT(*) FILTER (WHERE display_priority >= 75)            AS high_priority,
+      COUNT(*) FILTER (WHERE SUBSTR(fetched_at, 1, 10) = TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD')) AS today
+    FROM news_feed
+  `);
+  return {
+    lastRuns,
+    counts: {
+      total:         Number(c.rows[0]?.total || 0),
+      high:          Number(c.rows[0]?.high || 0),
+      high_priority: Number(c.rows[0]?.high_priority || 0),
+      today:         Number(c.rows[0]?.today || 0),
+    },
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 module.exports = {
@@ -421,10 +581,16 @@ module.exports = {
   appendRemarkPin,      // v3 — MACRO pipeline appends high-severity pins here
   updateMorningBrief,   // v3 — Monday weekly brief writer
   readMorningBrief,     // v3 — Monday weekly brief reader
+  setDailyRemark,       // v7 — user note writer on daily.price table popover
   // peer_prices
   writePeers,
   readLatestPeers,
   // news_feed
+  priorityForItem,      // v4 — derived priority, mirrors migrate-v4 SQL
   writeNewsItems,
   readNewsFeed,
+  readNewsStatus,       // v4 — GET /api/news/status payload
+  readHiddenNews,       // v6 — user-hidden rows for "Show hidden" view
+  setNewsHidden,        // v6 — soft delete toggle per row
+  setNewsNote,          // v6 — user_note writer
 };

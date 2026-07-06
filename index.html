@@ -256,7 +256,7 @@
             <h3 class="th" style="font-size:13px;">ข่าวล่าสุด</h3>
             <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
           </div>
-          <input type="text" id="dashNewsSearch" placeholder="ค้นหา remark..."
+          <input type="text" id="dashNewsSearch" placeholder="ค้นหาในหัวข้อ + สรุป..."
                  class="th" style="font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;" />
           <div id="dashNewsList" class="scroll-y" style="flex:1; min-height:0;"></div>
         </div>
@@ -391,129 +391,113 @@
       </div>
     </section>
 
-    <!-- ====================== News & Factors View ====================== -->
+    <!-- ====================== News & Factors View (unified feed, migrate-v4) ====================== -->
     <section class="view" id="view-news">
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
-      <div class="view-sub th">เหตุการณ์ที่กระทบราคา ASW จัดกลุ่มตามประเภท + ปัจจัยมหภาค/อสังหาฯ</div>
+      <div class="view-sub th">รวมข่าวจาก Daily Remark + Gemini Search — เรียงตาม severity แล้วแบ่งตามช่วงเวลา</div>
 
-      <div class="subtabs">
-        <button class="subtab active" data-ntab="asw">ASW</button>
-        <button class="subtab th" data-ntab="prop">อสังหาฯ</button>
-        <button class="subtab th" data-ntab="econ">เศรษฐกิจ</button>
-        <button class="subtab th" data-ntab="pol">การเมือง</button>
-        <button class="subtab th" data-ntab="feed">Feed</button>
-        <button class="subtab th" data-ntab="morning">Morning Brief</button>
-      </div>
-
-      <!-- ASW tab -->
-      <div class="ntab" id="ntab-asw">
-        <div class="row-between mb-12">
-          <div class="row" style="gap:6px;">
-            <span class="muted th" style="font-size:11px;">เรียง:</span>
-            <div class="pill-row" id="newsSort">
-              <button class="pill active" data-sort="newest">ใหม่สุด</button>
-              <button class="pill" data-sort="oldest">เก่าสุด</button>
-              <button class="pill" data-sort="impact">|Impact| สูง</button>
-            </div>
+      <!-- Morning Brief banner (Monday weekly summary, pinned at top) -->
+      <div class="card feed-mb-banner mb-16" id="feedMbBanner">
+        <div class="row-between mb-8">
+          <div>
+            <span class="muted th" style="font-size:11px;">📋 Morning Brief — สรุปสัปดาห์โดย Gemini</span>
+            <h3 class="th" id="mbDate" style="font-size:14px;margin:4px 0 0 0;">—</h3>
           </div>
-          <span class="muted th" id="aswCount" style="font-size:11px;">—</span>
-        </div>
-        <div id="aswNewsList"></div>
-      </div>
-
-      <!-- อสังหาฯ tab -->
-      <div class="ntab" id="ntab-prop" style="display:none;">
-        <div class="grid-2">
-          <div class="card">
-            <h3 class="th mb-8" style="font-size:13px;">Property Sector Index (PROP)</h3>
-            <div class="chart-container" style="height:220px;">
-              <canvas id="propChart"></canvas>
-            </div>
-            <div id="propStats" class="mt-8" style="font-size:11px;"></div>
-          </div>
-          <div class="card">
-            <h3 class="th mb-8" style="font-size:13px;">ข่าวอสังหาฯ — จาก Gemini Search</h3>
-            <div class="muted th mb-8" style="font-size:11px;">ข่าว sector + headlines ที่ Gemini สืบค้น (อัปเดต 17:45 น.)</div>
-            <div id="propNewsList"></div>
-            <div class="mt-12">
-              <h4 class="th mb-8" style="font-size:12px;">เหตุการณ์โครงการใน ASW</h4>
-              <div id="projectNewsList"></div>
-            </div>
+          <div class="row" style="gap:8px;align-items:center;">
+            <span id="mbTone" class="tag th" style="font-size:12px;padding:6px 12px;">—</span>
+            <button class="btn btn-ghost" id="morningRefreshBtn" title="เรียก Gemini สรุปสัปดาห์ใหม่">
+              <span class="th">รีเฟรช</span>
+            </button>
           </div>
         </div>
+        <div id="mbContent" class="muted th" style="font-size:12px;">ยังไม่มี Morning Brief — รอ cron จันทร์ 08:00 ICT</div>
       </div>
 
-      <!-- เศรษฐกิจ tab -->
-      <div class="ntab" id="ntab-econ" style="display:none;">
-        <div class="card mb-12">
-          <h3 class="th mb-8" style="font-size:13px;">BOT อัตราดอกเบี้ยนโยบาย — Timeline</h3>
-          <div class="muted th mb-12" style="font-size:11px;">จาก Remark column (ดอกเบี้ย / กนง.)</div>
-          <div id="rateTimeline" class="timeline"></div>
-        </div>
-      </div>
-
-      <!-- การเมือง tab -->
-      <div class="ntab" id="ntab-pol" style="display:none;">
+      <!-- 2-column grid: PROP chart (left) + Impact chart (right) -->
+      <div class="grid-2 mb-16">
         <div class="card">
-          <h3 class="th mb-8" style="font-size:13px;">เหตุการณ์การเมือง — Timeline</h3>
-          <div class="muted th mb-12" style="font-size:11px;">สกัดจาก Remark column</div>
-          <div id="polTimeline" class="timeline"></div>
-        </div>
-      </div>
-
-      <!-- Feed tab (Gemini-search pipeline: gemini-sector + gemini-macro) -->
-      <div class="ntab" id="ntab-feed" style="display:none;">
-        <div class="row-between mb-12">
-          <div class="row" style="gap:6px; flex-wrap:wrap;">
-            <span class="muted th" style="font-size:11px;">หมวด:</span>
-            <div class="pill-row" id="feedCategoryFilter">
-              <button class="pill active" data-feed-cat="all">ทั้งหมด</button>
-              <!-- company (5) -->
-              <button class="pill th" data-feed-cat="corporate">ผลประกอบการ</button>
-              <button class="pill th" data-feed-cat="project">โครงการใหม่</button>
-              <button class="pill th" data-feed-cat="dividend">ปันผล/ทุน</button>
-              <button class="pill th" data-feed-cat="fundraise">หุ้นกู้/เพิ่มทุน</button>
-              <button class="pill th" data-feed-cat="insider">Insider</button>
-              <!-- sector (3) -->
-              <button class="pill th" data-feed-cat="sector_policy">นโยบาย</button>
-              <button class="pill th" data-feed-cat="sector_data">ข้อมูล</button>
-              <button class="pill th" data-feed-cat="peer_news">Peer</button>
-              <!-- macro (5) -->
-              <button class="pill th" data-feed-cat="interest_rate">ดอกเบี้ย</button>
-              <button class="pill th" data-feed-cat="economic_data">ตัวเลข ศก.</button>
-              <button class="pill th" data-feed-cat="political">การเมือง</button>
-              <button class="pill th" data-feed-cat="disaster">ภัยพิบัติ</button>
-              <button class="pill th" data-feed-cat="global">ปัจจัยโลก</button>
-            </div>
+          <h3 class="th mb-8" style="font-size:13px;">Property Sector Index (PROP)</h3>
+          <div class="chart-container" style="height:220px;">
+            <canvas id="propChart"></canvas>
           </div>
-          <button class="btn btn-ghost" id="feedRefreshBtn" title="ดึงข่าวใหม่จาก Gemini Search">
-            <span class="th">รีเฟรช</span>
-          </button>
+          <div id="propStats" class="mt-8" style="font-size:11px;"></div>
         </div>
-        <div class="muted th mb-8" style="font-size:11px;">
-          Gemini Search grounding: sector ทุก 17:50 ICT · macro ทุก 17:55 ICT (severity=high → แสดงเป็น event pin)
+        <div class="card">
+          <h3 class="th mb-8" style="font-size:13px;">News-Price Correlation — Avg Impact by Event Type</h3>
+          <div class="muted th mb-12" style="font-size:11px;">%เปลี่ยนแปลงราคาเฉลี่ย (วันเกิดเหตุการณ์ + 3 วันถัดไป)</div>
+          <div class="chart-container" style="height:200px;">
+            <canvas id="impactChart"></canvas>
+          </div>
         </div>
-        <div id="feedList" class="feed-list"></div>
       </div>
 
-      <!-- Morning Brief tab (Monday 08:00 ICT, weekly summary) -->
-      <div class="ntab" id="ntab-morning" style="display:none;">
-        <div class="row-between mb-12">
-          <span class="muted th" style="font-size:11px;">สรุปสัปดาห์โดย Gemini · อัปเดตจันทร์ 08:00 ICT</span>
-          <button class="btn btn-ghost" id="morningRefreshBtn" title="เรียก Gemini สรุปสัปดาห์ใหม่">
-            <span class="th">รีเฟรช</span>
+      <!-- Feed toolbar: search + range pills + refresh -->
+      <div class="card mb-16">
+        <div class="feed-toolbar">
+          <input type="text" id="newsSearch" class="input th" placeholder="ค้นหา (ข่าวทั้ง remark และ feed)..." style="flex:1;min-width:200px;" />
+          <div class="pill-row" id="newsRangePills">
+            <button class="pill th" data-range="Today">วันนี้</button>
+            <button class="pill th" data-range="1W">1W</button>
+            <button class="pill active th" data-range="1M">1M</button>
+            <button class="pill th" data-range="3M">3M</button>
+            <button class="pill th" data-range="ALL">ทั้งหมด</button>
+          </div>
+          <button class="pill th" id="newsShowHiddenBtn" data-active="false" title="แสดงข่าวที่ซ่อนไว้">
+            <span id="newsShowHiddenIcon"></span> ที่ซ่อน (<span id="newsHiddenCount">0</span>)
+          </button>
+          <button class="btn btn-ghost" id="newsRefreshBtn" title="ดึงข่าวใหม่จาก Gemini Search">
+            <span id="newsRefreshIcon"></span><span class="th"> รีเฟรช</span>
           </button>
         </div>
-        <div id="morningBriefContent"></div>
       </div>
 
-      <!-- News-Price Correlation -->
+      <!-- 5 bucket sections (severity-first sort within each) -->
+      <section class="feed-bucket" data-bucket="today">
+        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
+          <span>📌 วันนี้</span>
+          <span class="feed-bucket-count" id="count-today">0</span>
+        </button>
+        <div class="feed-bucket-body" id="bucket-today"></div>
+      </section>
+
+      <section class="feed-bucket" data-bucket="yesterday">
+        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
+          <span>📅 เมื่อวาน</span>
+          <span class="feed-bucket-count" id="count-yesterday">0</span>
+        </button>
+        <div class="feed-bucket-body" id="bucket-yesterday"></div>
+      </section>
+
+      <section class="feed-bucket" data-bucket="this_week">
+        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
+          <span>🗓️ สัปดาห์นี้ (2–6 วันที่แล้ว)</span>
+          <span class="feed-bucket-count" id="count-this_week">0</span>
+        </button>
+        <div class="feed-bucket-body" id="bucket-this_week"></div>
+      </section>
+
+      <section class="feed-bucket" data-bucket="last_week">
+        <button class="feed-bucket-toggle th" type="button" aria-expanded="false">
+          <span>📆 สัปดาห์ที่แล้ว (7–13 วัน)</span>
+          <span class="feed-bucket-count" id="count-last_week">0</span>
+        </button>
+        <div class="feed-bucket-body" id="bucket-last_week" hidden></div>
+      </section>
+
+      <section class="feed-bucket" data-bucket="older">
+        <button class="feed-bucket-toggle th" type="button" aria-expanded="false">
+          <span>🗄️ เก่ากว่านั้น</span>
+          <span class="feed-bucket-count" id="count-older">0</span>
+        </button>
+        <div class="feed-bucket-body" id="bucket-older" hidden></div>
+      </section>
+
+      <div id="unifiedEmpty" class="empty-state th" hidden>— ไม่พบข่าวในช่วงเวลานี้ —</div>
+
+      <!-- Pipeline status row (bottom of feed) -->
       <div class="card mt-16">
-        <h3 class="th mb-8" style="font-size:13px;">News-Price Correlation — Average Impact by Event Type</h3>
-        <div class="muted th mb-12" style="font-size:11px;">เปรียบเทียบ %เปลี่ยนแปลงราคาเฉลี่ย (วันเกิดเหตุการณ์ + 3 วันถัดไป)</div>
-        <div class="chart-container" style="height:220px;">
-          <canvas id="impactChart"></canvas>
-        </div>
+        <h3 class="th mb-8" style="font-size:12px;">⚙ Pipeline Status</h3>
+        <div id="newsStatusRow" class="muted th" style="font-size:11px;">กำลังโหลด...</div>
       </div>
     </section>
 
@@ -813,6 +797,61 @@ window.ASW_API = {
       return await r.json();
     } catch (e) { return { ok: false, error: 'offline' }; }
   },
+  // Pipeline status + news_feed counts — backed by GET /api/news/status
+  // (migrate-v4). Drives the status strip under the news toolbar.
+  async newsStatus() {
+    try {
+      const r = await fetch('/api/news/status');
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { lastRuns: {}, counts: { total: 0, high: 0, high_priority: 0, today: 0 }, fetchedAt: null }; }
+  },
+  // User-action endpoints (migrate-v6) — hide/dismiss and note on a single
+  // news row. Both default to optimistic UI in the caller (mutate NEWS_DATA
+  // first, then await this); failures should rollback locally.
+  async hideNews(id, hidden = true) {
+    try {
+      const r = await fetch(`/api/news/${id}/hide`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hidden: !!hidden }),
+      });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  async noteNews(id, note) {
+    try {
+      const r = await fetch(`/api/news/${id}/note`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ note: note == null ? null : String(note) }),
+      });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  async hiddenNews(limit = 100) {
+    try {
+      const r = await fetch(`/api/news/hidden?limit=${limit}`);
+      if (!r.ok) throw 0;
+      const d = await r.json();
+      return d.rows || [];
+    } catch (e) { return []; }
+  },
+  // User-remark popover on the daily price table (migrate-v7).
+  // Optimistic UI: mutate the local row first, then await this.
+  async dailyRemark(date, note) {
+    try {
+      const r = await fetch(`/api/daily/${date}/remark`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ note: note == null ? null : String(note) }),
+      });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
   async morningBrief() {
     try { const r = await fetch('/api/morning-brief'); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { date: null, morning_brief: null }; }
@@ -945,9 +984,15 @@ const STATE = {
   tableSort: { key: 'date', dir: 'desc' },
   priceTableSort: { key: 'date', dir: 'desc' },
   priceFilter: null, // { start, end } override
-  newsSort: 'newest',
   focusedDate: null,
-  feedCategory: 'all',  // NEW — Pipeline B news-feed filter
+  // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
+  newsSearch: '',
+  newsRange: '1M',       // 'Today' | '1W' | '1M' | '3M' | 'ALL'
+  newsCollapsed: { last_week: true, older: true },  // today/yesterday/this_week expanded by default
+  // User-action state (migrate-v6): hide toggle, note cache, toast timer.
+  newsShowHidden: false, // when true, buildMergedNewsItems() includes hidden rows
+  hiddenNewsCache: [],   // populated lazily on first toggle; appended into NEWS_DATA
+  toastUndoTimer: null,  // setTimeout handle for the 5s Undo window after a hide
   wizardStep: 1,
   report: {
     template: 'summary',
@@ -1102,6 +1147,19 @@ const REMARK_BADGE = {
   political:     { label: 'การเมือง',     cls: 'political',     color: '#EF9F27' },
   disaster:      { label: 'ภัยพิบัติ',     cls: 'disaster',      color: '#A32D2D' },
   global:        { label: 'ปัจจัยโลก',    cls: 'global',        color: '#888780' },
+  // Migrate-v8 — extended coverage (RSS-extended fetcher, free public sources):
+  //   company_filing  — SET filing / earnings / dividend / capital / bond
+  //   broker          — analyst rating + target price
+  //   insider_trade   — SEC Form 59
+  //   investor_alert  — SET Smart Alert (unusual volume, cash balance)
+  //   macro_fx        — BoT USD/THB + baht-direction
+  //   debt_rating     — TRIS rating action
+  company_filing: { label: 'SET filing',  cls: 'company_filing', color: '#1D9E75' },
+  broker:         { label: 'นายหน้า',     cls: 'broker',         color: '#7F77DD' },
+  insider_trade:  { label: 'Insider',     cls: 'insider_trade',  color: '#EF9F27' },
+  investor_alert: { label: 'SET alert',   cls: 'investor_alert', color: '#A32D2D' },
+  macro_fx:       { label: 'ค่าเงิน',      cls: 'macro_fx',       color: '#185FA5' },
+  debt_rating:    { label: 'อันดับเครดิต', cls: 'debt_rating',    color: '#3B6D11' },
 };
 function eachRemark(row) {
   if (!row) return [];
@@ -1515,6 +1573,37 @@ function focusDashOnDate(dateStr) {
  *
  * Sort newest-first, cap at 15 visible. Search box filters both streams.
  */
+function renderDashNewsCard(item) {
+  // Migrate-v8 — uniform sidebar card. Both streams (remark + news_feed)
+  // render with the EXACT same shape:
+  //   [date | badge + title (clamp-2) | price + change%]
+  // Sidebar-specific chrome (source chip, severity pill, summary preview,
+  // action buttons, user_note, news text-link) lives in the News & Factors
+  // view — the sidebar stays scannable as a tidy feed.
+  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
+  const focused = item.date === STATE.focusedDate ? ' focused' : '';
+  const dataAttrs = item.source === 'feed'
+    ? ` data-source="feed" data-id="${item.id != null ? escapeHtml(String(item.id)) : ''}"`
+    : ` data-source="remark" data-date="${escapeHtml(item.date)}"`;
+  const priceCell = item.close  != null ? '฿' + fmtNum(item.close)  : '—';
+  const chgCell   = item.change != null ? fmtPct(item.change)      : '—';
+  const chgCls    = item.change == null ? 'muted'
+                  : item.change >  0     ? 'text-pos'
+                  : item.change <  0     ? 'text-neg'
+                  :                        'muted';
+  return `<div class="news-item-uniform${focused}"${dataAttrs}>
+    <div class="ni-date th">${fmtThaiShort(item.date)}</div>
+    <div class="ni-title-row">
+      <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+      <span class="ni-title th">${escapeHtml(item.text)}</span>
+    </div>
+    <div class="ni-meta">
+      <div class="ni-price">${priceCell}</div>
+      <div class="ni-chg ${chgCls}">${chgCell}</div>
+    </div>
+  </div>`;
+}
+
 function renderDashNews(filtered) {
   // Stream (A): remark items from eachRemark() — 1 per trading day
   const remarkItems = [];
@@ -1528,17 +1617,15 @@ function renderDashNews(filtered) {
   })));
 
   // Stream (B): news_feed items from /api/news (loaded into NEWS_DATA
-  // by loadNewsFeed(); lazily fetched when Dashboard or Feed tab opens)
+  // by loadNewsFeed(); lazily fetched when Dashboard or Feed tab opens).
   const feedItems = (window.NEWS_DATA || []).map(n => ({
     source: 'feed',
     date: (n.date || '').slice(0, 10),
     category: n.category || 'other',
     text: n.title || '',
     url: n.source_url,
-    sourceLabel: n.source_label,
-    impact: n.impact,
-    severity: n.severity,
-  })).filter(it => it.text);
+    id: n.id,
+  })).filter(it => it.text && (it.source === 'remark' || (it.url && it.url.length > 0)));
 
   const merged = [...remarkItems, ...feedItems];
 
@@ -1558,42 +1645,23 @@ function renderDashNews(filtered) {
   }
 
   const visible = sorted.slice(0, 15);
-  list.innerHTML = visible.map(item => {
-    if (item.source === 'feed') {
-      // (B) news_feed item — clickable link, no chart focus
-      const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
-      const dateStr = fmtThaiShort(item.date);
-      const url = item.url || '';
-      const linkInner = url
-        ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a>`
-        : `<span class="th">${escapeHtml(item.text)}</span>`;
-      return `<div class="news-item feed-dash-item">
-        <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span></div>
-        <div>
-          <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
-          ${linkInner}
-        </div>
-      </div>`;
-    }
-    // (A) remark item — click focuses chart on date
-    const c = classifyEvent({ text: item.text, category: item.category });
-    const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
-    return `<div class="news-item ${item.date === STATE.focusedDate ? 'focused' : ''}" data-date="${item.date}">
-      <div class="news-date th">${fmtThaiShort(item.date)}</div>
-      <div>
-        <div class="news-text th">${escapeHtml(item.text)}</div>
-        <div class="mt-8">${tag}</div>
-      </div>
-      <div class="news-meta">
-        <div class="price">฿${fmtNum(item.close)}</div>
-        <div class="chg ${item.change > 0 ? 'text-pos' : item.change < 0 ? 'text-neg' : 'muted'}">${item.change != null ? fmtPct(item.change) : '—'}</div>
-      </div>
-    </div>`;
-  }).join('');
+  // Migrate-v8: every card uses renderDashNewsCard(item) — a single uniform
+  // shape (date | badge + title | price/chg). Edit/hide buttons + source
+  // label + summary + user_note live in the News & Factors view, NOT here.
+  list.innerHTML = visible.map(renderDashNewsCard).join('');
 
-  // Click handlers — only on remark items (feed items are <a> with their own click)
-  list.querySelectorAll('.news-item:not(.feed-dash-item)').forEach(el => {
+  // Click handler — one delegated handler for both streams.
+  //   * data-source="remark" → focus chart on that date.
+  //   * data-source="feed"   → open the source_url in a new tab.
+  // Note/hide buttons no longer live on the sidebar cards — those live in
+  // the News & Factors view (renderUnifiedNewsItem).
+  list.querySelectorAll('.news-item-uniform').forEach(el => {
     el.addEventListener('click', () => {
+      if (el.dataset.source === 'feed') {
+        const item = (window.NEWS_DATA || []).find(n => String(n.id) === el.dataset.id);
+        if (item && item.source_url) window.open(item.source_url, '_blank', 'noopener,noreferrer');
+        return;
+      }
       STATE.focusedDate = el.dataset.date;
       focusDashOnDate(STATE.focusedDate);
       renderDashNews(filterByRange(DATA, STATE.range));
@@ -1601,101 +1669,97 @@ function renderDashNews(filtered) {
   });
 }
 
-function renderAswNews() {
-  // Flatten 3 remark columns → each is its own list item.
-  const items = [];
-  DATA.forEach(r => { if (r.close != null) eachRemark(r).forEach(it => items.push(it)); });
-  $('aswCount').textContent = items.length + ' เหตุการณ์';
-
-  let sorted;
-  if (STATE.newsSort === 'newest') sorted = [...items].sort((a,b) => b.date.localeCompare(a.date));
-  else if (STATE.newsSort === 'oldest') sorted = [...items].sort((a,b) => a.date.localeCompare(b.date));
-  else sorted = [...items].sort((a,b) => Math.abs(b.change || 0) - Math.abs(a.change || 0));
-
-  const list = $('aswNewsList');
-  list.innerHTML = sorted.map(item => {
-    const c = classifyEvent(item);
-    const tag = c ? `<span class="tag ${c.type}">${c.label}</span>` : '';
-    return `<div class="news-item" data-date="${item.date}">
-      <div class="news-date th">${fmtThaiShort(item.date)}</div>
-      <div>
-        <div class="news-text th">${escapeHtml(item.text)}</div>
-        <div class="mt-8">${tag}</div>
-      </div>
-      <div class="news-meta">
-        <div class="price">฿${fmtNum(item.close)}</div>
-        <div class="chg ${item.change > 0 ? 'text-pos' : item.change < 0 ? 'text-neg' : 'muted'}">${item.change != null ? fmtPct(item.change) : '—'}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderProjectNews() {
-  // Filter across all 3 remark columns for project-classified text.
-  const items = [];
-  DATA.forEach(r => {
-    eachRemark(r).forEach(it => {
-      if (classifyEvent(it)?.type === 'project') items.push(it);
-    });
-  });
-  items.sort((a,b) => b.date.localeCompare(a.date));
-  const list = $('projectNewsList');
-  if (!items.length) {
-    list.innerHTML = '<div class="muted th" style="font-size:11px;">ไม่พบเหตุการณ์โครงการ</div>';
-    return;
-  }
-  list.innerHTML = items.slice(0, 20).map(it => {
-    return `<div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
-      <div class="timeline-text th">${escapeHtml(it.text)}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderRateTimeline() {
-  const items = [];
-  DATA.forEach(r => {
-    eachRemark(r).forEach(it => {
-      if (classifyEvent(it)?.type === 'interest_rate') items.push(it);
-    });
-  });
-  items.sort((a,b) => a.date.localeCompare(b.date));
-  const list = $('rateTimeline');
-  if (!items.length) {
-    list.innerHTML = '<div class="muted th">ไม่พบข้อมูลอัตราดอกเบี้ย</div>';
-    return;
-  }
-  list.innerHTML = items.map(it => `
-    <div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
-      <div class="timeline-text th"><span class="tag interest_rate">ดอกเบี้ย</span> ${escapeHtml(it.text)}</div>
-    </div>`).join('');
-}
-
-function renderPolTimeline() {
-  const items = [];
-  DATA.forEach(r => {
-    eachRemark(r).forEach(it => {
-      if (classifyEvent(it)?.type === 'political') items.push(it);
-    });
-  });
-  items.sort((a,b) => b.date.localeCompare(a.date));
-  const list = $('polTimeline');
-  if (!items.length) {
-    list.innerHTML = '<div class="muted th">ไม่พบเหตุการณ์การเมือง</div>';
-    return;
-  }
-  list.innerHTML = items.map(it => `
-    <div class="timeline-item">
-      <div class="timeline-date th">${fmtThaiDate(it.date)} · ฿${fmtNum(it.close)}</div>
-      <div class="timeline-text th"><span class="tag political">การเมือง</span> ${escapeHtml(it.text)}</div>
-    </div>`).join('');
-}
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[m]));
+}
+
+// Inline SVG icon helper (Feather-inspired, MIT).
+// Returns a 14x14 line-art SVG that picks up the parent's text color via
+// `stroke="currentColor"`. Add a new icon by dropping it in the switch.
+//
+// Migrate-v7: replaces the emoji used in news action buttons + toolbar + toast
+// (the user requested no emoji in the UI). All callers use `${icon('name')}`.
+function icon(name) {
+  const sw = 1.6;  // stroke-width — Feather default
+  const wrap = (path) =>
+    `<svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" ` +
+    `fill="none" stroke="currentColor" stroke-width="${sw}" ` +
+    `stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+  switch (name) {
+    case 'eye':         return wrap('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>');
+    case 'eye-off':     return wrap('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>');
+    case 'edit':        return wrap('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>');
+    case 'undo':        return wrap('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>');
+    case 'search':      return wrap('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>');
+    case 'refresh':     return wrap('<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>');
+    case 'check':       return wrap('<polyline points="20 6 9 17 4 12"/>');
+    case 'alert':       return wrap('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>');
+    case 'x':           return wrap('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>');
+    case 'chevron-down':return wrap('<polyline points="6 9 12 15 18 9"/>');
+    default:            return '';
+  }
+}
+
+/* ============== Unified News Feed Helpers ==============
+ *
+ * Migrate-v4 view rebuild — these helpers + the backend `priorityForItem()`
+ * in db.js power the severity-first sorted feed on the new ข่าวและปัจจัย
+ * page. Stream A (DATA rows via eachRemark) lives on the chart pins and
+ * the Dashboard sidebar; the unified news feed is Stream B (NEWS_DATA via
+ * /api/news) only — every item must have a real, non-empty source_url.
+ */
+
+// Synthesize a severity value for sorting/display purposes.
+//   - Stream B rows already carry a severity from gemini-search.
+//   - Stream A rows (daily.remark) have none — treat as 'medium' so they're
+//     prominent but don't outrank flagged Stream B high-severity pins.
+function classifySeverity(item) {
+  if (item && item.severity) return item.severity;
+  if (item && item.source === 'remark') return 'medium';
+  return 'low';
+}
+
+// Mirror of db.priorityForItem — used for Stream A items that don't carry
+// precomputed display_priority. For Stream B items, prefer the value the
+// backend already wrote.
+function priorityForItem(item) {
+  const sev = { high: 100, medium: 50, low: 25 }[classifySeverity(item)] || 25;
+  const imp = { positive: 25, negative: 15, neutral: 5 }[item && item.impact] || 0;
+  const pin = item && item.show_pin ? 10 : 0;
+  return sev + imp + pin;
+}
+
+// Bucket an item by how recent its date is vs today. Returns one of
+// 'today' | 'yesterday' | 'this_week' | 'last_week' | 'older'. Anything
+// missing/empty → 'older' so it lands in the long tail.
+function bucketByRelativeDate(dateStr, nowStr) {
+  if (!dateStr) return 'older';
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date((nowStr || new Date().toISOString().slice(0, 10)) + 'T00:00:00');
+  if (isNaN(d.getTime()) || isNaN(today.getTime())) return 'older';
+  const diffDays = Math.floor((today - d) / 86400000);
+  if (diffDays <= 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays <= 6) return 'this_week';
+  if (diffDays <= 13) return 'last_week';
+  return 'older';
+}
+
+// Unified-feeds range filter. Reuses STATE.newsRange so the pills stay in
+// sync with whatever the user clicked. 'Today' = today only; 'ALL' = no cap.
+function inNewsRange(dateStr, range) {
+  if (!dateStr) return true;
+  if (!range || range === 'ALL') return true;
+  if (range === 'Today') {
+    return dateStr === new Date().toISOString().slice(0, 10);
+  }
+  const days = { '1W': 7, '1M': 30, '3M': 90, '6M': 180 }[range];
+  if (!days) return true;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  return dateStr >= cutoff;
 }
 
 /* ============== Data Table (paginated, sortable) ============== */
@@ -1769,7 +1833,27 @@ function renderPriceTable() {
     const chg = r.change;
     const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
     const has = hasRemark(r);
-    return `<tr class="${has ? 'has-remark' : ''}">
+    const userNote = r.user_note || '';
+    // Build the Remark cell body: Gemini badge first (if any), then the
+    // user's personal note on a separate line. The cell is wrapped in a
+    // clickable role="button" so the user can open the popover (migrate-v7).
+    let inner = '';
+    if (has) {
+      const items = eachRemark(r);
+      const it = items[0];
+      const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other;
+      inner = `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r));
+    }
+    if (userNote) {
+      // Multi-line note rendered below the Gemini line, with an edit icon
+      // to signal that it's editable (migrate-v7).
+      inner += (inner ? '<br/>' : '')
+        + `<span class="user-remark-line">${icon('edit')}<span class="user-remark-text">${escapeHtml(userNote)}</span></span>`;
+    }
+    const hint = inner
+      ? `<span class="muted remark-edit-hint">${icon('edit')}</span>`
+      : `<span class="muted remark-add-hint">+ เพิ่ม note</span>`;
+    return `<tr class="${has || userNote ? 'has-remark' : ''}">
       <td class="th nowrap">${fmtThaiShort(r.date)}</td>
       <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
       <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
@@ -1777,7 +1861,10 @@ function renderPriceTable() {
       <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
       <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
       <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
-      <td class="th">${has ? (() => { const items = eachRemark(r); const it = items[0]; const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other; return `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r)); })() : ''}</td>
+      <td class="th price-remark-cell" data-date="${escapeHtml(r.date)}" tabindex="0" role="button"
+          title="คลิกเพื่อเพิ่ม/แก้ไข note ส่วนตัว">
+        ${inner}${hint}
+      </td>
     </tr>`;
   }).join('');
   if (!sorted.length) body.innerHTML = '<tr><td colspan="8" class="empty-state th">ไม่พบข้อมูล</td></tr>';
@@ -2114,76 +2201,27 @@ function buildPropChart() {
   }
 }
 
-// --- Sector headlines for the อสังหาฯ tab (Gemini-driven) ---
 
-function renderPropNews() {
-  // Pull the past 30 days of sector / project headlines straight from DATA
-  // (already loaded by /api/daily). Pipeline refactor: each row now has 1
-  // remark + 1 category; we surface 'sector' rows as อสังหาฯ and any row
-  // whose remark classifies as 'project' as โครงการ.
-  const el = $('propNewsList');
-  if (!el) return;
-
-  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const items = [];
-  DATA.forEach(r => {
-    if (r.date < cutoff) return;
-    eachRemark(r).forEach(it => {
-      // Direct sector category → bucket as 'sector'.
-      if (it.category === 'sector') {
-        items.push({ date: r.date, category: 'sector', text: it.text, close: r.close, change: r.change });
-        return;
-      }
-      // Otherwise fall back to the keyword classifier — 'project' in the
-      // legacy sense (โครงการ / JV / presale) still belongs here.
-      if (classifyEvent(it)?.type === 'project') {
-        items.push({ date: r.date, category: 'project', text: it.text, close: r.close, change: r.change });
-      }
-    });
-  });
-  items.sort((a, b) => b.date.localeCompare(a.date));
-
-  if (!items.length) {
-    el.innerHTML = '<div class="empty-state th">ยังไม่มีข่าวอสังหาฯ — รอ Gemini cron 17:45 หรือกดรีเฟรชจาก Server</div>';
-    return;
-  }
-
-  el.innerHTML = items.slice(0, 30).map(it => {
-    const badge = REMARK_BADGE[it.category] || REMARK_BADGE.sector;
-    return `<div class="news-item">
-      <div class="news-date th">${fmtThaiShort(it.date)}</div>
-      <div>
-        <div class="news-text th">${escapeHtml(it.text)}</div>
-        <div class="mt-8"><span class="tag ${badge.cls}">${escapeHtml(badge.label)}</span></div>
-      </div>
-      <div class="news-meta">
-        <div class="price">฿${fmtNum(it.close)}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// Kept as a no-op so any leftover UI hook still works — the panel now reads
-// from DATA on every render.
-async function refreshPropNews() {
-  await renderPropNews();
-}
-
-/* ============== News Feed (Gemini-search v3) ==============
- * Reads from /api/news (backed by the news_feed table populated by
- * lib/fetchers/gemini-search.mjs 'gemini-sector' + 'gemini-macro'
- * pipelines). Each row has a TITLE (no remark rewrite) plus a source_url
- * the user can click through, and an explicit 13-value category.
+/* ============== News Feed (Stream B) ==============
+ * The Gemini-search pipeline (gemini-sector + gemini-macro) writes to the
+ * news_feed table in Postgres. /api/news returns rows already sorted
+ * severity-first (migrate-v4: ORDER BY display_priority DESC, date DESC, id
+ * DESC). loadNewsFeed() fetches + caches into window.NEWS_DATA; both
+ * renderDashNews() (dashboard sidebar) and renderUnifiedNews() (the new
+ * unified feed) consume the same cache.
  */
-// news_feed cache — lives on window so both renderDashNews() (dashboard
-// sidebar) and renderNewsFeed() (Feed tab) can read the same data without
-// re-fetching. Set initially by the boot Promise.all() and refreshed by
-// loadNewsFeed() / refresh handlers.
+// news_feed cache — lives on window so renderDashNews() (dashboard sidebar)
+// and renderUnifiedNews() (unified feed, ข่าวและปัจจัย view) can read the
+// same data without re-fetching. Set initially by the boot Promise.all() and
+// refreshed by loadNewsFeed() / refresh handlers.
 window.NEWS_DATA = window.NEWS_DATA || [];
 
 async function loadNewsFeed() {
   try {
-    const r = await fetch('/api/news?limit=200');
+    // Fetch with showHidden=1 so the cache is complete; filter functions
+    // (buildMergedNewsItems + renderDashNews) decide what to surface based
+    // on STATE.newsShowHidden. Keeps NEWS_DATA authoritative across views.
+    const r = await fetch('/api/news?limit=200&showHidden=1');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     window.NEWS_DATA = d.rows || [];
@@ -2191,40 +2229,9 @@ async function loadNewsFeed() {
     console.warn(`[feed] failed: ${e.message || e}`);
     window.NEWS_DATA = [];
   }
-  renderNewsFeed();
+  renderUnifiedNews();
 }
 
-function renderNewsFeed() {
-  const list = $('feedList');
-  if (!list) return;
-  const cat = STATE.feedCategory || 'all';
-  const items = (cat === 'all') ? window.NEWS_DATA : window.NEWS_DATA.filter(n => n.category === cat);
-  if (!items.length) {
-    list.innerHTML = `<div class="empty-state th">ยังไม่มีข่าว — รอ cron 17:50 น. (sector) / 17:55 น. (macro) หรือกด "รีเฟรช"</div>`;
-    return;
-  }
-  list.innerHTML = items.map(n => {
-    const d = (n.date || '').slice(0, 10);
-    const dt = d ? new Date(d + 'T00:00:00') : null;
-    const dateStr = dt ? dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
-    const catBadge = REMARK_BADGE[n.category] || REMARK_BADGE.other;
-    const sev = n.severity ? ` · <span class="muted">${escapeHtml(n.severity)}</span>` : '';
-    const impact = n.impact && n.impact !== 'neutral'
-      ? ` · <span class="muted th">${escapeHtml(n.impact)}</span>`
-      : '';
-    return `
-      <div class="news-item feed-item">
-        <div class="news-date th">${escapeHtml(dateStr)} · <span class="muted">${escapeHtml(n.source_label || '')}</span>${sev}</div>
-        <div>
-          <span class="tag ${catBadge.cls}" style="background:${catBadge.color}1a;color:${catBadge.color};">${escapeHtml(catBadge.label)}</span>${impact}
-          ${n.source_url
-            ? `<a href="${escapeHtml(n.source_url)}" target="_blank" rel="noopener noreferrer" class="th">${escapeHtml(n.title)}</a>`
-            : `<span class="th">${escapeHtml(n.title)}</span>`}
-        </div>
-      </div>
-    `;
-  }).join('');
-}
 
 // =============================================================================
 // Morning Brief (Gemini-search pipeline, Monday 08:00 ICT)
@@ -2233,6 +2240,308 @@ function renderNewsFeed() {
 // Reads from /api/morning-brief (the latest non-null brief). Renders 3
 // sections: LAST_WEEK bullets, THIS_WEEK_WATCH bullets, and a tone badge
 // (bullish/bearish/neutral) with the model's one-line reason.
+
+// =============================================================================
+// Unified News Feed (migrate-v4 rebuild — replaces the 6 subtabs)
+// =============================================================================
+//
+// One scroll, severity-first. Builds a single merged list from Stream A
+// (DATA → eachRemark) and Stream B (window.NEWS_DATA from /api/news),
+// filters by search + range pill, sorts by display_priority desc, buckets
+// by relative date, and renders 5 collapsible sections.
+//
+// Click semantics match the legacy view: Stream A items jump to Dashboard
+// chart focused on the event date; Stream B items open source_url.
+
+function buildMergedNewsItems() {
+  // Stream A (daily.remark chart pins) is intentionally NOT included here.
+  // Those are historical chart events with no URL — they belong on the chart
+  // (as pins) and the Dashboard sidebar, but not in the unified news feed
+  // (which is "news with links" only). Older buckets previously filled with
+  // 3-year-old remark pins, drowning out real news.
+
+  // Stream B — Gemini-search news_feed items (gemini-sector + gemini-macro).
+  // display_priority comes pre-computed from the backend so the client sort
+  // is O(N) instead of recomputing per row.
+  //
+  // Migrate-v6: also carry `id`, `hidden`, `hidden_at`, `user_note` so the
+  // renderer can show the note and the hide-toggle / "Show hidden" view
+  // works without an extra roundtrip.
+  const b = (window.NEWS_DATA || []).map(n => ({
+    source: 'feed',
+    date: (n.date || '').slice(0, 10),
+    category: n.category || 'other',
+    text: n.title,
+    summary: n.summary || null,
+    url: n.source_url,
+    sourceLabel: n.source_label,
+    impact: n.impact,
+    severity: n.severity,
+    show_pin: n.show_pin,
+    display_priority: n.display_priority,
+    id: n.id,
+    hidden: !!n.hidden,
+    hidden_at: n.hidden_at || null,
+    user_note: n.user_note || null,
+  }));
+  // Valid-link filter: drop items with empty/null source_url. Required so
+  // the feed never shows a non-clickable headline. Hidden filter: drop
+  // user-hidden rows unless STATE.newsShowHidden is true (Show hidden pill).
+  return b.filter(it =>
+    it.text && it.url && it.url.length > 0 &&
+    (STATE.newsShowHidden || !it.hidden)
+  );
+}
+
+function renderUnifiedNews() {
+  const today = new Date().toISOString().slice(0, 10);
+  let items = buildMergedNewsItems();
+  // Range filter (uses STATE.newsRange — matches toolbar pills).
+  items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
+  // Search filter (text contains, case-insensitive, both streams).
+  const q = (STATE.newsSearch || '').toLowerCase().trim();
+  if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
+  // Sort: priority desc, then date desc.
+  items.sort((a, b) => {
+    const pa = (a.display_priority != null) ? a.display_priority : priorityForItem(a);
+    const pb = (b.display_priority != null) ? b.display_priority : priorityForItem(b);
+    if (pa !== pb) return pb - pa;
+    return (b.date || '').localeCompare(a.date || '');
+  });
+  // Bucket into 5 groups.
+  const buckets = { today: [], yesterday: [], this_week: [], last_week: [], older: [] };
+  items.forEach(it => buckets[bucketByRelativeDate(it.date, today)].push(it));
+  // Render each bucket body + count badge + collapsed flag.
+  ['today', 'yesterday', 'this_week', 'last_week', 'older'].forEach(b => {
+    const list = buckets[b];
+    const body = $('bucket-' + b);
+    const badge = $('count-' + b);
+    if (!body || !badge) return;
+    badge.textContent = list.length;
+    body.hidden = !!STATE.newsCollapsed[b];
+    body.innerHTML = list.length
+      ? list.map(renderUnifiedNewsItem).join('')
+      : '<div class="muted th" style="font-size:11px;padding:8px;">— ไม่มีข่าว —</div>';
+  });
+  // Empty state when search/range filtered everything out.
+  const empty = $('unifiedEmpty');
+  if (empty) empty.hidden = items.length > 0;
+  // Note: click handlers for .news-item[data-date] are bound globally on
+  // document.body (lines ~3261-3270). They jump to Dashboard and focus the
+  // chart on the event date — no per-render rebind needed.
+}
+
+function renderUnifiedNewsItem(item) {
+  // Unified feed is Stream B (news_feed) only — Stream A was removed so the
+  // feed never has to choose between `<a>` and `<span>` rendering. Every
+  // item here is guaranteed to have a non-empty url (enforced by the
+  // buildMergedNewsItems() filter) and opens in a new tab on click.
+  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
+  const dateStr = fmtThaiShort(item.date);
+  const sev = classifySeverity(item);
+  // Suppress the low pill for low severity — it would be visual noise on
+  // every feed item (Stream B rows default to low).
+  const sevPill = sev !== 'low'
+    ? `<span class="severity-pill severity-${escapeHtml(sev)}">${escapeHtml(sev)}</span>`
+    : '';
+  // Body text — Gemini sends SUMMARY (1-2 sentences). Falls back to nothing
+  // when null so old rows without summary still render cleanly (just the
+  // headline + tag).
+  const summaryHtml = item.summary
+    ? `<div class="th news-summary muted">${escapeHtml(item.summary)}</div>`
+    : '';
+  // User note (migrate-v6) — shown inline if set; edit SVG icon as the
+  // prefix so the user can tell at a glance which rows have notes attached.
+  const noteHtml = item.user_note
+    ? `<div class="news-user-note th">${icon('edit')} ${escapeHtml(item.user_note)}</div>`
+    : '';
+  // Hidden-by-user state — when STATE.newsShowHidden is on, hidden rows
+  // render with strikethrough + reduced opacity so the user can see what
+  // they've dismissed and click the eye to restore.
+  const hiddenCls = item.hidden ? ' hidden-by-user' : '';
+  const idAttr = item.id != null ? ` data-id="${item.id}"` : '';
+  const hideTitle = item.hidden ? 'แสดงกลับ (unhide)' : 'ซ่อนข่าวนี้ (hide)';
+  const hideIcon  = item.hidden ? icon('eye') : icon('eye-off');
+  const noteTitle = item.user_note ? 'แก้ไข note' : 'เพิ่ม note';
+  return `<div class="news-item feed-dash-item${hiddenCls}"${idAttr}>
+    <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span>${sevPill}</div>
+    <div>
+      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
+      ${summaryHtml}
+      ${noteHtml}
+    </div>
+    <div class="news-actions">
+      <button class="news-action-btn" data-action="note" data-id="${item.id}" title="${noteTitle}">${icon('edit')}</button>
+      <button class="news-action-btn" data-action="hide" data-id="${item.id}" title="${hideTitle}">${hideIcon}</button>
+    </div>
+  </div>`;
+}
+
+function bindUnifiedItemClick() {
+  // Migrate-v6: action-button delegation inside the news view. Bound once
+  // via dataset flag so re-renders don't double-attach. Note: clicks on
+  // .news-item without data-date do NOT go to the body handler (only
+  // data-date items do), so e.stopPropagation() here is mostly future-proof.
+  const view = $('view-news');
+  if (!view || view.dataset.actionsBound === '1') return;
+  view.dataset.actionsBound = '1';
+
+  view.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.news-action-btn');
+    if (!btn) return;                  // not an action button — let click pass through
+    e.stopPropagation();                // don't bubble to the body handler
+    e.preventDefault();                 // don't navigate the surrounding <a>
+    const id = parseInt(btn.dataset.id, 10);
+    if (!Number.isFinite(id)) return;
+    const action = btn.dataset.action;
+    // Mutate the canonical cache so other views (dashboard sidebar) re-render
+    // consistently — single source of truth on the client too.
+    const item = (window.NEWS_DATA || []).find(n => n.id === id);
+    if (!item) return;
+
+    if (action === 'hide') {
+      const newHidden = !item.hidden;
+      item.hidden = newHidden;
+      item.hidden_at = newHidden ? new Date().toISOString() : null;
+      renderUnifiedNews();
+      renderDashNews(filterByRange(DATA, STATE.range)); // sync sidebar
+      const r = await window.ASW_API.hideNews(id, newHidden);
+      if (!r.ok) {
+        // Rollback on failure.
+        item.hidden = !newHidden;
+        item.hidden_at = item.hidden ? new Date().toISOString() : null;
+        renderUnifiedNews();
+        renderDashNews(filterByRange(DATA, STATE.range));
+        return;
+      }
+      showHideToast(id, item.title, newHidden);
+    } else if (action === 'note') {
+      const note = window.prompt('Note (ว่าง/ยกเลิก = ลบ note):', item.user_note || '');
+      if (note == null) return;        // user pressed Cancel
+      const newNote = note.trim() || null;
+      item.user_note = newNote;
+      renderUnifiedNews();
+      renderDashNews(filterByRange(DATA, STATE.range));
+      const r = await window.ASW_API.noteNews(id, newNote);
+      if (!r.ok) {
+        alert('บันทึก note ไม่สำเร็จ: ' + (r.error || 'unknown'));
+        // Don't auto-rollback note — easier to re-edit than re-type.
+      }
+    }
+  });
+}
+
+// 5-second toast with an Undo button. Used after a hide/unhide so the user
+// can reverse the action without manually re-toggling the pill.
+function showHideToast(id, title, wasHidden) {
+  const old = $('hideToast');
+  if (old) old.remove();
+  if (STATE.toastUndoTimer) {
+    clearTimeout(STATE.toastUndoTimer);
+    STATE.toastUndoTimer = null;
+  }
+
+  const t = (title || '').slice(0, 50);
+  const ellipsis = (title || '').length > 50 ? '…' : '';
+  const verb = wasHidden ? 'ซ่อน' : 'แสดงกลับ';
+
+  const toast = document.createElement('div');
+  toast.id = 'hideToast';
+  toast.className = 'toast-undo th';
+  toast.innerHTML = `
+    <span>${escapeHtml(verb)}: ${escapeHtml(t)}${ellipsis}</span>
+    <button class="btn btn-ghost th" id="hideToastUndo">${icon('undo')} Undo</button>
+  `;
+  document.body.appendChild(toast);
+
+  $('hideToastUndo').addEventListener('click', async () => {
+    if (STATE.toastUndoTimer) {
+      clearTimeout(STATE.toastUndoTimer);
+      STATE.toastUndoTimer = null;
+    }
+    toast.remove();
+    const item = (window.NEWS_DATA || []).find(n => n.id === id);
+    if (!item) return;
+    const restoreHidden = !wasHidden;       // flip back
+    item.hidden = restoreHidden;
+    item.hidden_at = restoreHidden ? new Date().toISOString() : null;
+    renderUnifiedNews();
+    renderDashNews(filterByRange(DATA, STATE.range));
+    await window.ASW_API.hideNews(id, restoreHidden);
+  });
+
+  STATE.toastUndoTimer = setTimeout(() => {
+    toast.remove();
+    STATE.toastUndoTimer = null;
+  }, 5000);
+}
+
+async function loadNewsStatus() {
+  const row = $('newsStatusRow');
+  if (!row) return;
+  const s = await window.ASW_API.newsStatus();
+  const fmtTime = (ts) => ts ? new Date(ts).toLocaleString('th-TH',
+    { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmtRun = (r) => {
+    if (!r) return '— ยังไม่เคยรัน';
+    // Local `ic` to avoid shadowing the global `icon(name)` SVG helper.
+    const ic = r.ok ? icon('check') : icon('alert');
+    return `${ic} ${fmtTime(r.finished_at || r.started_at)} (${r.rows_added || 0} รายการ${r.ok ? '' : ' · ' + (r.error || 'fail')})`;
+  };
+  const dotClass = (r) => r && r.ok ? 'ok' : (r ? 'error' : 'pending');
+  row.innerHTML = `
+    <div class="news-status-row">
+      <span><span class="dot ${dotClass(s.lastRuns.company)}"></span> <strong>company</strong> · ${fmtRun(s.lastRuns.company)}</span>
+      <span><span class="dot ${dotClass(s.lastRuns.sector)}"></span> <strong>sector</strong> · ${fmtRun(s.lastRuns.sector)}</span>
+      <span><span class="dot ${dotClass(s.lastRuns.macro)}"></span> <strong>macro</strong> · ${fmtRun(s.lastRuns.macro)}</span>
+      <span><span class="dot ${dotClass(s.lastRuns.brief)}"></span> <strong>brief</strong> · ${fmtRun(s.lastRuns.brief)}</span>
+    </div>
+    <div class="muted th mt-8" style="font-size:11px;">
+      📊 ทั้งหมด <strong>${s.counts.total}</strong> รายการ · high <strong>${s.counts.high}</strong> · priority ≥75 <strong>${s.counts.high_priority}</strong> · วันนี้ <strong>${s.counts.today}</strong>
+    </div>
+  `;
+}
+
+// Morning Brief banner — top of the unified feed. Reuses MORNING_BRIEF cache
+// loaded by loadMorningBrief() at boot or on first view visit.
+function renderMorningBriefBanner() {
+  const b = window.MORNING_BRIEF || {};
+  const dateEl = $('mbDate');
+  const toneEl = $('mbTone');
+  const contentEl = $('mbContent');
+  if (!dateEl || !toneEl || !contentEl) return;
+  if (!b || !b.date) {
+    dateEl.textContent = '—';
+    toneEl.textContent = '—';
+    toneEl.style.cssText = 'background:var(--muted);color:#fff;font-size:12px;padding:6px 12px;';
+    contentEl.textContent = 'ยังไม่มี Morning Brief — รอ cron จันทร์ 08:00 ICT';
+    return;
+  }
+  const tone = (b.morning_remark || 'neutral').toLowerCase();
+  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
+  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const dt = new Date(b.date + 'T00:00:00');
+  const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  dateEl.textContent = 'สัปดาห์ของวันที่ ' + dateStr;
+  toneEl.textContent = toneLabel;
+  toneEl.style.cssText = `background:${toneColor}1a;color:${toneColor};font-size:12px;padding:6px 12px;`;
+  const lastWeekBullets = (b.morning_brief || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const watchBullets = (b.morning_watch || '').split('\n').map(s => s.trim()).filter(Boolean);
+  let html = '';
+  if (lastWeekBullets.length) {
+    html += `<div class="mb-8"><strong class="th">📋 สัปดาห์ที่ผ่านมา</strong><ul class="th" style="margin:6px 0 0 0;padding-left:20px;line-height:1.6;">`
+      + lastWeekBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('') + `</ul></div>`;
+  }
+  if (watchBullets.length) {
+    html += `<div><strong class="th">👀 สัปดาห์นี้ต้องติดตาม</strong><ul class="th" style="margin:6px 0 0 0;padding-left:20px;line-height:1.6;">`
+      + watchBullets.map(s => `<li>${escapeHtml(s.replace(/^-\s*/, ''))}</li>`).join('') + `</ul></div>`;
+  }
+  if (!html) html = '<div class="muted th">— ไม่มีรายละเอียด —</div>';
+  if (b.morning_weekly_at) {
+    html += `<div class="muted th mt-8" style="font-size:10px;font-style:italic;">อัปเดตล่าสุด ${new Date(b.morning_weekly_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })} น.</div>`;
+  }
+  contentEl.innerHTML = html;
+}
 
 async function loadMorningBrief() {
   const brief = await window.ASW_API.morningBrief();
@@ -2830,19 +3139,164 @@ function refreshPrice() {
 }
 
 function refreshNews() {
-  renderAswNews();
-  buildPropChart();
-  renderProjectNews();
-  renderRateTimeline();
-  renderPolTimeline();
-  buildImpactChart();
+  // Unified feed (migrate-v4): one scroll, severity-first sort, 5 buckets.
+  // Wrap each step so a chart failure (e.g. canvas missing in jsdom) doesn't
+  // take down loadNewsStatus() — the status row should still populate.
+  try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
+  try { buildPropChart(); } catch (e) { console.warn('refreshNews: buildPropChart failed:', e.message); }
+  try { buildImpactChart(); } catch (e) { console.warn('refreshNews: buildImpactChart failed:', e.message); }
+  try { renderMorningBriefBanner(); } catch (e) { console.warn('refreshNews: renderMorningBriefBanner failed:', e.message); }
+  loadNewsStatus();
+  refreshHiddenCount();
+}
+
+// Migrate-v6: count hidden rows in the canonical NEWS_DATA cache and update
+// the toolbar pill badge. Called on every load and after each hide/unhide so
+// the counter always reflects the current cache state.
+function refreshHiddenCount() {
+  const el = $('newsHiddenCount');
+  if (!el) return;
+  const hidden = (window.NEWS_DATA || []).filter(n => n && n.hidden).length;
+  el.textContent = String(hidden);
 }
 
 /* ============== File upload ============== */
 // (Removed — app uses bundled sample_data.js only; no upload needed for MVP demo.)
 
 /* ============== Event wiring ============== */
+// ============================================================================
+// Migrate-v7 — User-remark popover on the Daily Price Table.
+//
+// Click any cell in the Remark column to open this popover. It writes to a
+// separate `daily.user_note` column (not the Gemini-generated `remark`).
+// Optimistic UI: mutate the row locally first, then POST. On failure, roll
+// back and toast.
+// ============================================================================
+let ACTIVE_REMARK_POPOVER = null;  // { cleanup() } or null
+
+function closeRemarkPopover() {
+  if (!ACTIVE_REMARK_POPOVER) return;
+  ACTIVE_REMARK_POPOVER.cleanup();
+  ACTIVE_REMARK_POPOVER = null;
+}
+
+function positionPopover(pop, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const PW = 360;
+  const PH_EST = 220;
+  const PAD = 8;
+  const scrollY = window.scrollY || window.pageYOffset;
+  const scrollX = window.scrollX || window.pageXOffset;
+  let top = scrollY + r.bottom + PAD;
+  let left = scrollX + r.left;
+  const vw = document.documentElement.clientWidth;
+  if (left + PW > scrollX + vw) {
+    left = Math.max(scrollX + PAD, scrollX + vw - PW - PAD);
+  }
+  // Flip above if not enough room below the cell.
+  if ((r.bottom + PH_EST) > (window.innerHeight - PAD)) {
+    top = scrollY + r.top - PH_EST - PAD;
+  }
+  pop.style.top  = Math.max(scrollY + PAD, top) + 'px';
+  pop.style.left = Math.max(scrollX + PAD, left) + 'px';
+}
+
+function openRemarkPopover(anchorCell, date) {
+  closeRemarkPopover();
+  const row = (DATA || []).find(r => r.date === date);
+  if (!row) return;
+  const initial = row.user_note || '';
+
+  // Backdrop = click-outside dismiss + click-elsewhere cancels save.
+  const backdrop = document.createElement('div');
+  backdrop.className = 'remark-popover-backdrop';
+  document.body.appendChild(backdrop);
+
+  const pop = document.createElement('div');
+  pop.className = 'remark-popover';
+  pop.innerHTML = `
+    <div class="remark-popover-head">
+      <strong class="th">My note — ${escapeHtml(fmtThaiShort(date))}</strong>
+      <button class="icon-btn" data-action="close" title="ปิด">${icon('x')}</button>
+    </div>
+    <textarea class="remark-popover-text th" rows="4" placeholder="พิมพ์ note ส่วนตัว...">${escapeHtml(initial)}</textarea>
+    <div class="remark-popover-actions">
+      <span class="muted th remark-popover-keys">${icon('check')} Cmd/Ctrl+Enter = save · Esc = close</span>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost th" data-action="clear" title="ลบ note">ลบ note</button>
+      <button class="btn btn-ghost th" data-action="cancel">ยกเลิก</button>
+      <button class="btn th remark-popover-save" data-action="save">บันทึก</button>
+    </div>
+  `;
+  document.body.appendChild(pop);
+  positionPopover(pop, anchorCell);
+
+  const textarea = pop.querySelector('textarea');
+  textarea.focus();
+  // Caret at the end so the user can keep typing without re-positioning.
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  const onBackdrop = () => closeRemarkPopover();
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeRemarkPopover(); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      saveRemark();
+    }
+  };
+  backdrop.addEventListener('click', onBackdrop);
+  document.addEventListener('keydown', onKey);
+
+  pop.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'close' || action === 'cancel') return closeRemarkPopover();
+    if (action === 'clear') { textarea.value = ''; textarea.focus(); return; }
+    if (action === 'save') return saveRemark();
+  });
+
+  async function saveRemark() {
+    const v = textarea.value;
+    const newNote = v.trim() || null;
+    // Optimistic update: change local row + re-render so the cell reflects it
+    // immediately, then POST. Rollback on failure.
+    row.user_note = newNote;
+    closeRemarkPopover();
+    renderPriceTable();
+    try {
+      const r = await window.ASW_API.dailyRemark(date, newNote);
+      if (!r || !r.ok) {
+        row.user_note = initial || null;
+        renderPriceTable();
+        showToast('บันทึก note ไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
+      } else {
+        showToast(newNote ? 'บันทึก note แล้ว' : 'ลบ note แล้ว');
+      }
+    } catch (err) {
+      row.user_note = initial || null;
+      renderPriceTable();
+      showToast('บันทึก note ไม่สำเร็จ');
+    }
+  }
+
+  ACTIVE_REMARK_POPOVER = {
+    cleanup() {
+      backdrop.remove();
+      pop.remove();
+      backdrop.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    },
+  };
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Migrate-v7: inject SVG icons into static HTML placeholders (news toolbar).
+  // The placeholders can't use ${icon(...)} because they're in HTML markup,
+  // not JS template literals.
+  const shI = $('newsShowHiddenIcon'); if (shI) shI.innerHTML = icon('eye-off');
+  const rfI = $('newsRefreshIcon');   if (rfI) rfI.innerHTML = icon('refresh');
+
   // Sidebar
   document.querySelectorAll('.sidebar-item').forEach(b => {
     b.addEventListener('click', (e) => {
@@ -2912,55 +3366,59 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('priceTableSearch').addEventListener('input', () => renderPriceTable());
 
-  // News tabs
-  document.querySelectorAll('.subtab').forEach(b => {
+  // Migrate-v7: click/keyboard delegate on the price-table body so users can
+  // click any Remark cell to open the personal-note popover. Bound once.
+  const priceTableBody = $('priceTableBody');
+  if (priceTableBody && priceTableBody.dataset.popoverBound !== '1') {
+    priceTableBody.dataset.popoverBound = '1';
+    priceTableBody.addEventListener('click', (e) => {
+      const cell = e.target.closest('.price-remark-cell');
+      if (!cell) return;
+      openRemarkPopover(cell, cell.dataset.date);
+    });
+    priceTableBody.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const cell = e.target.closest('.price-remark-cell');
+      if (!cell) return;
+      e.preventDefault();
+      openRemarkPopover(cell, cell.dataset.date);
+    });
+  }
+
+  // News view — unified feed (migrate-v4 rebuild)
+  //   Search box, range pills, bucket toggles, refresh buttons all bind here.
+  //   Body-level click handler for `.news-item[data-date]` (set below) still
+  //   drives the "click → focus dashboard chart" flow.
+  const newsSearch = $('newsSearch');
+  if (newsSearch) {
+    newsSearch.addEventListener('input', () => {
+      STATE.newsSearch = newsSearch.value;
+      renderUnifiedNews();
+    });
+  }
+  document.querySelectorAll('#newsRangePills .pill').forEach(b => {
     b.addEventListener('click', () => {
-      const t = b.dataset.ntab;
-      document.querySelectorAll('.subtab').forEach(x => x.classList.toggle('active', x === b));
-      document.querySelectorAll('.ntab').forEach(el => el.style.display = 'none');
-      $('ntab-' + t).style.display = 'block';
-      // Lazy-load live news the first time the user opens the อสังหาฯ tab.
-      if (t === 'prop' && !window.__propNewsLoaded) {
-        window.__propNewsLoaded = true;
-        renderPropNews();
-      }
-      // Lazy-load the Gemini-search news feed the first time the user opens
-      // the Feed tab. Subsequent opens reuse the cached NEWS_DATA so the
-      // tab opens instantly. (Also pre-loaded at boot, so this is a safety
-      // net for offline / failed-bootstrap cases.)
-      if (t === 'feed') {
-        if (!window.__newsFeedLoaded) {
-          window.__newsFeedLoaded = true;
-          loadNewsFeed();
-        } else {
-          renderNewsFeed();
-        }
-      }
-      // Morning Brief tab — lazy-load only on first open
-      if (t === 'morning' && !window.__morningLoaded) {
-        window.__morningLoaded = true;
-        loadMorningBrief();
-      } else if (t === 'morning') {
-        renderMorningBrief();
-      }
+      STATE.newsRange = b.dataset.range;
+      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x === b));
+      renderUnifiedNews();
     });
   });
-  // Live news refresh button (อสังหาฯ tab).
-  const propRefresh = $('propNewsRefresh');
-  if (propRefresh) propRefresh.addEventListener('click', refreshPropNews);
-  // Feed category pills (Pipeline B)
-  document.querySelectorAll('[data-feed-cat]').forEach(p => {
-    p.addEventListener('click', () => {
-      document.querySelectorAll('[data-feed-cat]').forEach(x => x.classList.toggle('active', x === p));
-      STATE.feedCategory = p.dataset.feedCat;
-      renderNewsFeed();
+  document.querySelectorAll('.feed-bucket-toggle').forEach(b => {
+    b.addEventListener('click', () => {
+      const key = b.dataset.bucket;
+      if (!key || !STATE.newsCollapsed) return;
+      STATE.newsCollapsed[key] = !STATE.newsCollapsed[key];
+      const body = $('bucket-' + key);
+      if (body) body.hidden = STATE.newsCollapsed[key];
+      b.setAttribute('aria-expanded', String(!STATE.newsCollapsed[key]));
     });
   });
-  // Feed refresh button — POST /api/news/refresh then reload.
-  const feedRefresh = $('feedRefreshBtn');
-  if (feedRefresh) {
-    feedRefresh.addEventListener('click', async () => {
-      feedRefresh.disabled = true;
+  // News refresh button — POST /api/news/refresh (default = gemini-sector)
+  // then reload the feed and the status row.
+  const newsRefreshBtn = $('newsRefreshBtn');
+  if (newsRefreshBtn) {
+    newsRefreshBtn.addEventListener('click', async () => {
+      newsRefreshBtn.disabled = true;
       try {
         const r = await window.ASW_API.newsRefresh();
         if (!r || !r.ok) {
@@ -2969,12 +3427,37 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('รีเฟรช Gemini Search แล้ว');
         }
         await loadNewsFeed();
+        renderUnifiedNews();
+        await loadNewsStatus();
       } finally {
-        feedRefresh.disabled = false;
+        newsRefreshBtn.disabled = false;
       }
     });
   }
-  // Morning Brief refresh button — POST /api/morning-brief/refresh then reload.
+  // Migrate-v6: "Show hidden" pill — toggles STATE.newsShowHidden and (on
+  // first enable) lazily fetches the hidden-rows cache so the unified feed
+  // can render them. The counter badge next to the label updates whenever
+  // the cache changes via refreshHiddenCount().
+  const newsShowHiddenBtn = $('newsShowHiddenBtn');
+  if (newsShowHiddenBtn) {
+    newsShowHiddenBtn.addEventListener('click', async () => {
+      STATE.newsShowHidden = !STATE.newsShowHidden;
+      newsShowHiddenBtn.dataset.active = String(STATE.newsShowHidden);
+      newsShowHiddenBtn.classList.toggle('active', STATE.newsShowHidden);
+      // Lazy fetch hidden rows on first enable; the cache is then merged
+      // into NEWS_DATA so the unified-feed filter sees them.
+      if (STATE.newsShowHidden && !STATE.hiddenNewsCache.length) {
+        const hidden = await window.ASW_API.hiddenNews();
+        STATE.hiddenNewsCache = hidden;
+        const ids = new Set((window.NEWS_DATA || []).map(n => n.id));
+        hidden.forEach(h => { if (!ids.has(h.id) && (window.NEWS_DATA || []).push) window.NEWS_DATA.push(h); });
+      }
+      refreshHiddenCount();
+      renderUnifiedNews();
+    });
+  }
+  refreshHiddenCount();
+  // Morning Brief refresh button (banner top of unified feed).
   const morningRefresh = $('morningRefreshBtn');
   if (morningRefresh) {
     morningRefresh.addEventListener('click', async () => {
@@ -2987,19 +3470,12 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast('รีเฟรช Morning Brief แล้ว');
         }
         await loadMorningBrief();
+        renderMorningBriefBanner();
       } finally {
         morningRefresh.disabled = false;
       }
     });
   }
-  // News sort
-  document.querySelectorAll('#newsSort .pill').forEach(b => {
-    b.addEventListener('click', () => {
-      STATE.newsSort = b.dataset.sort;
-      document.querySelectorAll('#newsSort .pill').forEach(x => x.classList.toggle('active', x === b));
-      renderAswNews();
-    });
-  });
   // Report language toggle — re-render preview on change
   const rptLang = $('rptLang');
   if (rptLang) rptLang.addEventListener('change', () => {
@@ -3273,7 +3749,7 @@ async function loadDataHealth() {
   set('healthLastFetch', h.lastFetched ? new Date(h.lastFetched).toLocaleString('th-TH') + ' น.' : '—');
   set('healthRows', h.stored + ' / ' + h.expected + ' วัน');
   set('healthRange', (h.dateMin || '—') + ' → ' + (h.dateMax || '—'));
-  set('healthMissing', h.missingGaps === 0 ? 'ไม่มีข้อมูลขาด ✓' : (h.missingGaps + ' วัน'));
+  set('healthMissing', h.missingGaps === 0 ? 'ไม่มีข้อมูลขาด' : (h.missingGaps + ' วัน'));
   const list = $('healthMissingList');
   if (list) {
     const gaps = (h.missingDates || []).filter(d => d.reason === 'gap').slice(0, 50);

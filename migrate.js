@@ -61,9 +61,14 @@ CREATE TABLE daily (
   morning_watch     TEXT,
   morning_remark    TEXT,
   morning_weekly_at TEXT,
-  fetched_at        TEXT NOT NULL
+  fetched_at        TEXT NOT NULL,
+  -- User-remark popover (migrate-v7): free-text personal note attached
+  -- via the Price-table click-to-edit affordance. Coexists with the
+  -- Gemini-generated `remark` column above (different writers).
+  user_note         TEXT
 );
 CREATE INDEX daily_date_idx ON daily(date);
+CREATE INDEX daily_user_note_idx ON daily (date DESC) WHERE user_note IS NOT NULL;
 
 CREATE TABLE news_feed (
   id            SERIAL PRIMARY KEY,
@@ -78,13 +83,28 @@ CREATE TABLE news_feed (
   impact        TEXT,                 -- 'positive' | 'negative' | 'neutral'
   severity      TEXT,                 -- 'high' | 'medium' | 'low'
   show_pin      BOOLEAN,              -- true → also render as event pin on chart
-  fetched_at    TEXT NOT NULL
+  fetched_at    TEXT NOT NULL,
+  -- Unified-feed derived priority (migrate-v4)
+  display_priority SMALLINT NOT NULL DEFAULT 0,  -- see priorityForItem() in index.html
+  -- 1-2 sentence Thai summary (migrate-v5). Nullable so the ALTER is cheap
+  -- on a populated table; NULL means title-only (old rows; "fall back" in UI).
+  summary TEXT,
+  -- User actions (migrate-v6) — single-tenant: same flag visible to all.
+  -- hidden = soft delete (filter from feed unless "show hidden" is on);
+  -- hidden_at = audit; user_note = free-text personal remark displayed
+  -- inline under the headline.
+  hidden    BOOLEAN     NOT NULL DEFAULT FALSE,
+  hidden_at TIMESTAMPTZ,
+  user_note TEXT
 );
 CREATE UNIQUE INDEX news_feed_title_hash_idx ON news_feed (title_hash);
 CREATE INDEX news_feed_date_idx     ON news_feed (date DESC);
 CREATE INDEX news_feed_category_idx ON news_feed (category);
 CREATE INDEX news_feed_show_pin_idx ON news_feed (date DESC) WHERE show_pin = TRUE;
 CREATE INDEX news_feed_pipeline_idx ON news_feed (pipeline);
+CREATE INDEX news_feed_priority_date_idx ON news_feed (display_priority DESC, date DESC, id DESC);
+CREATE INDEX news_feed_hidden_at_idx ON news_feed (hidden_at DESC NULLS LAST) WHERE hidden = TRUE;
+CREATE INDEX news_feed_user_note_idx ON news_feed (id) WHERE user_note IS NOT NULL;
 
 CREATE TABLE peer_prices (
   date        TEXT NOT NULL,

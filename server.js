@@ -66,6 +66,27 @@ app.get('/api/daily', async (req, res) => {
   }
 });
 
+// Migrate-v7: User-remark popover on the daily price table.
+// POST /api/daily/:date/remark  body: {note: string|null}
+// Single-tenant — all clients see the same user notes. Coexists with the
+// Gemini-generated `daily.remark` column (different writer).
+app.post('/api/daily/:date/remark', async (req, res) => {
+  try {
+    const date = req.params.date;
+    // Light date validation (YYYY-MM-DD only). DB will reject anything weirder
+    // because `daily.date` is the PRIMARY KEY.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD', code: 'date_bad_format' });
+    }
+    const note = (req.body && typeof req.body.note === 'string') ? req.body.note : null;
+    await db.setDailyRemark(date, note);
+    // Echo back the trimmed note (or null) so the client can confirm.
+    res.json({ ok: true, date, note: note && note.trim() ? note.trim() : null });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'daily_remark_failed' });
+  }
+});
+
 app.get('/api/peers', async (req, res) => {
   try {
     const { date, rows } = await db.readLatestPeers();
@@ -202,17 +223,30 @@ app.post('/api/remarks/refresh', async (req, res) => {
 // --- News feed (Gemini-search: gemini-sector + gemini-macro) ---
 
 // Read recent news items, newest first. Optional ?category= and ?since= filters.
+// ?showHidden=1 includes user-hidden rows (default = hidden only) — used by the
+// "Show hidden" toggle on the unified feed so the client cache is complete.
 app.get('/api/news', async (req, res) => {
   try {
-    const { category, since, limit } = req.query;
+    const { category, since, limit, showHidden } = req.query;
     const rows = await db.readNewsFeed({
       category: category || null,
       since: since || null,
       limit: Math.min(parseInt(limit || '100', 10) || 100, 500),
+      includeHidden: showHidden === '1' || showHidden === 'true',
     });
     res.json({ rows, count: rows.length });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_read_failed' });
+  }
+});
+
+// Unified-feed pipeline status (per sub-pipeline last run + counts).
+// Powers the #newsStatusRow indicator strip on the new "ข่าวและปัจจัย" view.
+app.get('/api/news/status', async (req, res) => {
+  try {
+    res.json(await db.readNewsStatus());
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_status_failed' });
   }
 });
 
@@ -228,6 +262,69 @@ app.post('/api/news/refresh', async (req, res) => {
   } catch (e) {
     await db.logFetchFinish(id, 0, source, 0, 0, String(e.message || e));
     res.json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// Manually trigger an RSS pull. Body can pass `{"source": "rss-property" |
+// "rss-extended", "maxAgeDays": 7}`. Default source=rss-property,
+// maxAgeDays=7 (rss-property) or 14 (rss-extended).
+app.post('/api/news/rss-refresh', async (req, res) => {
+  const source = (req.body && req.body.source) || 'rss-property';
+  const defaultAge = source === 'rss-extended' ? 14 : 7;
+  const maxAgeDays = (req.body && req.body.maxAgeDays) || defaultAge;
+  const id = await db.logFetchStart();
+  try {
+    const result = await runFetch({ source, maxAgeDays });
+    await db.logFetchFinish(id, 1, source, result.inserted || 0, 0, null);
+    res.json({ ok: true, source, ...result });
+  } catch (e) {
+    await db.logFetchFinish(id, 0, source, 0, 0, String(e.message || e));
+    res.json({ ok: false, source, error: String(e.message || e) });
+  }
+});
+
+// User actions on a single news row (migrate-v6).
+//
+//   POST /api/news/:id/hide   body: {hidden: bool}     — default true
+//   POST /api/news/:id/note   body: {note: string|null}— empty/null clears
+//   GET  /api/news/hidden     — list user-hidden rows, newest hide first
+//
+// Single-tenant model — no per-user scope. All clients see the same state.
+app.post('/api/news/:id/hide', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id', code: 'news_hide_bad_id' });
+    // Default hidden=true when the caller doesn't pass it (e.g. a one-click
+    // "hide" button with no body). `!== false` means anything but explicit
+    // false counts as hide.
+    const hidden = !!(req.body && req.body.hidden !== false);
+    await db.setNewsHidden(id, hidden);
+    res.json({ ok: true, id, hidden });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_hide_failed' });
+  }
+});
+
+app.post('/api/news/:id/note', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id', code: 'news_note_bad_id' });
+    const note = (req.body && typeof req.body.note === 'string') ? req.body.note : null;
+    await db.setNewsNote(id, note);
+    // Echo back the trimmed note (or null) so the client can confirm.
+    res.json({ ok: true, id, note: note && note.trim() ? note.trim() : null });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_note_failed' });
+  }
+});
+
+app.get('/api/news/hidden', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 500);
+    const rows = await db.readHiddenNews(limit);
+    res.json({ rows, count: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_hidden_failed' });
   }
 });
 
@@ -395,6 +492,57 @@ if (process.env.GEMINI_API_KEY) {
 } else {
   console.log('[scheduler] GEMINI_API_KEY not set — all gemini-* cron disabled.');
 }
+
+// Google News RSS pull — every 30 min during market hours + 1 final pull at
+// 18:00 ICT. Cheap (8 parallel HTTPS GETs to Google, no key, no JS render).
+// Google News returns recent items only, so a high-frequency cron is safe
+// — the GUID-based title_hash keeps re-runs idempotent.
+cron.schedule('*/30 10-17 * * 1-5', async () => {
+  console.log('[scheduler] rss-property triggered (market hours)');
+  const id = await db.logFetchStart();
+  try {
+    const result = await runFetch({ source: 'rss-property', maxAgeDays: 2 });
+    await db.logFetchFinish(id, 1, 'rss-property', result.inserted || 0, 0, null);
+    console.log(`[scheduler] rss-property ok fetched=${result.fetched || 0} inserted=${result.inserted || 0}`);
+  } catch (e) {
+    await db.logFetchFinish(id, 0, 'rss-property', 0, 0, String(e.message || e));
+    console.error('[scheduler] rss-property failed:', e.message || e);
+  }
+}, { timezone: 'Asia/Bangkok' });
+
+// 18:00 ICT — post-close RSS pull. Casts a wider net (maxAge=7d) so the
+// evening feed covers anything we missed during the day.
+cron.schedule('0 11 * * 1-5', async () => {
+  console.log('[scheduler] rss-property triggered (post-close)');
+  const id = await db.logFetchStart();
+  try {
+    const result = await runFetch({ source: 'rss-property', maxAgeDays: 7 });
+    await db.logFetchFinish(id, 1, 'rss-property', result.inserted || 0, 0, null);
+    console.log(`[scheduler] rss-property ok fetched=${result.fetched || 0} inserted=${result.inserted || 0}`);
+  } catch (e) {
+    await db.logFetchFinish(id, 0, 'rss-property', 0, 0, String(e.message || e));
+    console.error('[scheduler] rss-property failed:', e.message || e);
+  }
+}, { timezone: 'Asia/Bangkok' });
+
+// Migrate-v8 — extended news (SET filings / broker / insider / Smart Alert /
+// USD/THB FX / debt rating). Daily at 18:30 ICT (UTC 11:30) — runs after
+// the rss-property post-close pull so it sees the same-day SET filings
+// without contention. maxAge=14d because insider-trading + broker reports
+// lose actionability fast and a 14-day trailing window ensures we don't
+// miss late retro-published entries from SET.
+cron.schedule('30 11 * * *', async () => {
+  console.log('[scheduler] rss-extended triggered (daily 18:30 ICT)');
+  const id = await db.logFetchStart();
+  try {
+    const result = await runFetch({ source: 'rss-extended', maxAgeDays: 14 });
+    await db.logFetchFinish(id, 1, 'rss-extended', result.inserted || 0, 0, null);
+    console.log(`[scheduler] rss-extended ok fetched=${result.fetched || 0} inserted=${result.inserted || 0} byCat=${JSON.stringify(result.byCat || {})}`);
+  } catch (e) {
+    await db.logFetchFinish(id, 0, 'rss-extended', 0, 0, String(e.message || e));
+    console.error('[scheduler] rss-extended failed:', e.message || e);
+  }
+}, { timezone: 'Asia/Bangkok' });
 
 app.listen(PORT, () => {
   console.log(`ASW Monitor backend on http://localhost:${PORT}`);

@@ -272,6 +272,100 @@
   .news-meta .chg {
     @apply text-[11px];
   }
+  /* Migrate-v6: user actions on news items (note + hide). */
+  .news-actions {
+    @apply flex flex-col gap-1 items-end;
+    align-self: center;
+  }
+  .news-action-btn {
+    @apply bg-transparent border-0 text-muted hover:text-text cursor-pointer px-1.5 py-0.5 rounded text-base;
+    line-height: 1;
+  }
+  .news-action-btn:hover {
+    background: var(--surface-2);
+  }
+  .news-user-note {
+    @apply text-[12px] italic mt-1 px-2 py-1 rounded;
+    color: var(--primary);
+    background: rgba(59, 139, 212, 0.08);
+    border-left: 2px solid var(--primary);
+  }
+  .news-item.hidden-by-user {
+    opacity: 0.55;
+    background: var(--surface-2);
+  }
+  .news-item.hidden-by-user .news-text-link {
+    text-decoration: line-through;
+  }
+
+  /* === Migrate-v8: dashboard-sidebar uniform card ===
+   *
+   * Rendered by renderDashNewsCard() — every card (Stream A remark + Stream B
+   * news_feed) uses the SAME chrome: [date | badge + title (clamp-2) |
+   * price + chg]. The right column never balloons because there are no
+   * per-card action buttons here. Edit / hide / summary / source / note live
+   * in the News & Factors view only.
+   */
+  #dashNewsList .news-item-uniform {
+    @apply grid items-center gap-3 p-2.5 mb-2 border border-border rounded-md bg-card cursor-pointer transition-colors;
+    grid-template-columns: 64px 1fr auto;
+    min-height: 64px;
+  }
+  #dashNewsList .news-item-uniform:hover { @apply bg-surface; }
+  #dashNewsList .news-item-uniform.focused {
+    border-color: var(--primary);
+    background: rgba(59, 139, 212, 0.06);
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+  #dashNewsList .news-item-uniform .ni-date {
+    @apply text-[12px] text-muted tabular-nums;
+  }
+  #dashNewsList .news-item-uniform .ni-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;            /* allow text to clamp inside this column */
+  }
+  #dashNewsList .news-item-uniform .ni-title {
+    @apply text-[13px] leading-snug;
+    flex: 1 1 0;
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    max-height: 2.8em;
+  }
+  #dashNewsList .news-item-uniform .ni-meta {
+    @apply text-right text-[12px];
+    align-self: center;
+    line-height: 1.3;
+  }
+  #dashNewsList .news-item-uniform .ni-price {
+    @apply font-semibold;
+  }
+  #dashNewsList .news-item-uniform .ni-chg {
+    @apply text-[11px];
+  }
+  /* Toast for hide/unhide undo (auto-dismiss after 5s). */
+  .toast-undo {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    z-index: 9999;
+    font-size: 13px;
+  }
+  .toast-undo button { font-size: 12px; }
 
   /* === Sub-tabs === */
   .subtabs {
@@ -541,3 +635,208 @@
     }
   }
 }
+
+/* === Unified News Feed (migrate-v4 rebuild) === */
+@layer components {
+  /* Morning Brief banner sits above the 2-col grid; full-width card. */
+  .feed-mb-banner {
+    @apply p-4;
+  }
+
+  /* Toolbar row inside the search/range card — wrap on narrow screens. */
+  .feed-toolbar {
+    @apply flex gap-2 items-center flex-wrap;
+  }
+  .feed-toolbar .input {
+    @apply px-3 py-2 rounded-md border border-border bg-surface text-text;
+  }
+
+  /* Collapsible bucket section (Today / Yesterday / etc.). */
+  .feed-bucket {
+    @apply mb-2 rounded-lg border border-border overflow-hidden;
+  }
+  .feed-bucket-toggle {
+    @apply w-full flex justify-between items-center px-4 py-2.5 bg-card border-0 text-text font-semibold cursor-pointer;
+  }
+  .feed-bucket-toggle:hover {
+    @apply bg-surface;
+  }
+  .feed-bucket-body {
+    @apply px-4 py-3 bg-surface;
+  }
+  .feed-bucket-body[hidden] {
+    display: none;
+  }
+  .feed-bucket-count {
+    @apply text-xs text-muted font-normal bg-card px-2 py-0.5 rounded-full;
+    min-width: 24px;
+    text-align: center;
+  }
+
+  /* Severity pill rendered on each Stream B item (high/medium/low). */
+  .severity-pill {
+    @apply inline-block text-[10px] px-1.5 py-0.5 rounded-md ml-1.5 font-semibold uppercase;
+  }
+  .severity-pill.severity-high {
+    background: rgba(163, 45, 45, 0.10);
+    color: #A32D2D;
+  }
+  .severity-pill.severity-medium {
+    background: rgba(239, 159, 39, 0.10);
+    color: #EF9F27;
+  }
+  .severity-pill.severity-low {
+    background: rgba(136, 135, 128, 0.10);
+    color: #888780;
+  }
+
+  /* Body text under feed item title (Gemini SUMMARY field, migrate-v5).
+     Smaller than the headline, muted — gives context without competing. */
+  .news-summary {
+    @apply mt-1 text-[13px] leading-snug;
+  }
+
+  /* Pipeline status strip at bottom of unified feed. */
+  .news-status-row {
+    @apply flex gap-4 flex-wrap items-center text-[11px];
+  }
+  .news-status-row .dot {
+    @apply inline-block w-2 h-2 rounded-full mr-1.5;
+  }
+  .news-status-row .dot.ok {
+    @apply bg-positive;
+  }
+  .news-status-row .dot.error {
+    @apply bg-negative;
+  }
+  .news-status-row .dot.pending {
+    @apply bg-muted;
+  }
+}
+
+/* ===== Migrate-v7 — SVG icons + user-remark popover =====================
+ * Migrate-v6 cleaned up emoji; these classes support the new SVG icon
+ * helper (icon(name)) and the click-to-edit popover on the Daily Price
+ * Table's Remark column.
+ * ====================================================================== */
+
+.icon-svg {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+/* Daily Price Table — Remark cell is now a clickable target. The hint
+ * icons (`+ เพิ่ม note` / edit icon) signal that the cell is editable. */
+.price-remark-cell {
+  cursor: pointer;
+  position: relative;
+}
+.price-remark-cell:hover {
+  background: var(--surface-2);
+}
+.price-remark-cell:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.remark-edit-hint,
+.remark-add-hint {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+}
+.remark-add-hint {
+  color: var(--primary);
+  opacity: 0.7;
+}
+.user-remark-line {
+  display: inline-flex;
+  gap: 4px;
+  align-items: flex-start;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--primary);
+  font-style: italic;
+  max-width: 100%;
+}
+.user-remark-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Remark popover (anchored to a Remark cell). The backdrop covers the
+ * full viewport so clicks anywhere outside dismiss the popover. */
+.remark-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: transparent;
+}
+.remark-popover {
+  position: absolute;        /* top/left set inline by positionPopover() */
+  z-index: 9100;
+  width: 360px;
+  max-width: calc(100vw - 20px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+  padding: 12px;
+  animation: popoverIn 120ms ease-out;
+}
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.remark-popover-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.remark-popover-text {
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.remark-popover-text:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+  border-color: var(--primary);
+}
+.remark-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.remark-popover-keys {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.remark-popover-save {
+  background: var(--primary);
+  color: #fff;
+  border: 0;
+}
+.icon-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
