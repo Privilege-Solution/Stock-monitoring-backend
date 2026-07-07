@@ -1153,16 +1153,11 @@ const REMARK_BADGE = {
   MACRO:      { label: 'MACRO',       cls: 'cat-macro',      color: '#185FA5' },
 };
 
-// Migrate-v9 — impact magnitude. Distinct from the legacy `impact` column
-// (positive/negative/neutral for sentiment). impact_level describes how much
-// the item moves ASW fundamentals, not whether the news is good or bad.
-// Used by the card renderer to draw a coloured dot next to the category
-// badge — HIGH = red, MEDIUM = orange, LOW = grey.
-const IMPACT_BADGE = {
-  HIGH:   { label: 'HIGH',   cls: 'impact-high',   color: '#A32D2D' },
-  MEDIUM: { label: 'MEDIUM', cls: 'impact-medium', color: '#EF9F27' },
-  LOW:    { label: 'LOW',    cls: 'impact-low',    color: '#888780' },
-};
+// Note: impact_level is still stored in the DB (column 14, added by
+// migrate-v9) and emitted by the Gemini / RSS classifiers, but the UI
+// decided not to render it on cards. The column is kept as a hook for
+// future filters (HIGH-only toggle, etc.) without requiring a schema
+// change.
 function eachRemark(row) {
   if (!row) return [];
   // v2: single remark + category (the main path going forward).
@@ -1587,12 +1582,6 @@ function renderDashNewsCard(item) {
   // Falls back to MACRO for unknown legacy values (offline sample data).
   const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
   const focused = item.date === STATE.focusedDate ? ' focused' : '';
-  // Migrate-v9 impact dot — red for HIGH (moves ASW), orange for MEDIUM,
-  // grey for LOW (background). Only present on news_feed rows; remark rows
-  // carry no impact_level so we skip the dot.
-  const impactDot = item.impact_level && IMPACT_BADGE[item.impact_level]
-    ? `<span class="impact-dot ${IMPACT_BADGE[item.impact_level].cls}" title="${IMPACT_BADGE[item.impact_level].label} impact"></span>`
-    : '';
   const dataAttrs = item.source === 'feed'
     ? ` data-source="feed" data-id="${item.id != null ? escapeHtml(String(item.id)) : ''}"`
     : ` data-source="remark" data-date="${escapeHtml(item.date)}"`;
@@ -1606,7 +1595,6 @@ function renderDashNewsCard(item) {
     <div class="ni-date th">${fmtThaiShort(item.date)}</div>
     <div class="ni-title-row">
       <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
-      ${impactDot}
       <span class="ni-title th">${escapeHtml(item.text)}</span>
     </div>
     <div class="ni-meta">
@@ -2325,13 +2313,6 @@ function renderUnifiedNewsItem(item) {
   // (COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO) — direct
   // lookup, no bucketFor() collapse. Matches the chip the user clicked.
   const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
-  // Impact dot — red for HIGH (moves ASW fundamentals), orange MEDIUM,
-  // grey LOW. Hover title shows the impact level so a glance at the colour
-  // is enough to triage. Optional: rows without impact_level (legacy
-  // offline data) just skip the dot.
-  const impactDot = item.impact_level && IMPACT_BADGE[item.impact_level]
-    ? `<span class="impact-dot ${IMPACT_BADGE[item.impact_level].cls}" title="${IMPACT_BADGE[item.impact_level].label} impact"></span>`
-    : '';
   const dateStr = fmtThaiShort(item.date);
   const sev = classifySeverity(item);
   // Suppress the low pill for low severity — it would be visual noise on
@@ -2361,7 +2342,7 @@ function renderUnifiedNewsItem(item) {
   return `<div class="news-item feed-dash-item${hiddenCls}"${idAttr}>
     <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span>${sevPill}</div>
     <div>
-      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> ${impactDot} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
+      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
       ${summaryHtml}
       ${noteHtml}
     </div>
