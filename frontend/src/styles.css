@@ -705,6 +705,28 @@
     color: #888780;
   }
 
+  /* Migrate-v9 — impact-level dot rendered next to the category badge on
+     each news card (both News view and Dashboard sidebar). The colour
+     reflects how much the item moves ASW fundamentals (HIGH = red, MEDIUM
+     = orange, LOW = grey). The dot is the same size as a punctuation
+     mark so it stays unobtrusive — the category badge carries the primary
+     visual weight. */
+  .impact-dot {
+    @apply inline-block w-2 h-2 rounded-full ml-1.5 align-middle;
+  }
+  .impact-dot.impact-high {
+    background: #A32D2D;
+    box-shadow: 0 0 0 2px rgba(163, 45, 45, 0.10);
+  }
+  .impact-dot.impact-medium {
+    background: #EF9F27;
+    box-shadow: 0 0 0 2px rgba(239, 159, 39, 0.10);
+  }
+  .impact-dot.impact-low {
+    background: #888780;
+    box-shadow: 0 0 0 2px rgba(136, 135, 128, 0.10);
+  }
+
   /* Body text under feed item title (Gemini SUMMARY field, migrate-v5).
      Smaller than the headline, muted — gives context without competing. */
   .news-summary {

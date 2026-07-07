@@ -405,8 +405,8 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 13;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13})`);
+    const base = i * 14;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14})`);
     params.push(
       it.title,
       it.date,
@@ -414,10 +414,10 @@ async function writeNewsItems(items) {
       it.source_url,
       it.source_label,
       it.title_hash,
-      it.pipeline   ?? null,
-      it.impact     ?? null,
-      it.severity   ?? null,
-      it.show_pin   ?? false,
+      it.pipeline     ?? null,
+      it.impact       ?? null,
+      it.severity     ?? null,
+      it.show_pin     ?? false,
       now,
       // 12th column — RSS/Gemini sources that score relevance (rss-property)
       // pre-compute `display_priority` and pass it in directly. Sources that
@@ -426,13 +426,14 @@ async function writeNewsItems(items) {
       (typeof it.display_priority === 'number' && it.display_priority > 0)
         ? it.display_priority
         : priorityForItem(it),
-      it.summary    ?? null,         // 13th column (migrate-v5)
+      it.summary      ?? null,         // 13th column (migrate-v5)
+      it.impact_level ?? null,         // 14th column (migrate-v9) — HIGH/MEDIUM/LOW
     );
   });
   const r = await p.query(`
     INSERT INTO news_feed (title, date, category, source_url, source_label, title_hash,
                            pipeline, impact, severity, show_pin,
-                           fetched_at, display_priority, summary)
+                           fetched_at, display_priority, summary, impact_level)
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
@@ -446,6 +447,11 @@ async function writeNewsItems(items) {
 // the composite index hint `ORDER BY display_priority DESC, date DESC, id
 // DESC`. High-severity items surface first; same priority keeps date order;
 // id tiebreaks identical timestamps deterministically.
+//
+// Pipeline refactor (migrate-v9): SELECT now also returns `impact_level`
+// (HIGH/MEDIUM/LOW — distinct from the legacy `impact` column which keeps
+// positive/negative/neutral for sentiment). UI renders impact_level as a
+// coloured dot next to the category badge.
 async function readNewsFeed({ category = null, since = null, limit = 100, includeHidden = false } = {}) {
   const p = getPool();
   const where = [];
@@ -459,6 +465,7 @@ async function readNewsFeed({ category = null, since = null, limit = 100, includ
   params.push(Math.min(limit || 100, 500));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
+                      impact_level,
                       hidden, hidden_at, user_note
                FROM news_feed
                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
@@ -474,6 +481,7 @@ async function readHiddenNews(limit = 100) {
   const p = getPool();
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
+                      impact_level,
                       hidden, hidden_at, user_note
                FROM news_feed
                WHERE hidden = TRUE

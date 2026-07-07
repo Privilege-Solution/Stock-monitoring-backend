@@ -15,7 +15,23 @@
 // (FX, BoT rate, Phuket/Pattaya foreign ownership, etc.).
 //
 // Run shape (dispatched by runFetch in lib/fetchers/index.js):
-//   source: 'rss-extended' → inserts 0–40 rows to news_feed across 6 categories
+//   source: 'rss-extended' → inserts 0–40 rows to news_feed
+//
+// Taxonomy v2 (migrate-v9)
+// -----------------------
+// The legacy `category` values above are KEPT in the QUERY catalogue as a
+// private hint (used by parseItem for severity scoring and to pick a sensible
+// fallback when the title doesn't match any pattern). The DB column itself
+// now stores the new 6-way vocabulary: COMPANY / RATES / GOV_POLICY /
+// POLITICS / INDUSTRY / MACRO. `classifyCategory()` runs the title-pattern
+// priority from migrate-v9.js so RSS rows land in the same buckets as
+// Gemini output and migrated legacy data.
+//
+// Each row also carries `impact_level` (HIGH / MEDIUM / LOW) — distinct from
+// the legacy `impact` column (positive/negative/neutral for sentiment). The
+// mapping is severity-driven: high→HIGH, low→LOW, otherwise MEDIUM. The
+// legacy `impact` field stays as 'neutral' for now since sentiment is
+// separate from impact magnitude.
 // =============================================================================
 
 import { createHash } from 'node:crypto';
@@ -28,10 +44,11 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 // ---------------------------------------------------------------------------
 // Query catalogue — 4 logical groups, mapped to the 4 user-approved scopes.
 //
-// Each entry: { q, category, pipeline, requireAsw }
+// Each entry: { q, category (legacy hint), pipeline, requireAsw, severity }
 //   - requireAsw=true  : headline MUST mention ASW / Assetwise / แอสเซทไวส์
 //                        (company_filing + insider + investor_alert are ASW-only)
 //   - requireAsw=false : sector-level signal (BoT, FX, etc.) accepted as-is
+//   - requireAsw='OR'  : headline must mention ASW OR a broker keyword
 // ---------------------------------------------------------------------------
 const QUERIES = [
   // ── 1. Company filings (earnings / dividend / capital / bond) ─────────────
@@ -95,6 +112,61 @@ const FILING_TOKENS = [
   'กองทุนรวม', 'X-Report', 'F4-1', 'F4-2', 'XB-1', 'แบบแสดงรายการ',
 ];
 
+// ----------------------------------------------------------------------------
+// Taxonomy-v2 classifier (mirrors migrate-v9.js CASE priority + post-passes).
+// Title pattern is the primary signal; the query's legacy `category` is a
+// fallback when the title is generic (e.g. บาท USD/THB where the title is
+// just "เงินบาทเปิด 33.30 บ./ดอลลาร์" — no rate keyword, no housing policy,
+// but the query knows this is macro FX).
+// ----------------------------------------------------------------------------
+function classifyCategory(title, hint) {
+  if (!title) return 'MACRO';
+
+  // (a) ASW-name wins over everything per the spec's disambiguation rules.
+  if (headlineMentionsAsw(title)) return 'COMPANY';
+
+  // (b) BoT rate-decision keywords — main subject IS the rate decision.
+  if (/กนง\.|ดอกเบี้ยนโยบาย|อัตราดอกเบี้ย/.test(title)) return 'RATES';
+
+  // (c) Housing-policy keywords — government measures for real estate.
+  if (/LTV|ค่าโอน|ค่าจดจำนอง|สมาคมบ้านจัดสรร|มาตรการอสังหาฯ/.test(title)) return 'GOV_POLICY';
+
+  // (c') Post-pass GOV_POLICY variants — "ลดค่าธรรมเนียมโอน", etc.
+  if (/ลดค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน|อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
+  if (/ค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน).*(อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
+  if (/มาตรการกระตุ้นอสังหาฯ/.test(title)) return 'GOV_POLICY';
+
+  // (d) Legacy sector_policy hint → GOV_POLICY.
+  if (hint === 'sector_policy') return 'GOV_POLICY';
+
+  // (e) Legacy interest_rate hint → RATES.
+  if (hint === 'interest_rate') return 'RATES';
+
+  // (f) Legacy political hint → POLITICS.
+  if (hint === 'political') return 'POLITICS';
+
+  // (g) Legacy sector_data / peer_news hint → INDUSTRY.
+  if (hint === 'sector_data' || hint === 'peer_news') return 'INDUSTRY';
+
+  // (g') Post-pass INDUSTRY — RE market trends without a specific policy.
+  if (/อสังหา|ที่อยู่อาศัย|คอนโด|บ้านจัดสรร/.test(title)) return 'INDUSTRY';
+
+  // (h) Catch-all — broker non-ASW, debt_rating non-ASW, investor_alert
+  //     non-ASW, insider_trade non-ASW, macro_fx (FX/baht/employment),
+  //     corporate, dividend, fundraise, project, insider, company,
+  //     company_filing (non-ASW), economic_data, global, disaster.
+  return 'MACRO';
+}
+
+// Map the query's severity to the new impact_level. severity=high means the
+// item materially affects ASW fundamentals; severity=low is background only;
+// everything else is the regular sector/macro backdrop.
+function impactLevelFromSeverity(sev) {
+  if (sev === 'high') return 'HIGH';
+  if (sev === 'low')  return 'LOW';
+  return 'MEDIUM';
+}
+
 function headlineMentionsAsw(title) {
   if (!title) return false;
   const t = title.toLowerCase();
@@ -149,19 +221,25 @@ function parseItem(itemXml, q) {
   if (q.requireAsw === 'OR'
       && !(headlineMentionsAsw(title) || headlineMentionsBroker(title))) return null;
 
-  // Severity: brker = high; rest = default from query.
+  // Classify into the new 6-way taxonomy. The headline's title pattern wins
+  // (matches migrate-v9.js priority); the query's legacy `category` is a
+  // fallback for generic titles where no pattern matches.
+  const category = classifyCategory(title, q.category);
+  const impact_level = impactLevelFromSeverity(q.severity);
+
   return {
     title,
     date: d.toISOString().slice(0, 10),
-    category: q.category,
+    category,                        // taxonomy-v2 key
     source_url: link,
     source_label: sourceName || 'Google News',
     title_hash: sha1(guid || link || title),
     pipeline: q.pipeline,
-    impact: 'neutral',
+    impact: 'neutral',               // legacy sentiment column — RSS items don't score this
     severity: q.severity || 'medium',
     show_pin: q.severity === 'high',
     summary: null,
+    impact_level,                    // taxonomy-v2 key
   };
 }
 
@@ -212,11 +290,14 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
   // the frontend's priorityForItem() falls back to severity-based scoring.
   const { inserted } = await db.writeNewsItems(valid);
 
-  // Per-category counts for the log line (operator at-a-glance).
+  // Per-category counts for the log line (operator at-a-glance). Uses the
+  // NEW taxonomy keys so the log matches what the user sees in the UI.
   const byCat = {};
   for (const it of valid) byCat[it.category] = (byCat[it.category] || 0) + 1;
-  console.log(`[rss-extended] parsed=${all.length} unique=${unique.length} inserted=${inserted} byCat=${JSON.stringify(byCat)}`);
-  return { ok: true, fetched: valid.length, inserted, byCat };
+  const byImpact = {};
+  for (const it of valid) byImpact[it.impact_level] = (byImpact[it.impact_level] || 0) + 1;
+  console.log(`[rss-extended] parsed=${all.length} unique=${unique.length} inserted=${inserted} byCat=${JSON.stringify(byCat)} byImpact=${JSON.stringify(byImpact)}`);
+  return { ok: true, fetched: valid.length, inserted, byCat, byImpact };
 }
 
 export { run };

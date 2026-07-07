@@ -417,12 +417,12 @@
           <span class="muted th feed-cat-label">หมวด:</span>
           <div class="pill-row feed-cat-pills" id="newsCatPills">
             <button class="pill th active" data-cat="__all">ทั้งหมด</button>
-            <button class="pill th" data-cat="bucket_perf">ผลประกอบการ</button>
-            <button class="pill th" data-cat="bucket_proj">โครงการ</button>
-            <button class="pill th" data-cat="bucket_rate">ดอกเบี้ย</button>
-            <button class="pill th" data-cat="bucket_pol">การเมือง</button>
-            <button class="pill th" data-cat="bucket_macro">มหภาค</button>
-            <button class="pill th" data-cat="bucket_other">อื่น ๆ</button>
+            <button class="pill th" data-cat="COMPANY">COMPANY</button>
+            <button class="pill th" data-cat="RATES">RATES</button>
+            <button class="pill th" data-cat="GOV_POLICY">GOV_POLICY</button>
+            <button class="pill th" data-cat="POLITICS">POLITICS</button>
+            <button class="pill th" data-cat="INDUSTRY">INDUSTRY</button>
+            <button class="pill th" data-cat="MACRO">MACRO</button>
           </div>
         </div>
       </div>
@@ -1101,6 +1101,13 @@ function classifyEvent(x) {
 // Each badge has a Thai label, a CSS class (for color), and a hex color
 // (for inline rendering). The 4 legacy keys (company / sector / macro /
 // other) stay as compatibility shims.
+//
+// Migrate-v9 (taxonomy v2): the DB now stores one of 6 ASW-centric keys
+// directly — COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO —
+// no client-side collapse needed. The Gemini prompts + RSS classifier +
+// migrate-v9 SQL all emit these keys. Legacy categories (corporate, project,
+// broker, etc.) below are kept for offline sample data + table fallback
+// coloring; news rows from the live DB use only the 6 new keys.
 const REMARK_CATEGORIES = ['company', 'sector', 'macro'];
 const REMARK_BADGE = {
   // legacy compatibility shims (kept so tables + offline fallback still color)
@@ -1108,94 +1115,54 @@ const REMARK_BADGE = {
   sector:  { label: 'อสังหาฯ', cls: 'sector',    color: '#3B8BD4' },
   macro:   { label: 'มหภาค',  cls: 'macro',     color: '#EF9F27' },
   other:   { label: 'อื่นๆ',  cls: 'other',     color: '#888780' },
-  // company pipeline (Gemini)
+  // legacy categories from earlier Gemini pipelines + v8 RSS — retained
+  // so any offline data, old rows in the DB, or external consumers still
+  // see a coloured badge. Live news rows from Gemini/RSS now write one
+  // of the 6 taxonomy-v2 keys below.
   corporate:     { label: 'ผลประกอบการ',    cls: 'corporate',     color: '#3B6D11' },
   project:       { label: 'โครงการใหม่',    cls: 'project',       color: '#3B8BD4' },
   dividend:      { label: 'ปันผล/ทุน',     cls: 'dividend',      color: '#1D9E75' },
   fundraise:     { label: 'หุ้นกู้/เพิ่มทุน', cls: 'fundraise',  color: '#7F77DD' },
   insider:       { label: 'Insider trade',  cls: 'insider',       color: '#EF9F27' },
-  // sector pipeline
   sector_policy: { label: 'นโยบาย sector', cls: 'sector_policy', color: '#EF9F27' },
   sector_data:   { label: 'ข้อมูล sector', cls: 'sector_data',   color: '#185FA5' },
   peer_news:     { label: 'ข่าว peer',     cls: 'peer_news',     color: '#888780' },
-  // macro pipeline
   interest_rate: { label: 'ดอกเบี้ย',     cls: 'interest_rate', color: '#A32D2D' },
   economic_data: { label: 'ตัวเลขเศรษฐกิจ', cls: 'economic_data', color: '#888780' },
   political:     { label: 'การเมือง',     cls: 'political',     color: '#EF9F27' },
   disaster:      { label: 'ภัยพิบัติ',     cls: 'disaster',      color: '#A32D2D' },
   global:        { label: 'ปัจจัยโลก',    cls: 'global',        color: '#888780' },
-  // Migrate-v8 — extended coverage (RSS-extended fetcher, free public sources):
-  //   company_filing  — SET filing / earnings / dividend / capital / bond
-  //   broker          — analyst rating + target price
-  //   insider_trade   — SEC Form 59
-  //   investor_alert  — SET Smart Alert (unusual volume, cash balance)
-  //   macro_fx        — BoT USD/THB + baht-direction
-  //   debt_rating     — TRIS rating action
   company_filing: { label: 'SET filing',  cls: 'company_filing', color: '#1D9E75' },
   broker:         { label: 'โบรกเกอร์',    cls: 'broker',         color: '#7F77DD' },
   insider_trade:  { label: 'Insider',     cls: 'insider_trade',  color: '#EF9F27' },
   investor_alert: { label: 'SET alert',   cls: 'investor_alert', color: '#A32D2D' },
   macro_fx:       { label: 'ค่าเงิน',      cls: 'macro_fx',       color: '#185FA5' },
   debt_rating:    { label: 'อันดับเครดิต', cls: 'debt_rating',    color: '#3B6D11' },
-  // Migrate-v8b — top-level bucket labels for the 6 news-category filter
-  // chips. Cards + chips + filter all read from these. Each underlying
-  // category (above) is mapped to one of these 6 via BUCKET_FOR_CATEGORY.
-  // The `isBucket: true` flag lets bucketFor() pass through when the chip
-  // click handler feeds a bucket name back in.
-  bucket_perf:   { label: 'ผลประกอบการ', cls: 'bucket-perf',   color: '#1D9E75', isBucket: true },
-  bucket_proj:   { label: 'โครงการ',     cls: 'bucket-proj',   color: '#3B8BD4', isBucket: true },
-  bucket_rate:   { label: 'ดอกเบี้ย',    cls: 'bucket-rate',   color: '#A32D2D', isBucket: true },
-  bucket_pol:    { label: 'การเมือง',    cls: 'bucket-pol',    color: '#EF9F27', isBucket: true },
-  bucket_macro:  { label: 'มหภาค',      cls: 'bucket-macro',  color: '#185FA5', isBucket: true },
-  bucket_other:  { label: 'อื่น ๆ',      cls: 'bucket-other',  color: '#888780', isBucket: true },
+  // ── Migrate-v9 taxonomy-v2 (live values, ASW-centric) ──────────────────
+  //   COMPANY    — anything naming ASW/AssetWise/แอสเซทไวส์ (wins over topic)
+  //   RATES      — BoT (กนง.) rate-decision headlines
+  //   GOV_POLICY — housing-specific government measures (LTV, ค่าโอน-จดจำนอง)
+  //   POLITICS   — general political news (not housing-specific)
+  //   INDUSTRY   — RE market trends / peer activity / supply-demand
+  //   MACRO      — broad economic indicators (GDP/CPI/FX/trade)
+  COMPANY:    { label: 'COMPANY',     cls: 'cat-company',    color: '#1D9E75' },
+  RATES:      { label: 'RATES',       cls: 'cat-rates',      color: '#A32D2D' },
+  GOV_POLICY: { label: 'GOV_POLICY',  cls: 'cat-gov-policy', color: '#7F77DD' },
+  POLITICS:   { label: 'POLITICS',    cls: 'cat-politics',   color: '#EF9F27' },
+  INDUSTRY:   { label: 'INDUSTRY',    cls: 'cat-industry',   color: '#3B8BD4' },
+  MACRO:      { label: 'MACRO',       cls: 'cat-macro',      color: '#185FA5' },
 };
 
-// Bucket mapping — every underlying category (Gemini pipeline + v8 RSS)
-// collapses to one of the 6 user-facing buckets. Used by bucketFor() below.
-// Kept outside REMARK_BADGE so the badge map stays a pure data table.
-const BUCKET_FOR_CATEGORY = {
-  // 1. ผลประกอบการ — pure financial filings (Gemini pipeline only)
-  corporate:      'bucket_perf',
-  dividend:       'bucket_perf',
-  fundraise:      'bucket_perf',
-  company:        'bucket_perf',
-  // 2. โครงการ — project launches / sector data / ASW-company activity
-  // (RSS-extended writes company_filing + broker for ASW-specific news, which
-  //  for a real-estate developer is overwhelmingly project milestones
-  //  rather than financial filings — see sales/transfer headlines.)
-  company_filing: 'bucket_proj',
-  broker:         'bucket_proj',
-  project:        'bucket_proj',
-  sector_data:    'bucket_proj',
-  // 3. ดอกเบี้ย — interest rate
-  interest_rate:  'bucket_rate',
-  // 4. การเมือง — political / sector policy
-  political:      'bucket_pol',
-  sector_policy:  'bucket_pol',
-  // 5. มหภาค — macro / baht / FX / economic data / global / debt rating
-  macro_fx:       'bucket_macro',
-  macro:          'bucket_macro',
-  economic_data:  'bucket_macro',
-  global:         'bucket_macro',
-  disaster:       'bucket_macro',
-  debt_rating:    'bucket_macro',
-  // 6. อื่น ๆ — insider activity, SET alerts, peer comparison, fallback
-  insider_trade:  'bucket_other',
-  insider:        'bucket_other',
-  investor_alert: 'bucket_other',
-  peer_news:      'bucket_other',
-  sector:         'bucket_other',
-  other:          'bucket_other',
+// Migrate-v9 — impact magnitude. Distinct from the legacy `impact` column
+// (positive/negative/neutral for sentiment). impact_level describes how much
+// the item moves ASW fundamentals, not whether the news is good or bad.
+// Used by the card renderer to draw a coloured dot next to the category
+// badge — HIGH = red, MEDIUM = orange, LOW = grey.
+const IMPACT_BADGE = {
+  HIGH:   { label: 'HIGH',   cls: 'impact-high',   color: '#A32D2D' },
+  MEDIUM: { label: 'MEDIUM', cls: 'impact-medium', color: '#EF9F27' },
+  LOW:    { label: 'LOW',    cls: 'impact-low',    color: '#888780' },
 };
-
-// Map any category (Gemini pipeline name, v8 RSS name, or already-bucket
-// key) to its 6-bucket key. Falls back to 'bucket_other' so unknown rows
-// always land in the "อื่น ๆ" bucket instead of looking unstyled.
-function bucketFor(category) {
-  if (!category) return 'bucket_other';
-  if (REMARK_BADGE[category] && REMARK_BADGE[category].isBucket) return category;
-  return BUCKET_FOR_CATEGORY[category] || 'bucket_other';
-}
 function eachRemark(row) {
   if (!row) return [];
   // v2: single remark + category (the main path going forward).
@@ -1615,10 +1582,17 @@ function renderDashNewsCard(item) {
   // Sidebar-specific chrome (source chip, severity pill, summary preview,
   // action buttons, user_note, news text-link) lives in the News & Factors
   // view — the sidebar stays scannable as a tidy feed.
-  // Migrate-v8b: badge uses the 6-bucket scheme so sidebar category chrome
-  // matches what the user sees in the News & Factors chips.
-  const badge = REMARK_BADGE[bucketFor(item.category)] || REMARK_BADGE.bucket_other;
+  // Migrate-v9: DB now stores one of the 6 taxonomy-v2 keys directly, so
+  // the sidebar badge is a plain lookup — no bucketFor() collapse needed.
+  // Falls back to MACRO for unknown legacy values (offline sample data).
+  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
   const focused = item.date === STATE.focusedDate ? ' focused' : '';
+  // Migrate-v9 impact dot — red for HIGH (moves ASW), orange for MEDIUM,
+  // grey for LOW (background). Only present on news_feed rows; remark rows
+  // carry no impact_level so we skip the dot.
+  const impactDot = item.impact_level && IMPACT_BADGE[item.impact_level]
+    ? `<span class="impact-dot ${IMPACT_BADGE[item.impact_level].cls}" title="${IMPACT_BADGE[item.impact_level].label} impact"></span>`
+    : '';
   const dataAttrs = item.source === 'feed'
     ? ` data-source="feed" data-id="${item.id != null ? escapeHtml(String(item.id)) : ''}"`
     : ` data-source="remark" data-date="${escapeHtml(item.date)}"`;
@@ -1632,6 +1606,7 @@ function renderDashNewsCard(item) {
     <div class="ni-date th">${fmtThaiShort(item.date)}</div>
     <div class="ni-title-row">
       <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+      ${impactDot}
       <span class="ni-title th">${escapeHtml(item.text)}</span>
     </div>
     <div class="ni-meta">
@@ -1658,10 +1633,11 @@ function renderDashNews(filtered) {
   const feedItems = (window.NEWS_DATA || []).map(n => ({
     source: 'feed',
     date: (n.date || '').slice(0, 10),
-    category: n.category || 'other',
+    category: n.category || 'MACRO',
     text: n.title || '',
     url: n.source_url,
     id: n.id,
+    impact_level: n.impact_level || null,    // migrate-v9 — optional HIGH/MEDIUM/LOW
   })).filter(it => it.text && (it.source === 'remark' || (it.url && it.url.length > 0)));
 
   const merged = [...remarkItems, ...feedItems];
@@ -2256,7 +2232,7 @@ function buildMergedNewsItems() {
   const b = (window.NEWS_DATA || []).map(n => ({
     source: 'feed',
     date: (n.date || '').slice(0, 10),
-    category: n.category || 'other',
+    category: n.category || 'MACRO',         // migrate-v9 — taxonomy-v2 key
     text: n.title,
     summary: n.summary || null,
     url: n.source_url,
@@ -2265,6 +2241,7 @@ function buildMergedNewsItems() {
     severity: n.severity,
     show_pin: n.show_pin,
     display_priority: n.display_priority,
+    impact_level: n.impact_level || null,    // migrate-v9 — HIGH/MEDIUM/LOW
     id: n.id,
     hidden: !!n.hidden,
     hidden_at: n.hidden_at || null,
@@ -2300,12 +2277,14 @@ function renderUnifiedNews() {
   // Search filter (text contains, case-insensitive, both streams).
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
-  // Migrate-v8b: bucket OR-filter (multi-select chips above). Each news
-  // item's underlying category is collapsed to one of 6 buckets via
-  // bucketFor() before the Set check, so chips + categories are aligned
-  // regardless of which pipeline wrote the row (Gemini or rss-extended).
+  // Migrate-v9: chip OR-filter (multi-select above). The DB now stores one
+  // of the 6 taxonomy-v2 keys directly (COMPANY / RATES / GOV_POLICY /
+  // POLITICS / INDUSTRY / MACRO), so the Set check is a direct equality
+  // match — no bucketFor() collapse needed. Items whose category isn't in
+  // the whitelist (legacy offline data) are simply dropped from filtered
+  // views, matching what migrate-v9.js wrote to the DB.
   if (STATE.newsCats.size > 0) {
-    items = items.filter(it => STATE.newsCats.has(bucketFor(it.category)));
+    items = items.filter(it => STATE.newsCats.has(it.category));
   }
   // Sort: priority desc, then date desc.
   items.sort((a, b) => {
@@ -2342,10 +2321,17 @@ function renderUnifiedNewsItem(item) {
   // feed never has to choose between `<a>` and `<span>` rendering. Every
   // item here is guaranteed to have a non-empty url (enforced by the
   // buildMergedNewsItems() filter) and opens in a new tab on click.
-  // Migrate-v8b: badge label + color come from the 6-bucket scheme
-  // (ผลประกอบการ / โครงการ / ดอกเบี้ย / การเมือง / มหภาค / อื่น ๆ) so the card
-  // matches the chip the user clicked to surface this row.
-  const badge = REMARK_BADGE[bucketFor(item.category)] || REMARK_BADGE.bucket_other;
+  // Migrate-v9: badge label + color come from the 6 taxonomy-v2 keys
+  // (COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO) — direct
+  // lookup, no bucketFor() collapse. Matches the chip the user clicked.
+  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
+  // Impact dot — red for HIGH (moves ASW fundamentals), orange MEDIUM,
+  // grey LOW. Hover title shows the impact level so a glance at the colour
+  // is enough to triage. Optional: rows without impact_level (legacy
+  // offline data) just skip the dot.
+  const impactDot = item.impact_level && IMPACT_BADGE[item.impact_level]
+    ? `<span class="impact-dot ${IMPACT_BADGE[item.impact_level].cls}" title="${IMPACT_BADGE[item.impact_level].label} impact"></span>`
+    : '';
   const dateStr = fmtThaiShort(item.date);
   const sev = classifySeverity(item);
   // Suppress the low pill for low severity — it would be visual noise on
@@ -2375,7 +2361,7 @@ function renderUnifiedNewsItem(item) {
   return `<div class="news-item feed-dash-item${hiddenCls}"${idAttr}>
     <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span>${sevPill}</div>
     <div>
-      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
+      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> ${impactDot} <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
       ${summaryHtml}
       ${noteHtml}
     </div>
@@ -3287,9 +3273,11 @@ document.addEventListener('DOMContentLoaded', () => {
       renderUnifiedNews();
     });
   });
-  // Migrate-v8: paint the 6 category chips with REMARK_BADGE colors so they
-  // match the badges inside news cards (which already render via the same
-  // REMARK_BADGE color tokens).
+  // Migrate-v9: paint the 6 category chips with REMARK_BADGE colors so they
+  // match the badges inside news cards (which render via the same
+  // REMARK_BADGE color tokens). The 6 chip keys are the taxonomy-v2
+  // values (COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO)
+  // — direct REMARK_BADGE lookup, no bucketFor() collapse.
   document.querySelectorAll('#newsCatPills .pill[data-cat]').forEach(b => {
     const cat = b.dataset.cat;
     if (cat === '__all') return;
