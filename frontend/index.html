@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>ASW Monitor — Asia Wealth Corporation (ASW.BK)</title>
+<title>ASW Monitor — ASSETWISE PUBLIC COMPANY LIMITED (ASW.BK)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -964,7 +964,7 @@ const STATE = {
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
   newsRange: '1M',       // 'Today' | '1W' | '1M' | '3M' | 'ALL'
-  newsCats: new Set(),   // empty = all categories shown (migrate-v8 news-cat filter chips)
+  newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: { last_week: true, older: true },  // today/yesterday/this_week expanded by default
   // User-action state (migrate-v6): hide toggle, note cache, toast timer.
   newsShowHidden: false, // when true, buildMergedNewsItems() includes hidden rows
@@ -1919,7 +1919,7 @@ async function buildPeerSnapshot() {
   });
 
   // Insert real ASW row at position 4 (mid-list, prominent without being on top)
-  const aswRow = { ticker: 'ASW', name: 'Asia Wealth Corporation', close: lastRow.close, change: lastRow.change, isASW: true };
+  const aswRow = { ticker: 'ASW', name: 'ASSETWISE PUBLIC COMPANY LIMITED', close: lastRow.close, change: lastRow.change, isASW: true };
   peerRows.splice(4, 0, aswRow);
 
   body.innerHTML = peerRows.map(r => {
@@ -2245,14 +2245,13 @@ function buildMergedNewsItems() {
 }
 
 // Migrate-v8: paint the .active state on category chips based on
-// STATE.newsCats. Multi-select: real chips are active when their value is in
-// the Set. The "ทั้งหมด" sentinel chip is active only when the Set is empty.
+// STATE.newsCats. Single-select (1:1): exactly one chip is active at a time.
+// "ทั้งหมด" is the sentinel for "show all" — active when STATE.newsCats
+// holds the sentinel value, otherwise the matching chip is active.
 function syncNewsCatPills() {
   document.querySelectorAll('#newsCatPills .pill').forEach(b => {
     const cat = b.dataset.cat;
-    const active = cat === '__all'
-      ? STATE.newsCats.size === 0
-      : STATE.newsCats.has(cat);
+    const active = cat === STATE.newsCats;
     b.classList.toggle('active', active);
   });
 }
@@ -2265,14 +2264,15 @@ function renderUnifiedNews() {
   // Search filter (text contains, case-insensitive, both streams).
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
-  // Migrate-v9: chip OR-filter (multi-select above). The DB now stores one
-  // of the 6 taxonomy-v2 keys directly (COMPANY / RATES / GOV_POLICY /
-  // POLITICS / INDUSTRY / MACRO), so the Set check is a direct equality
-  // match — no bucketFor() collapse needed. Items whose category isn't in
-  // the whitelist (legacy offline data) are simply dropped from filtered
-  // views, matching what migrate-v9.js wrote to the DB.
-  if (STATE.newsCats.size > 0) {
-    items = items.filter(it => STATE.newsCats.has(it.category));
+  // Migrate-v9 + 1:1 single-select: when not on "ทั้งหมด", keep only items
+  // whose category equals the selected chip. The DB stores one of the 6
+  // taxonomy-v2 keys directly (COMPANY / RATES / GOV_POLICY / POLITICS /
+  // INDUSTRY / MACRO), so the check is direct equality — no bucketFor()
+  // collapse needed. Items whose category isn't a known key are dropped
+  // from filtered views, matching what migrate-v9.js wrote to the DB.
+  if (STATE.newsCats !== '__all') {
+    const want = STATE.newsCats;
+    items = items.filter(it => it.category === want);
   }
   // Sort: priority desc, then date desc.
   items.sort((a, b) => {
@@ -3266,17 +3266,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!badge) return;
     b.style.setProperty('--cat-color', badge.color);
   });
-  // Migrate-v8: category chips — multi-select OR. "ทั้งหมด" is the reset
-  // sentinel (not a real category). Empty Set means "show all".
+  // Migrate-v8 (revised): category chips — single-select (1:1). Clicking a
+  // chip sets STATE.newsCats directly to that chip's category. "ทั้งหมด"
+  // is the reset sentinel meaning "show all categories".
   document.querySelectorAll('#newsCatPills .pill').forEach(b => {
     b.addEventListener('click', () => {
-      const cat = b.dataset.cat;
-      if (cat === '__all') {
-        STATE.newsCats = new Set();
-      } else {
-        if (STATE.newsCats.has(cat)) STATE.newsCats.delete(cat);
-        else STATE.newsCats.add(cat);
-      }
+      STATE.newsCats = b.dataset.cat;
       syncNewsCatPills();
       renderUnifiedNews();
     });
