@@ -417,12 +417,12 @@
           <span class="muted th feed-cat-label">หมวด:</span>
           <div class="pill-row feed-cat-pills" id="newsCatPills">
             <button class="pill th active" data-cat="__all">ทั้งหมด</button>
-            <button class="pill th" data-cat="company_filing">SET filing</button>
-            <button class="pill th" data-cat="broker">โบรกเกอร์</button>
-            <button class="pill th" data-cat="insider_trade">Insider</button>
-            <button class="pill th" data-cat="investor_alert">SET alert</button>
-            <button class="pill th" data-cat="macro_fx">ค่าเงิน</button>
-            <button class="pill th" data-cat="debt_rating">อันดับเครดิต</button>
+            <button class="pill th" data-cat="bucket_perf">ผลประกอบการ</button>
+            <button class="pill th" data-cat="bucket_proj">โครงการ</button>
+            <button class="pill th" data-cat="bucket_rate">ดอกเบี้ย</button>
+            <button class="pill th" data-cat="bucket_pol">การเมือง</button>
+            <button class="pill th" data-cat="bucket_macro">มหภาค</button>
+            <button class="pill th" data-cat="bucket_other">อื่น ๆ</button>
           </div>
         </div>
       </div>
@@ -1137,7 +1137,62 @@ const REMARK_BADGE = {
   investor_alert: { label: 'SET alert',   cls: 'investor_alert', color: '#A32D2D' },
   macro_fx:       { label: 'ค่าเงิน',      cls: 'macro_fx',       color: '#185FA5' },
   debt_rating:    { label: 'อันดับเครดิต', cls: 'debt_rating',    color: '#3B6D11' },
+  // Migrate-v8b — top-level bucket labels for the 6 news-category filter
+  // chips. Cards + chips + filter all read from these. Each underlying
+  // category (above) is mapped to one of these 6 via BUCKET_FOR_CATEGORY.
+  // The `isBucket: true` flag lets bucketFor() pass through when the chip
+  // click handler feeds a bucket name back in.
+  bucket_perf:   { label: 'ผลประกอบการ', cls: 'bucket-perf',   color: '#1D9E75', isBucket: true },
+  bucket_proj:   { label: 'โครงการ',     cls: 'bucket-proj',   color: '#3B8BD4', isBucket: true },
+  bucket_rate:   { label: 'ดอกเบี้ย',    cls: 'bucket-rate',   color: '#A32D2D', isBucket: true },
+  bucket_pol:    { label: 'การเมือง',    cls: 'bucket-pol',    color: '#EF9F27', isBucket: true },
+  bucket_macro:  { label: 'มหภาค',      cls: 'bucket-macro',  color: '#185FA5', isBucket: true },
+  bucket_other:  { label: 'อื่น ๆ',      cls: 'bucket-other',  color: '#888780', isBucket: true },
 };
+
+// Bucket mapping — every underlying category (Gemini pipeline + v8 RSS)
+// collapses to one of the 6 user-facing buckets. Used by bucketFor() below.
+// Kept outside REMARK_BADGE so the badge map stays a pure data table.
+const BUCKET_FOR_CATEGORY = {
+  // 1. ผลประกอบการ — operating results, earnings, filings, dividend
+  company_filing: 'bucket_perf',
+  corporate:      'bucket_perf',
+  dividend:       'bucket_perf',
+  fundraise:      'bucket_perf',
+  company:        'bucket_perf',
+  // 2. โครงการ — project launches / sector data
+  project:        'bucket_proj',
+  sector_data:    'bucket_proj',
+  // 3. ดอกเบี้ย — interest rate
+  interest_rate:  'bucket_rate',
+  // 4. การเมือง — political / sector policy
+  political:      'bucket_pol',
+  sector_policy:  'bucket_pol',
+  // 5. มหภาค — macro / baht / FX / economic data / global / debt rating
+  macro_fx:       'bucket_macro',
+  macro:          'bucket_macro',
+  economic_data:  'bucket_macro',
+  global:         'bucket_macro',
+  disaster:       'bucket_macro',
+  debt_rating:    'bucket_macro',
+  // 6. อื่น ๆ — broker analysis, peer news, insider, alerts, fallback
+  broker:         'bucket_other',
+  insider_trade:  'bucket_other',
+  insider:        'bucket_other',
+  investor_alert: 'bucket_other',
+  peer_news:      'bucket_other',
+  sector:         'bucket_other',
+  other:          'bucket_other',
+};
+
+// Map any category (Gemini pipeline name, v8 RSS name, or already-bucket
+// key) to its 6-bucket key. Falls back to 'bucket_other' so unknown rows
+// always land in the "อื่น ๆ" bucket instead of looking unstyled.
+function bucketFor(category) {
+  if (!category) return 'bucket_other';
+  if (REMARK_BADGE[category] && REMARK_BADGE[category].isBucket) return category;
+  return BUCKET_FOR_CATEGORY[category] || 'bucket_other';
+}
 function eachRemark(row) {
   if (!row) return [];
   // v2: single remark + category (the main path going forward).
@@ -1557,7 +1612,9 @@ function renderDashNewsCard(item) {
   // Sidebar-specific chrome (source chip, severity pill, summary preview,
   // action buttons, user_note, news text-link) lives in the News & Factors
   // view — the sidebar stays scannable as a tidy feed.
-  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
+  // Migrate-v8b: badge uses the 6-bucket scheme so sidebar category chrome
+  // matches what the user sees in the News & Factors chips.
+  const badge = REMARK_BADGE[bucketFor(item.category)] || REMARK_BADGE.bucket_other;
   const focused = item.date === STATE.focusedDate ? ' focused' : '';
   const dataAttrs = item.source === 'feed'
     ? ` data-source="feed" data-id="${item.id != null ? escapeHtml(String(item.id)) : ''}"`
@@ -2240,9 +2297,12 @@ function renderUnifiedNews() {
   // Search filter (text contains, case-insensitive, both streams).
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
-  // Migrate-v8: category OR-filter (multi-select chips above). Empty Set = all.
+  // Migrate-v8b: bucket OR-filter (multi-select chips above). Each news
+  // item's underlying category is collapsed to one of 6 buckets via
+  // bucketFor() before the Set check, so chips + categories are aligned
+  // regardless of which pipeline wrote the row (Gemini or rss-extended).
   if (STATE.newsCats.size > 0) {
-    items = items.filter(it => STATE.newsCats.has(it.category));
+    items = items.filter(it => STATE.newsCats.has(bucketFor(it.category)));
   }
   // Sort: priority desc, then date desc.
   items.sort((a, b) => {
@@ -2279,7 +2339,10 @@ function renderUnifiedNewsItem(item) {
   // feed never has to choose between `<a>` and `<span>` rendering. Every
   // item here is guaranteed to have a non-empty url (enforced by the
   // buildMergedNewsItems() filter) and opens in a new tab on click.
-  const badge = REMARK_BADGE[item.category] || REMARK_BADGE.other;
+  // Migrate-v8b: badge label + color come from the 6-bucket scheme
+  // (ผลประกอบการ / โครงการ / ดอกเบี้ย / การเมือง / มหภาค / อื่น ๆ) so the card
+  // matches the chip the user clicked to surface this row.
+  const badge = REMARK_BADGE[bucketFor(item.category)] || REMARK_BADGE.bucket_other;
   const dateStr = fmtThaiShort(item.date);
   const sev = classifySeverity(item);
   // Suppress the low pill for low severity — it would be visual noise on
