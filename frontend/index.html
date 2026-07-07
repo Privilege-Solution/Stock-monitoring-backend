@@ -1154,13 +1154,17 @@ const REMARK_BADGE = {
 // collapses to one of the 6 user-facing buckets. Used by bucketFor() below.
 // Kept outside REMARK_BADGE so the badge map stays a pure data table.
 const BUCKET_FOR_CATEGORY = {
-  // 1. ผลประกอบการ — operating results, earnings, filings, dividend
-  company_filing: 'bucket_perf',
+  // 1. ผลประกอบการ — pure financial filings (Gemini pipeline only)
   corporate:      'bucket_perf',
   dividend:       'bucket_perf',
   fundraise:      'bucket_perf',
   company:        'bucket_perf',
-  // 2. โครงการ — project launches / sector data
+  // 2. โครงการ — project launches / sector data / ASW-company activity
+  // (RSS-extended writes company_filing + broker for ASW-specific news, which
+  //  for a real-estate developer is overwhelmingly project milestones
+  //  rather than financial filings — see sales/transfer headlines.)
+  company_filing: 'bucket_proj',
+  broker:         'bucket_proj',
   project:        'bucket_proj',
   sector_data:    'bucket_proj',
   // 3. ดอกเบี้ย — interest rate
@@ -1175,8 +1179,7 @@ const BUCKET_FOR_CATEGORY = {
   global:         'bucket_macro',
   disaster:       'bucket_macro',
   debt_rating:    'bucket_macro',
-  // 6. อื่น ๆ — broker analysis, peer news, insider, alerts, fallback
-  broker:         'bucket_other',
+  // 6. อื่น ๆ — insider activity, SET alerts, peer comparison, fallback
   insider_trade:  'bucket_other',
   insider:        'bucket_other',
   investor_alert: 'bucket_other',
