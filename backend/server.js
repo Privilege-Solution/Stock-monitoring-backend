@@ -616,6 +616,23 @@ cron.schedule('30 11 * * *', async () => {
   }
 }, { timezone: 'Asia/Bangkok' });
 
+// Global error handler — must come last (4-arg signature). On Railway we
+// saw 500s whenever the request had an Origin header (browser always sends
+// one), even for static files that don't touch the DB. Express's default
+// error page swallows the stack trace, so we replace it with a JSON
+// responder that logs the full error to stdout for Railway logs.
+app.use((err, req, res, next) => {
+  console.error('[express error]', err.stack || err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({
+    ok: false,
+    error: String(err.message || err),
+    code: 'unhandled',
+    path: req.path,
+    method: req.method,
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`ASW Monitor backend on http://localhost:${PORT}`);
 });
