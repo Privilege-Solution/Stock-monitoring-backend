@@ -454,7 +454,27 @@ cron.schedule('*/3 * * * *', async () => {
 }, { timezone: 'Asia/Bangkok' });
 
 // Daily fetch at 17:35 ICT (10:35 UTC) — 5 min after SET close (17:30).
-cron.schedule('35 10 * * *', async () => {
+//
+// We register TWO cron expressions pointing at the same handler:
+//   - '35 10 * * *' Asia/Bangkok — the "official" schedule
+//   - '35 3  * * *' UTC          — fallback for Railway, where
+//     node-cron's timezone option has been observed to silently skip
+//     some schedules (empirically, fetch_log shows zero `yahoo` rows
+//     while gemini-* and rss-property crons fire correctly).
+//
+// An in-memory guard ensures only one of the two fires per day even if
+// both schedules resolve to the same wall-clock moment.
+let _yahooDailyRan = null; // ISO date in ICT — nulled on process restart
+function _yahooDailyGuard() {
+  const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  if (_yahooDailyRan === todayICT) {
+    console.log('[scheduler] daily fetch already ran today, skip');
+    return false;
+  }
+  _yahooDailyRan = todayICT;
+  return true;
+}
+async function _runDailyYahoo() {
   console.log('[scheduler] daily fetch triggered');
   const id = await db.logFetchStart();
   try {
@@ -466,7 +486,13 @@ cron.schedule('35 10 * * *', async () => {
     await db.logFetchFinish(id, 0, 'yahoo', 0, 0, String(e.message || e));
     console.error('[scheduler] yahoo failed:', e.message || e);
   }
+}
+cron.schedule('35 10 * * *', async () => {
+  if (_yahooDailyGuard()) await _runDailyYahoo();
 }, { timezone: 'Asia/Bangkok' });
+cron.schedule('35 3 * * *', async () => {
+  if (_yahooDailyGuard()) await _runDailyYahoo();
+});
 
 // Gemini-search pipeline — 4 cron jobs, all gated on GEMINI_API_KEY.
 //
