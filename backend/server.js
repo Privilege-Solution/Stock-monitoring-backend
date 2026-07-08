@@ -104,6 +104,44 @@ app.get('/api/peers', async (req, res) => {
   }
 });
 
+// Debug-only: hits Yahoo chart API once for ASW and returns status +
+// latency + first ~500 chars of the body. Useful for diagnosing Railway
+// IP blocks vs transient errors. Gated to non-production to keep it
+// from being abused if someone exposes the service publicly.
+app.get('/api/debug/yahoo-test', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'not found' });
+  }
+  const symbol = (req.query.symbol || 'ASW.BK').toString();
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=1700000000&period2=1750000000&interval=1d&includeAdjustedClose=true&events=history`;
+  const startedAt = Date.now();
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+    });
+    const body = await r.text();
+    res.json({
+      ok: r.ok,
+      status: r.status,
+      latencyMs: Date.now() - startedAt,
+      symbol,
+      bodyPreview: body.slice(0, 500),
+    });
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      status: null,
+      latencyMs: Date.now() - startedAt,
+      symbol,
+      error: String(e.message || e),
+      errorCode: e.code || null,
+    });
+  }
+});
+
 // Live ticker — the intraday partial close (latest 1-min candle) populated
 // by the */3 cron. Distinct from /api/daily which returns EOD closes only.
 // `prevClose` is yesterday's settled close so the client can show the

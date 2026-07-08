@@ -59,6 +59,11 @@ const PEER_NAMES = {
 // fetcher and return metadata for the caller (cron logs,
 // /api/remarks/refresh, /api/news/refresh, /api/morning-brief/refresh).
 //
+// Yahoo calls inside yahoo.mjs use retry + exponential backoff so a single
+// 429/5xx doesn't fail the whole batch. (Earlier experiment with a Stooq
+// CSV fallback was abandoned — Stooq now serves a Cloudflare JS challenge
+// to non-browser clients. See git history for stooq.mjs.)
+//
 // Default `sinceDate`: when caller doesn't supply one and we're fetching
 // prices, default to a 7-day window before the latest stored date so a
 // missed daily cron self-heals next run. gemini-* sources use today instead

@@ -11,6 +11,32 @@ export const SYMBOLS = {
 
 const CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
 
+// Exponential-backoff retry for transient errors (429, 5xx, network timeout).
+// Skips retry on 4xx (except 429) since those are permanent client errors.
+// Throws the final error if all attempts fail; error carries `.status` and
+// `.symbol` so the caller's logger can attribute failures.
+async function withRetry(fn, { retries = 3, baseMs = 500, factor = 2, jitter = true, label = 'yahoo' } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (e) {
+      lastErr = e;
+      const status = e.status;
+      if (status && status >= 400 && status < 500 && status !== 429) {
+        // Permanent client error (400/401/403/404) — no point retrying
+        throw e;
+      }
+      if (attempt === retries) break;
+      const delay = baseMs * Math.pow(factor, attempt - 1);
+      const wait = jitter ? delay * (0.5 + Math.random()) : delay;
+      console.warn(`[${label}] attempt ${attempt}/${retries} failed (${status || 'no-status'}${e.symbol ? ' ' + e.symbol : ''}); retry in ${Math.round(wait)}ms`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
+}
+
 // Low-level fetch: returns the raw {rows, meta} object. `meta` carries
 // fields like regularMarketPrice/regularMarketTime that Yahoo always
 // populates regardless of interval — useful as a fallback when the candle
@@ -27,7 +53,10 @@ async function fetchRaw(symbol, period1, period2, interval = '1d') {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Yahoo ${symbol} HTTP ${res.status}: ${body.slice(0, 200)}`);
+    const err = new Error(`Yahoo ${symbol} HTTP ${res.status}: ${body.slice(0, 200)}`);
+    err.status = res.status;
+    err.symbol = symbol;
+    throw err;
   }
   const json = await res.json();
   const result = json.chart?.result?.[0];
@@ -68,15 +97,17 @@ export async function fetchAll({ sinceDate } = {}) {
     : period2 - 60 * 60 * 24 * 365 * 5; // 5 years default
 
   // Sequential with small jitter to avoid Yahoo rate-limit (429).
+  // Each call also goes through withRetry() so a single 429/5xx doesn't
+  // fail the whole batch.
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const asw = await fetchOne(SYMBOLS.asw, period1, period2);
+  const asw = await withRetry(() => fetchOne(SYMBOLS.asw, period1, period2));
   await sleep(150);
-  const setSeries = await fetchOne(SYMBOLS.set, period1, period2);
+  const setSeries = await withRetry(() => fetchOne(SYMBOLS.set, period1, period2));
   await sleep(150);
   const peers = [];
   for (const p of SYMBOLS.peers) {
-    peers.push(await fetchOne(p, period1, period2));
+    peers.push(await withRetry(() => fetchOne(p, period1, period2)));
     await sleep(150);
   }
   return { asw, set: setSeries, peers };
