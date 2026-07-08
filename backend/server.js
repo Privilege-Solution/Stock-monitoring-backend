@@ -64,6 +64,24 @@ function seedFromSampleData() {
 
 // --- Routes ---
 
+// Debug-only: confirms whether Express sees the request. Logs every hit
+// with a timestamp + key headers so we can compare against Railway logs
+// when the response is 500. Gated to non-production.
+app.get('/api/debug/trace', (req, res) => {
+  console.log('[trace]', new Date().toISOString(), req.method, req.path,
+    'origin=', req.headers.origin || '(none)',
+    'ua=', req.headers['user-agent'] || '(none)');
+  res.json({
+    ok: true,
+    pid: process.pid,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin || null,
+    method: req.method,
+    path: req.path,
+  });
+});
+
 app.get('/api/daily', async (req, res) => {
   try {
     const { start, end } = req.query;
