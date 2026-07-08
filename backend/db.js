@@ -4,10 +4,12 @@
 // Supabase DATABASE_URL. All public functions are async — callers (server.js,
 // fetchers/index.js) await them.
 //
-// Schema (auto-created by migrate.js):
+// Schema (auto-created by migrate.js, fresh-install shape):
 //   daily          — one row per trading day, PRIMARY KEY date
-//                    remark split into 3 category columns (company/sector/macro)
+//                    single (remark, category) pair — migrated from the
+//                    legacy 3-col shape (remark_company/sector/macro) in v2
 //   peer_prices    — one row per (date, ticker)
+//   news_feed      — SERIAL id, Gemini+RSS pipeline + user actions
 //   fetch_log      — append-only fetch audit trail, SERIAL id
 
 const { Pool } = require('pg');
@@ -55,14 +57,15 @@ async function closeDb() {
 
 // ── daily ──────────────────────────────────────────────────────────────────
 
-// Upsert by date. The COALESCE on each remark column preserves existing AI
-// remarks when the incoming row has none — the 3 remark columns are owned
-// by the AI-remarks pipeline, not by the price pipeline.
+// Upsert by date. The COALESCE on (remark, category) preserves existing AI
+// remarks when the incoming row has none — both columns are owned by the
+// AI-remarks pipeline (gemini-search.mjs), not by the price pipeline.
 //
-// Accepts both the new shape ({remark_company, remark_sector, remark_macro})
-// and the legacy shape ({remark}); legacy single-text remarks are bucketed
-// by classifyBucket() so seed data (sample_data.js) keeps working after the
-// schema split.
+// Accepts the new shape ({remark, category}) and the legacy shapes too:
+//   - {remark} (single-text, from sample_data.js + SQLite-era) → classified
+//     via classifySingle() which assigns macro/sector/company/other
+//   - {remark_company, remark_sector, remark_macro} (legacy 3-col, pre-v2) →
+//     collapsed into one remark + category, company > sector > macro priority
 const REMARK_BUCKET_HELPERS = require('./lib/remark-bucket');
 
 async function writeRows(rows) {
@@ -84,14 +87,15 @@ async function writeRows(rows) {
   for (const r of rows) (existingSet.has(r.date) ? updated++ : added++);
 
   // 2) Single multi-row upsert. One statement = one round-trip = no statement
-  // timeout risk even at ~1.2k rows. COALESCE on remark_* preserves existing
-  // AI remarks when the incoming price row carries none.
+  // timeout risk even at ~2.2k rows (10y backfill). COALESCE on remark/category
+  // preserves existing AI remarks when the incoming price row carries none —
+  // both columns are owned by the AI-remarks pipeline, not the price pipeline.
   const values = [];
   const params = [];
   rows.forEach((r, i) => {
-    const base = i * 11;
+    const base = i * 10;
     const rm = normalizeRemarks(r);
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11})`);
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10})`);
     params.push(
       r.date,
       r.close ?? null,
@@ -100,62 +104,63 @@ async function writeRows(rows) {
       r.value ?? null,
       r.setIdx ?? null,
       r.propIdx ?? null,
-      rm.company,
-      rm.sector,
-      rm.macro,
+      rm.remark,
+      rm.category,
       now,
     );
   });
 
   await p.query(`
     INSERT INTO daily (date, close, "change", volume, value, "setIdx", "propIdx",
-                       remark_company, remark_sector, remark_macro, fetched_at)
+                       remark, category, fetched_at)
     VALUES ${values.join(',')}
     ON CONFLICT (date) DO UPDATE SET
-      close          = EXCLUDED.close,
-      "change"       = EXCLUDED."change",
-      volume         = EXCLUDED.volume,
-      value          = EXCLUDED.value,
-      "setIdx"       = EXCLUDED."setIdx",
-      "propIdx"      = EXCLUDED."propIdx",
-      remark_company = COALESCE(EXCLUDED.remark_company, daily.remark_company),
-      remark_sector  = COALESCE(EXCLUDED.remark_sector,  daily.remark_sector),
-      remark_macro   = COALESCE(EXCLUDED.remark_macro,   daily.remark_macro),
-      fetched_at     = EXCLUDED.fetched_at
+      close      = EXCLUDED.close,
+      "change"   = EXCLUDED."change",
+      volume     = EXCLUDED.volume,
+      value      = EXCLUDED.value,
+      "setIdx"   = EXCLUDED."setIdx",
+      "propIdx"  = EXCLUDED."propIdx",
+      remark     = COALESCE(EXCLUDED.remark,    daily.remark),
+      category   = COALESCE(EXCLUDED.category,  daily.category),
+      fetched_at = EXCLUDED.fetched_at
   `, params);
 
   return { added, updated };
 }
 
-// Map a single-row object to {company, sector, macro} strings. Accepts both
-// the new 3-column shape and the legacy {remark} single-text shape so the
-// SQLite seed path (sample_data.js) keeps working without rewriting 595 rows.
+// Map a single-row object to {remark, category} for the v9 single-column shape.
+// Accepts the legacy 3-col shape ({remark_company/sector/macro}) by picking
+// the first non-null and back-classifying into a category — this keeps any
+// stray legacy callers working without a code fork. The {remark} single-text
+// shape uses classifySingle() so seed data (sample_data.js) keeps working.
 function normalizeRemarks(r) {
-  if (r.remark_company !== undefined || r.remark_sector !== undefined || r.remark_macro !== undefined) {
-    return {
-      company: r.remark_company ?? null,
-      sector:  r.remark_sector  ?? null,
-      macro:   r.remark_macro   ?? null,
-    };
+  if (r.remark !== undefined) {
+    const out = REMARK_BUCKET_HELPERS.classifySingle(r.remark);
+    return { remark: out.text, category: out.category };
   }
-  if (r.remark) return REMARK_BUCKET_HELPERS.classifyBucket(r.remark);
-  return { company: null, sector: null, macro: null };
+  if (r.remark_company || r.remark_sector || r.remark_macro) {
+    // Legacy 3-col input — collapse into one remark + category. Prefer
+    // company > sector > macro (matches the priority in updateRemarks()).
+    const text = r.remark_company || r.remark_sector || r.remark_macro;
+    const category = r.remark_company ? 'company' : r.remark_sector ? 'sector' : 'macro';
+    return { remark: text, category };
+  }
+  return { remark: null, category: null };
 }
 
 async function readAllRows(start, end) {
   const p = getPool();
-  // Pipeline refactor: read the new 2-column remark shape (remark, category)
-  // plus the morning-brief columns added in migrate-v3. The legacy 3 columns
-  // (remark_company/sector/macro) are KEPT in the SELECT for one release so
-  // the offline / sample_data.js fallback path and any external consumers
-  // keep working. They will be dropped in a follow-up.
+  // Pipeline refactor (migrate-v9): the legacy 3-column remark shape
+  // (remark_company / remark_sector / remark_macro) was dropped from the
+  // schema in the fresh-install shape. The single (remark, category) pair
+  // carries everything the UI needs; legacy callers have been migrated.
   let sql, params;
   if (start && end) {
     sql = `SELECT date, close, "change" AS "change", volume, value,
                   "setIdx" AS "setIdx", "propIdx" AS "propIdx",
                   remark, category,
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
-                  remark_company, remark_sector, remark_macro,
                   user_note
            FROM daily WHERE date BETWEEN $1 AND $2 ORDER BY date ASC`;
     params = [start, end];
@@ -164,7 +169,6 @@ async function readAllRows(start, end) {
                   "setIdx" AS "setIdx", "propIdx" AS "propIdx",
                   remark, category,
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
-                  remark_company, remark_sector, remark_macro,
                   user_note
            FROM daily ORDER BY date ASC`;
     params = [];

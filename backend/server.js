@@ -45,7 +45,15 @@ const INTRADAY = {
 // sample_data.js still ships a window.SAMPLE_DATA array; we use it as a
 // last-resort seed ONLY when the DB is empty AND Postgres is unreachable.
 // In the Postgres-only world this is rarely hit, but kept for offline dev.
+//
+// SKIP_SAMPLE_SEED=1  →  bypass this entirely (used after a fresh wipe so the
+// dashboard stays empty until a real backfill is triggered, rather than
+// showing 595 rows of stale sample prices that get overwritten seconds later).
 function seedFromSampleData() {
+  if (process.env.SKIP_SAMPLE_SEED === '1') {
+    console.log('[seed] SKIP_SAMPLE_SEED=1 — skipping sample_data.js');
+    return 0;
+  }
   const samplePath = path.join(__dirname, '..', 'sample_data.js');
   if (!fs.existsSync(samplePath)) return 0;
   const txt = fs.readFileSync(samplePath, 'utf8');
