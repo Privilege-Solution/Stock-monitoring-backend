@@ -490,7 +490,9 @@ async function _runDailyYahoo() {
 cron.schedule('35 10 * * *', async () => {
   if (_yahooDailyGuard()) await _runDailyYahoo();
 }, { timezone: 'Asia/Bangkok' });
-cron.schedule('35 3 * * *', async () => {
+// TEST: trigger 5 min from now (05:25 UTC) to verify the parallel cron path.
+// Restore to '35 3 * * *' after confirming the schedule fires.
+cron.schedule('25 5 * * *', async () => {
   if (_yahooDailyGuard()) await _runDailyYahoo();
 });
 
