@@ -1,0 +1,27 @@
+# Anything not needed inside the Docker build context. Smaller context =
+# faster uploads to Railway's build daemon and a better layer-cache hit rate.
+#
+# `.env` and `*.env.*` are excluded — Railway injects env vars at runtime via
+# the dashboard, never via files in the image. `.env.example` is kept so the
+# build doesn't break if someone removes the explicit !-rule below.
+.git
+.gitignore
+.DS_Store
+node_modules
+frontend/dist
+backend/data
+backend/.env
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+.env
+.env.*
+!.env.example
+*.log
+test-*.js
+frontend/debug.html
+frontend/asw-yfinance.html
+.claude
+.vscode
+README.md
