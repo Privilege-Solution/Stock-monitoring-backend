@@ -1,5 +1,7 @@
 'use strict';
 
+const { PEER_TICKERS } = require('../prop-basket');
+
 // Offline / test fetcher: generates a deterministic series so the UI keeps
 // working when the network is down or for tests.
 
@@ -35,11 +37,10 @@ function makeSeries(symbol, days = 600, base = 100) {
 }
 
 async function fetchAll({ sinceDate } = {}) {
-  const peers = ['AP.BK','LH.BK','QH.BK','SIRI.BK','SPALI.BK','NOBLE.BK','ORI.BK','ANAN.BK','LPN.BK','WHA.BK'];
   return {
     asw: makeSeries('ASW.BK', 600, 8.5),
     set: makeSeries('^SET.BK', 600, 1400),
-    peers: peers.map(s => makeSeries(s, 600, 10 + hash01(s) * 80)),
+    peers: PEER_TICKERS.map(s => makeSeries(s, 600, 10 + hash01(s) * 80)),
   };
 }
 

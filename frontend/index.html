@@ -1873,17 +1873,29 @@ function renderPriceTable() {
 
 /* ============== Thai Real-Estate Peer Snapshot ============== */
 // Real peer prices come from /api/peers (populated by db.writePeers from the Yahoo fetcher).
+// 20-ticker list — order matches PEER_TICKERS in backend/lib/prop-basket.js
+// (ASW anchored at position 4 since it doubles as the primary tracked ticker).
 const THAI_RE_PEERS = [
   { ticker: 'AP',    name: 'AP Thailand' },
+  { ticker: 'SIRI',  name: 'Sansiri' },
   { ticker: 'LH',    name: 'Land & Houses' },
-  { ticker: 'QH',    name: 'Quality Houses' },
-  { ticker: 'SIRI',  name: 'Siri Vanachroen' },
+  { ticker: 'ASW',   name: 'AssetWise' },
   { ticker: 'SPALI', name: 'Supalai' },
-  { ticker: 'NOBLE', name: 'Noble Development' },
+  { ticker: 'SC',    name: 'SC Asset' },
+  { ticker: 'S',     name: 'Singha Estate' },
+  { ticker: 'PSH',   name: 'Pruksa Holding' },
+  { ticker: 'FPT',   name: 'Frasers Property' },
   { ticker: 'ORI',   name: 'Origin Property' },
-  { ticker: 'ANAN',  name: 'Ananda Development' },
+  { ticker: 'PRIME', name: 'Proud Real Estate' },
+  { ticker: 'NOBLE', name: 'Noble Development' },
+  { ticker: 'QH',    name: 'Quality Houses' },
   { ticker: 'LPN',   name: 'L.P.N. Development' },
-  { ticker: 'WHA',   name: 'WHA Corporation' },
+  { ticker: 'PF',    name: 'Property Perfect' },
+  { ticker: 'SENA',  name: 'Sena Development' },
+  { ticker: 'ANAN',  name: 'Ananda Development' },
+  { ticker: 'LALIN', name: 'Lalin Property' },
+  { ticker: 'CI',    name: 'Charn Issara Development' },
+  { ticker: 'MJD',   name: 'Major Development' },
 ];
 
 // In-memory cache so we don't refetch every time the dashboard re-renders.
@@ -1908,19 +1920,19 @@ async function buildPeerSnapshot() {
 
   // Build rows: real prices if available, else fall back to THAI_RE_PEERS metadata
   // with "—" placeholders for close/change (no fake-hash values).
+  // ASW is part of THAI_RE_PEERS now (position 4) — its row pulls from peerByTicker
+  // just like every other peer, so we no longer splice it from DATA.
   const peerRows = THAI_RE_PEERS.map(p => {
     const live = peerByTicker.get(p.ticker);
+    const isASW = p.ticker === 'ASW';
     return {
       ticker: p.ticker,
       name: live?.name || p.name,
       close: live?.close ?? null,
       change: live?.change ?? null,
+      isASW,
     };
   });
-
-  // Insert real ASW row at position 4 (mid-list, prominent without being on top)
-  const aswRow = { ticker: 'ASW', name: 'ASSETWISE PUBLIC COMPANY LIMITED', close: lastRow.close, change: lastRow.change, isASW: true };
-  peerRows.splice(4, 0, aswRow);
 
   body.innerHTML = peerRows.map(r => {
     const chg = r.change != null ? r.change : null;

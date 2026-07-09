@@ -3,10 +3,13 @@
 // Reference: https://github.com/ranaroussi/yfinance/blob/main/yfinance/base.py
 //            (Yahoo's public chart API is the same data source yfinance uses)
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { PEER_TICKERS } = require('../prop-basket.js');
+
 export const SYMBOLS = {
   asw: 'ASW.BK',
   set: '^SET.BK',
-  peers: ['AP.BK','LH.BK','QH.BK','SIRI.BK','SPALI.BK','NOBLE.BK','ORI.BK','ANAN.BK','LPN.BK','WHA.BK'],
 };
 
 const CHART_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
@@ -113,8 +116,14 @@ export async function fetchAll({ sinceDate } = {}) {
   // A single delisted/renamed ticker returning a permanent 404 must NOT abort
   // the whole fetch and lose ASW + SET + the other peers — so isolate each in
   // its own try/catch and substitute an empty series on failure.
+  //
+  // PEER_TICKERS (single source of truth in ../prop-basket.js) includes ASW.BK
+  // so it appears in the peer-snapshot table. Reuse the already-fetched `asw`
+  // series instead of refetching — keeps the peers array index-aligned with
+  // PEER_TICKERS and avoids a redundant Yahoo call.
   const peers = [];
-  for (const p of SYMBOLS.peers) {
+  for (const p of PEER_TICKERS) {
+    if (p === SYMBOLS.asw) { peers.push(asw); continue; }
     try {
       peers.push(await withRetry(() => fetchOne(p, period1, period2)));
     } catch (e) {

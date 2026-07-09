@@ -2,7 +2,7 @@
 
 const db = require('../../db');
 const { fetchAll: mockFetch } = require('./mock');
-const { computePropBasket, joinByDate, PEER_TICKERS } = require('../prop-basket');
+const { computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES } = require('../prop-basket');
 
 let yahooModule = null;
 async function loadYahoo() {
@@ -39,18 +39,7 @@ async function loadRssExtended() {
   return rssExtendedModule;
 }
 
-const PEER_NAMES = {
-  'AP.BK': 'AP Thailand',
-  'LH.BK': 'Land & Houses',
-  'QH.BK': 'Quality Houses',
-  'SIRI.BK': 'Siri Vanachroen',
-  'SPALI.BK': 'Supalai',
-  'NOBLE.BK': 'Noble Development',
-  'ORI.BK': 'Origin Property',
-  'ANAN.BK': 'Ananda Development',
-  'LPN.BK': 'L.P.N. Development',
-  'WHA.BK': 'WHA Corporation',
-};
+// PEER_NAMES is now imported from ../prop-basket (single source of truth).
 
 // Dispatch by source. 'yahoo' (default) and 'mock' return price rows in the
 // same shape (so they flow through joinByDate + writeRows); 'gemini-*'

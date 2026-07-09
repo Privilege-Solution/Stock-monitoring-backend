@@ -5,9 +5,14 @@
 // yahoo-finance2 does not provide a Thai real-estate sector index (no SETPROP
 // ticker is published on Yahoo Finance in our tested region/build).
 //
-// We compute a DERIVED value from a 10-ticker peer basket:
-//   AP, LH, QH, SIRI, SPALI, NOBLE, ORI, ANAN, LPN, WHA
+// We compute a DERIVED value from a 20-ticker peer basket (Thai residential
+// real-estate developers, ordered by approximate market cap with ASW anchored
+// at position 4 to match the frontend's display layout):
+//   AP, SIRI, LH, ASW, SPALI, SC, S, PSH, FPT, ORI,
+//   PRIME, NOBLE, QH, LPN, PF, SENA, ANAN, LALIN, CI, MJD
 //
+// Note: ASW (AssetWise) — our primary tracked ticker — is included in the
+// basket, which gives the synthetic PROP index a 5% ASW self-bias by design.
 // Method: equal-weighted mean of daily % changes; base 100.00 on the first
 // common date; then accumulate (1 + meanPct) cumulatively per trading day.
 //
@@ -17,7 +22,37 @@
 //   - the rest of the pipeline treats propIdx identically.
 // =============================================================================
 
-const PEER_TICKERS = ['AP.BK','LH.BK','QH.BK','SIRI.BK','SPALI.BK','NOBLE.BK','ORI.BK','ANAN.BK','LPN.BK','WHA.BK'];
+const PEER_TICKERS = [
+  'AP.BK', 'SIRI.BK', 'LH.BK', 'ASW.BK', 'SPALI.BK',
+  'SC.BK', 'S.BK', 'PSH.BK', 'FPT.BK', 'ORI.BK',
+  'PRIME.BK', 'NOBLE.BK', 'QH.BK', 'LPN.BK', 'PF.BK',
+  'SENA.BK', 'ANAN.BK', 'LALIN.BK', 'CI.BK', 'MJD.BK',
+];
+
+// Single source of truth for ticker → display name. Kept here (instead of in
+// fetchers/index.js) so any change to the peer list flows in one place.
+const PEER_NAMES = {
+  'AP.BK':    'AP Thailand',
+  'SIRI.BK':  'Sansiri',
+  'LH.BK':    'Land & Houses',
+  'ASW.BK':   'AssetWise',
+  'SPALI.BK': 'Supalai',
+  'SC.BK':    'SC Asset',
+  'S.BK':     'Singha Estate',
+  'PSH.BK':   'Pruksa Holding',
+  'FPT.BK':   'Frasers Property',
+  'ORI.BK':   'Origin Property',
+  'PRIME.BK': 'Proud Real Estate',
+  'NOBLE.BK': 'Noble Development',
+  'QH.BK':    'Quality Houses',
+  'LPN.BK':   'L.P.N. Development',
+  'PF.BK':    'Property Perfect',
+  'SENA.BK':  'Sena Development',
+  'ANAN.BK':  'Ananda Development',
+  'LALIN.BK': 'Lalin Property',
+  'CI.BK':    'Charn Issara Development',
+  'MJD.BK':   'Major Development',
+};
 
 function computePropBasket(peerSeries) {
   // peerSeries: [{ date, close, ... }] per ticker; may have different date ranges.
@@ -104,4 +139,4 @@ function joinByDate(asw, setSeries, propSeries) {
   return out;
 }
 
-module.exports = { computePropBasket, joinByDate, PEER_TICKERS };
+module.exports = { computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES };
