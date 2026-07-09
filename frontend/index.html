@@ -298,17 +298,19 @@
             <span class="muted th" id="peerSnapshotDate" style="font-size:11px;">—</span>
           </div>
           <div class="muted th mb-8" style="font-size:11px;">เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์</div>
-          <table class="data-table" id="peerTable">
-            <thead>
-              <tr>
-                <th class="th">Ticker</th>
-                <th class="th">บริษัท</th>
-                <th class="num th">ราคาปิด</th>
-                <th class="num th">%เปลี่ยนแปลง</th>
-              </tr>
-            </thead>
-            <tbody id="peerTableBody"></tbody>
-          </table>
+          <div class="data-table-wrap" style="max-height:380px;">
+            <table class="data-table" id="peerTable">
+              <thead>
+                <tr>
+                  <th class="th" style="position:static;">Ticker</th>
+                  <th class="th" style="position:static;">บริษัท</th>
+                  <th class="num th" style="position:static;">ราคาปิด</th>
+                  <th class="num th" style="position:static;">%เปลี่ยนแปลง</th>
+                </tr>
+              </thead>
+              <tbody id="peerTableBody"></tbody>
+            </table>
+          </div>
           <div class="muted th mt-8" style="font-size:10px;">* ข้อมูลจาก Yahoo Finance · อัปเดตทุกครั้งที่กดรีเฟรช</div>
         </div>
       </div>
@@ -1874,12 +1876,12 @@ function renderPriceTable() {
 /* ============== Thai Real-Estate Peer Snapshot ============== */
 // Real peer prices come from /api/peers (populated by db.writePeers from the Yahoo fetcher).
 // 20-ticker list — order matches PEER_TICKERS in backend/lib/prop-basket.js
-// (ASW anchored at position 4 since it doubles as the primary tracked ticker).
+// (ASW leads because it's the primary tracked ticker; rest is market-cap-ish).
 const THAI_RE_PEERS = [
+  { ticker: 'ASW',   name: 'AssetWise' },
   { ticker: 'AP',    name: 'AP Thailand' },
   { ticker: 'SIRI',  name: 'Sansiri' },
   { ticker: 'LH',    name: 'Land & Houses' },
-  { ticker: 'ASW',   name: 'AssetWise' },
   { ticker: 'SPALI', name: 'Supalai' },
   { ticker: 'SC',    name: 'SC Asset' },
   { ticker: 'S',     name: 'Singha Estate' },
@@ -1920,8 +1922,10 @@ async function buildPeerSnapshot() {
 
   // Build rows: real prices if available, else fall back to THAI_RE_PEERS metadata
   // with "—" placeholders for close/change (no fake-hash values).
-  // ASW is part of THAI_RE_PEERS now (position 4) — its row pulls from peerByTicker
-  // just like every other peer, so we no longer splice it from DATA.
+  // ASW leads THAI_RE_PEERS (position 1) — its row pulls from peerByTicker
+  // just like every other peer (no splice from DATA). The ASW row is also
+  // styled `position:sticky; top:0` so it stays pinned at the top of the
+  // scrollable table while the other 19 peers scroll below.
   const peerRows = THAI_RE_PEERS.map(p => {
     const live = peerByTicker.get(p.ticker);
     const isASW = p.ticker === 'ASW';
@@ -1944,7 +1948,7 @@ async function buildPeerSnapshot() {
       ? 'color:var(--muted)'
       : chg > 0.05 ? 'color:var(--positive)' : chg < -0.05 ? 'color:var(--negative)' : 'color:var(--muted)';
     const chgText = !hasData ? '—' : `${arrow}${(chg >= 0 ? '+' : '')}${chg.toFixed(2)}%`;
-    return `<tr style="${r.isASW ? 'background:var(--sidebar-active); font-weight:600;' : ''}">
+    return `<tr style="${r.isASW ? 'background:var(--sidebar-active); font-weight:600; position:sticky; top:0; z-index:1;' : ''}">
       <td><strong>${r.ticker}</strong>${aswBadge}</td>
       <td class="th muted">${r.name}</td>
       <td class="num">${closeText}</td>

@@ -6,9 +6,9 @@
 // ticker is published on Yahoo Finance in our tested region/build).
 //
 // We compute a DERIVED value from a 20-ticker peer basket (Thai residential
-// real-estate developers, ordered by approximate market cap with ASW anchored
-// at position 4 to match the frontend's display layout):
-//   AP, SIRI, LH, ASW, SPALI, SC, S, PSH, FPT, ORI,
+// real-estate developers, ordered so ASW leads as the primary tracked ticker,
+// followed by approximate-market-cap ordering of peers):
+//   ASW, AP, SIRI, LH, SPALI, SC, S, PSH, FPT, ORI,
 //   PRIME, NOBLE, QH, LPN, PF, SENA, ANAN, LALIN, CI, MJD
 //
 // Note: ASW (AssetWise) — our primary tracked ticker — is included in the
@@ -23,7 +23,7 @@
 // =============================================================================
 
 const PEER_TICKERS = [
-  'AP.BK', 'SIRI.BK', 'LH.BK', 'ASW.BK', 'SPALI.BK',
+  'ASW.BK', 'AP.BK', 'SIRI.BK', 'LH.BK', 'SPALI.BK',
   'SC.BK', 'S.BK', 'PSH.BK', 'FPT.BK', 'ORI.BK',
   'PRIME.BK', 'NOBLE.BK', 'QH.BK', 'LPN.BK', 'PF.BK',
   'SENA.BK', 'ANAN.BK', 'LALIN.BK', 'CI.BK', 'MJD.BK',
