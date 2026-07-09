@@ -27,6 +27,30 @@ function parsePgUrl(url) {
   };
 }
 
+// Decide whether to open the connection over SSL. Supabase *requires* SSL, but
+// Railway's managed Postgres reached over the private network
+// (host ends in `.railway.internal`) does NOT offer SSL — forcing it there
+// fails the connection with "The server does not support SSL connections".
+// Precedence:
+//   1. Explicit DATABASE_SSL env  ('disable'/'false'/'0' → off; else → on)
+//   2. `sslmode=disable` in the DATABASE_URL query string → off
+//   3. Host heuristic: localhost / 127.0.0.1 / *.railway.internal → off
+//   4. Default → on, with rejectUnauthorized:false (Supabase, Railway proxy)
+function resolveSslConfig(url) {
+  const flag = (process.env.DATABASE_SSL || '').trim().toLowerCase();
+  if (flag) {
+    return /^(disable|false|0|off|no)$/.test(flag) ? false : { rejectUnauthorized: false };
+  }
+  let u;
+  try { u = new URL(url); } catch { return { rejectUnauthorized: false }; }
+  if ((u.searchParams.get('sslmode') || '').toLowerCase() === 'disable') return false;
+  const host = u.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.railway.internal')) {
+    return false;
+  }
+  return { rejectUnauthorized: false };
+}
+
 function getPool() {
   if (pool) return pool;
   if (!process.env.DATABASE_URL) {
@@ -35,9 +59,15 @@ function getPool() {
   const cfg = parsePgUrl(process.env.DATABASE_URL);
   pool = new Pool({
     ...cfg,
-    ssl: { rejectUnauthorized: false },
+    ssl: resolveSslConfig(process.env.DATABASE_URL),
     max: 10,
     idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+  });
+  // A pool-level error listener prevents an idle-client error (e.g. Supabase
+  // dropping a connection) from crashing the process with an unhandled event.
+  pool.on('error', (err) => {
+    console.error('[db] idle client error:', err.message || err);
   });
   return pool;
 }
@@ -53,6 +83,90 @@ function openDb() {
 
 async function closeDb() {
   if (pool) { await pool.end(); pool = null; }
+}
+
+// Idempotent schema bootstrap. Safe to run on every boot: uses CREATE TABLE /
+// INDEX IF NOT EXISTS and ADD COLUMN IF NOT EXISTS so it neither drops data nor
+// errors on an already-migrated Supabase DB. Its purpose is the fresh-deploy
+// path — a brand-new Railway Postgres has no tables, and migrate.js can't
+// bootstrap it (that script needs a local SQLite file). This mirrors the
+// final v9 shape: migrate.js's SCHEMA plus news_feed.impact_level (added by
+// migrate-v9.js), which db.writeNewsItems()/readNewsFeed() require.
+async function ensureSchema() {
+  const p = getPool();
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS daily (
+      date              TEXT PRIMARY KEY,
+      close             DOUBLE PRECISION,
+      "change"          DOUBLE PRECISION,
+      volume            DOUBLE PRECISION,
+      value             DOUBLE PRECISION,
+      "setIdx"          DOUBLE PRECISION,
+      "propIdx"         DOUBLE PRECISION,
+      remark            TEXT,
+      category          TEXT,
+      morning_brief     TEXT,
+      morning_watch     TEXT,
+      morning_remark    TEXT,
+      morning_weekly_at TEXT,
+      fetched_at        TEXT NOT NULL,
+      user_note         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS daily_date_idx ON daily(date);
+    CREATE INDEX IF NOT EXISTS daily_user_note_idx ON daily (date DESC) WHERE user_note IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS news_feed (
+      id            SERIAL PRIMARY KEY,
+      title         TEXT NOT NULL,
+      date          TEXT NOT NULL,
+      category      TEXT NOT NULL,
+      source_url    TEXT NOT NULL,
+      source_label  TEXT NOT NULL,
+      title_hash    TEXT NOT NULL,
+      pipeline      TEXT,
+      impact        TEXT,
+      severity      TEXT,
+      show_pin      BOOLEAN,
+      fetched_at    TEXT NOT NULL,
+      display_priority SMALLINT NOT NULL DEFAULT 0,
+      summary       TEXT,
+      hidden        BOOLEAN     NOT NULL DEFAULT FALSE,
+      hidden_at     TIMESTAMPTZ,
+      user_note     TEXT,
+      impact_level  TEXT
+    );
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS impact_level TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS news_feed_title_hash_idx ON news_feed (title_hash);
+    CREATE INDEX IF NOT EXISTS news_feed_date_idx     ON news_feed (date DESC);
+    CREATE INDEX IF NOT EXISTS news_feed_category_idx ON news_feed (category);
+    CREATE INDEX IF NOT EXISTS news_feed_show_pin_idx ON news_feed (date DESC) WHERE show_pin = TRUE;
+    CREATE INDEX IF NOT EXISTS news_feed_pipeline_idx ON news_feed (pipeline);
+    CREATE INDEX IF NOT EXISTS news_feed_priority_date_idx ON news_feed (display_priority DESC, date DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS news_feed_hidden_at_idx ON news_feed (hidden_at DESC NULLS LAST) WHERE hidden = TRUE;
+    CREATE INDEX IF NOT EXISTS news_feed_user_note_idx ON news_feed (id) WHERE user_note IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS peer_prices (
+      date        TEXT NOT NULL,
+      ticker      TEXT NOT NULL,
+      name        TEXT,
+      close       DOUBLE PRECISION,
+      "change"    DOUBLE PRECISION,
+      fetched_at  TEXT NOT NULL,
+      PRIMARY KEY (date, ticker)
+    );
+    CREATE INDEX IF NOT EXISTS peer_prices_date_idx ON peer_prices(date);
+
+    CREATE TABLE IF NOT EXISTS fetch_log (
+      id           SERIAL PRIMARY KEY,
+      started_at   TEXT NOT NULL,
+      finished_at  TEXT,
+      ok           INTEGER NOT NULL,
+      source       TEXT NOT NULL,
+      rows_added   INTEGER,
+      rows_updated INTEGER,
+      error        TEXT
+    );
+  `);
 }
 
 // ── daily ──────────────────────────────────────────────────────────────────
@@ -580,6 +694,7 @@ async function readNewsStatus() {
 
 module.exports = {
   openDb,
+  ensureSchema,
   closeDb,
   // daily
   writeRows,

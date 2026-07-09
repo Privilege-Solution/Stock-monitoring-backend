@@ -247,7 +247,7 @@ async function fetchQuery(q, maxAgeDays) {
   const url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(q.q) +
     '&hl=th&gl=TH&ceid=TH:th';
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(15_000) });
     if (!r.ok) {
       console.log(`[rss-extended] ${q.q} → HTTP ${r.status}`);
       return [];

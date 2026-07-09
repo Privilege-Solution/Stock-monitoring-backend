@@ -64,7 +64,7 @@ CREATE TABLE daily (
   fetched_at        TEXT NOT NULL,
   -- User-remark popover (migrate-v7): free-text personal note attached
   -- via the Price-table click-to-edit affordance. Coexists with the
-  -- Gemini-generated `remark` column above (different writers).
+  -- Gemini-generated 'remark' column above (different writers).
   user_note         TEXT
 );
 CREATE INDEX daily_date_idx ON daily(date);
@@ -89,6 +89,10 @@ CREATE TABLE news_feed (
   -- 1-2 sentence Thai summary (migrate-v5). Nullable so the ALTER is cheap
   -- on a populated table; NULL means title-only (old rows; "fall back" in UI).
   summary TEXT,
+  -- News taxonomy v2 (migrate-v9): HIGH | MEDIUM | LOW impact magnitude,
+  -- distinct from the 'impact' sentiment column. Read/written by db.js —
+  -- kept in the fresh schema so a SQLite→PG migrate matches the live shape.
+  impact_level TEXT,
   -- User actions (migrate-v6) — single-tenant: same flag visible to all.
   -- hidden = soft delete (filter from feed unless "show hidden" is on);
   -- hidden_at = audit; user_note = free-text personal remark displayed

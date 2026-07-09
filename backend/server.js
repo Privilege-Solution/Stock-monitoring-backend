@@ -438,6 +438,11 @@ db.openDb();
 
 (async () => {
   try {
+    // Bootstrap the schema before any query. Idempotent (CREATE ... IF NOT
+    // EXISTS) so it's a no-op on the already-migrated Supabase DB, but it makes
+    // a fresh Railway Postgres deploy work with zero manual migration steps —
+    // without it, /api/health 500s and the Railway healthcheck crash-loops.
+    await db.ensureSchema();
     const before = await db.metadata();
     if (before.rowCount === 0) {
       console.log('[startup] empty DB — seeding from sample_data.js');

@@ -45,11 +45,15 @@ async function fetchRaw(symbol, period1, period2, interval = '1d') {
   const url = CHART_URL + encodeURIComponent(symbol)
     + '?period1=' + period1 + '&period2=' + period2
     + '&interval=' + interval + '&includeAdjustedClose=true&events=history';
+  // 15s timeout so a hung Yahoo socket doesn't stall the fetch forever. The
+  // resulting TimeoutError has no `.status`, so withRetry() treats it as
+  // retryable (only 4xx short-circuits) — matching the retry comment's intent.
   const res = await fetch(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
       'Accept': 'application/json',
     },
+    signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -105,9 +109,18 @@ export async function fetchAll({ sinceDate } = {}) {
   await sleep(150);
   const setSeries = await withRetry(() => fetchOne(SYMBOLS.set, period1, period2));
   await sleep(150);
+  // Peers are supplementary (they only feed the PROP basket + peer snapshot).
+  // A single delisted/renamed ticker returning a permanent 404 must NOT abort
+  // the whole fetch and lose ASW + SET + the other peers — so isolate each in
+  // its own try/catch and substitute an empty series on failure.
   const peers = [];
   for (const p of SYMBOLS.peers) {
-    peers.push(await withRetry(() => fetchOne(p, period1, period2)));
+    try {
+      peers.push(await withRetry(() => fetchOne(p, period1, period2)));
+    } catch (e) {
+      console.warn(`[yahoo] peer ${p} failed, using empty series:`, e.message || e);
+      peers.push([]);
+    }
     await sleep(150);
   }
   return { asw, set: setSeries, peers };

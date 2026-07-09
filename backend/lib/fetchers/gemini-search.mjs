@@ -31,6 +31,14 @@ const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 const todayThai = () =>
   new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
 
+// ISO date key (YYYY-MM-DD) for `daily.date` writes. MUST be used for any DB
+// key — todayThai() returns a Buddhist-era display string ("2 กรกฎาคม 2569")
+// that never matches a stored 'YYYY-MM-DD' primary key, so pin UPDATEs would
+// silently touch 0 rows. Uses ICT (+7) so the day rolls at Thai midnight, not
+// UTC midnight (matches the daily price row's date).
+const todayISO = () =>
+  new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
 // =============================================================================
 // PROMPTS (verbatim from user spec — keep formatting literal)
 // =============================================================================
@@ -283,10 +291,14 @@ async function geminiSearch(prompt) {
     tools: [{ google_search: {} }],
     generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
   };
+  // Bound the wait: Node's global fetch has no default timeout, so a hung
+  // Gemini connection would stall the cron indefinitely on Railway. 30s is
+  // generous for a grounded-search generate call.
   const res = await fetch(`${ENDPOINT}?key=${process.env.GEMINI_API_KEY}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const j = await res.json();
@@ -354,7 +366,9 @@ async function runCompany(sinceDate) {
   }
 
   const top = items[0];
-  await db.updateSingleRemark(td, {
+  // Write the pin against the ISO date key (todayISO), NOT the Thai display
+  // string — otherwise the UPDATE matches no daily row and the pin is lost.
+  await db.updateSingleRemark(todayISO(), {
     category: top.category,
     text: top.headline,
   });
@@ -393,7 +407,8 @@ async function runMacro(sinceDate) {
   // appendRemarkPin so the company pin from runCompany (above) is preserved.
   const topHigh = items.find(it => it.severity === 'high');
   if (topHigh) {
-    await db.appendRemarkPin(td, `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
+    // ISO key (see runCompany) — the Thai display string never matches daily.date.
+    await db.appendRemarkPin(todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
   }
   const highCount = items.filter(i => i.severity === 'high').length;
   console.log(`[gemini-macro] ${td} → fetched=${items.length} inserted=${inserted} high=${highCount}`);
