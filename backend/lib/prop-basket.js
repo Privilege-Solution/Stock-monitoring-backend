@@ -35,7 +35,7 @@ const PEER_NAMES = {
   'AP.BK':    'AP Thailand',
   'SIRI.BK':  'Sansiri',
   'LH.BK':    'Land & Houses',
-  'ASW.BK':   'AssetWise',
+  'ASW.BK':   'ASSETWISE PUBLIC COMPANY LIMITED',
   'SPALI.BK': 'Supalai',
   'SC.BK':    'SC Asset',
   'S.BK':     'Singha Estate',

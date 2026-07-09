@@ -355,7 +355,7 @@ app.post('/api/news/rss-refresh', async (req, res) => {
   }
 });
 
-// User actions on a single news row (migrate-v6).
+// User actions on a single news row.
 //
 //   POST /api/news/:id/hide   body: {hidden: bool}     — default true
 //   POST /api/news/:id/note   body: {note: string|null}— empty/null clears

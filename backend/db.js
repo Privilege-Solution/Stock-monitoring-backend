@@ -4,10 +4,10 @@
 // Supabase DATABASE_URL. All public functions are async — callers (server.js,
 // fetchers/index.js) await them.
 //
-// Schema (auto-created by migrate.js, fresh-install shape):
+// Schema (auto-created by ensureSchema() below, fresh-install shape):
 //   daily          — one row per trading day, PRIMARY KEY date
-//                    single (remark, category) pair — migrated from the
-//                    legacy 3-col shape (remark_company/sector/macro) in v2
+//                    single (remark, category) pair — was a 3-col shape
+//                    (remark_company/sector/macro) in an earlier revision
 //   peer_prices    — one row per (date, ticker)
 //   news_feed      — SERIAL id, Gemini+RSS pipeline + user actions
 //   fetch_log      — append-only fetch audit trail, SERIAL id
@@ -86,12 +86,11 @@ async function closeDb() {
 }
 
 // Idempotent schema bootstrap. Safe to run on every boot: uses CREATE TABLE /
-// INDEX IF NOT EXISTS and ADD COLUMN IF NOT EXISTS so it neither drops data nor
-// errors on an already-migrated Supabase DB. Its purpose is the fresh-deploy
-// path — a brand-new Railway Postgres has no tables, and migrate.js can't
-// bootstrap it (that script needs a local SQLite file). This mirrors the
-// final v9 shape: migrate.js's SCHEMA plus news_feed.impact_level (added by
-// migrate-v9.js), which db.writeNewsItems()/readNewsFeed() require.
+// INDEX IF NOT EXISTS and ADD COLUMN IF NOT EXISTS so it neither drops data
+// nor errors on an already-migrated Supabase DB. Its purpose is the fresh-
+// deploy path — a brand-new Railway Postgres has no tables, so this is what
+// creates them. db.writeNewsItems() / readNewsFeed() require the news_feed
+// shape defined here.
 async function ensureSchema() {
   const p = getPool();
   await p.query(`
@@ -482,7 +481,7 @@ async function readLatestPeers() {
 
 // ── news_feed ──────────────────────────────────────────────────────────────
 
-// Derived priority used by the unified-feed sort (mirrors migrate-v4 SQL and
+// Derived priority used by the unified-feed sort (mirrors
 // index.html#priorityForItem). Range 0..150, fits SMALLINT.
 //
 //   severity: high=100 | medium=50 | low/null=25
@@ -501,21 +500,11 @@ function priorityForItem(it) {
 }
 
 // Multi-row INSERT with ON CONFLICT (title_hash) DO NOTHING. The unique index
-// on title_hash (created by migrate-v2.js) is the second line of dedup; the
-// in-memory Set in gemini-search.mjs is the first.
-//
-// Pipeline refactor (migrate-v3): added 4 columns — pipeline, impact,
-// severity, show_pin — populated from Gemini's parseAIResult() output. The
-// 7-column insert became an 11-column insert; older items without those keys
-// (manual INSERTs, legacy data) get NULL/FALSE defaults and still parse fine.
-//
-// Pipeline refactor (migrate-v4): 12th column — display_priority — derived
-// at insert time via priorityForItem() so a fresh row never lands with a 0.
-// On conflict (title_hash DO NOTHING) the existing row's priority is kept.
-//
-// Pipeline refactor (migrate-v5): 13th column — summary — optional 1-2
-// sentence Thai body text from the Gemini prompt. NULL for old rows; the
-// UI falls back to the title when summary is missing.
+// on title_hash is the second line of dedup; the in-memory Set in
+// gemini-search.mjs is the first. The 14 columns mirror ensureSchema()'s
+// news_feed shape, in order: title, date, category, source_url, source_label,
+// title_hash, pipeline, impact, severity, show_pin, fetched_at,
+// display_priority, summary, impact_level.
 async function writeNewsItems(items) {
   if (!items || !items.length) return { inserted: 0 };
   const p = getPool();
@@ -537,15 +526,15 @@ async function writeNewsItems(items) {
       it.severity     ?? null,
       it.show_pin     ?? false,
       now,
-      // 12th column — RSS/Gemini sources that score relevance (rss-property)
-      // pre-compute `display_priority` and pass it in directly. Sources that
-      // only know severity/impact (older Gemini pipelines) fall back to
-      // priorityForItem() which derives 50/55/125 from those fields.
+      // RSS/Gemini sources that score relevance (rss-property) pre-compute
+      // `display_priority` and pass it in directly. Sources that only know
+      // severity/impact fall back to priorityForItem() which derives
+      // 50/55/125 from those fields.
       (typeof it.display_priority === 'number' && it.display_priority > 0)
         ? it.display_priority
         : priorityForItem(it),
-      it.summary      ?? null,         // 13th column (migrate-v5)
-      it.impact_level ?? null,         // 14th column (migrate-v9) — HIGH/MEDIUM/LOW
+      it.summary      ?? null,
+      it.impact_level ?? null,         // HIGH/MEDIUM/LOW impact magnitude
     );
   });
   const r = await p.query(`
@@ -560,25 +549,18 @@ async function writeNewsItems(items) {
 
 // Read recent news items, sorted severity-first then newest-first. Optional
 // category/since filters (since is an ISO date string from `date` column).
-//
-// Pipeline refactor (migrate-v4): replaced plain `ORDER BY date DESC` with
-// the composite index hint `ORDER BY display_priority DESC, date DESC, id
-// DESC`. High-severity items surface first; same priority keeps date order;
-// id tiebreaks identical timestamps deterministically.
-//
-// Pipeline refactor (migrate-v9): SELECT now also returns `impact_level`
-// (HIGH/MEDIUM/LOW — distinct from the legacy `impact` column which keeps
-// positive/negative/neutral for sentiment). UI renders impact_level as a
-// coloured dot next to the category badge.
+// The composite index on (display_priority DESC, date DESC, id DESC) backs
+// this sort — high-severity items surface first, same priority keeps date
+// order, id tiebreaks identical timestamps deterministically.
 async function readNewsFeed({ category = null, since = null, limit = 100, includeHidden = false } = {}) {
   const p = getPool();
   const where = [];
   const params = [];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
-  // Pipeline refactor (migrate-v6): hidden items are user-dismissed and
-  // dropped by default. Pass `includeHidden: true` to fetch them anyway
-  // (used by /api/news?showHidden=1 for the "Show hidden" toggle).
+  // hidden items are user-dismissed and dropped by default. Pass
+  // `includeHidden: true` to fetch them anyway (used by /api/news?showHidden=1
+  // for the "Show hidden" toggle).
   if (!includeHidden) where.push('hidden = FALSE');
   params.push(Math.min(limit || 100, 500));
   const sql = `SELECT id, title, date, category, source_url, source_label,
@@ -707,16 +689,16 @@ module.exports = {
   updateSingleRemark,   // v2 — COMPANY pipeline writes here
   appendRemarkPin,      // v3 — MACRO pipeline appends high-severity pins here
   updateMorningBrief,   // v3 — Monday weekly brief writer
-  readMorningBrief,     // v3 — Monday weekly brief reader
-  setDailyRemark,       // v7 — user note writer on daily.price table popover
+  readMorningBrief,     // Monday weekly brief reader
+  setDailyRemark,       // user note writer on daily.price table popover
   // peer_prices
   writePeers,
   readLatestPeers,
   // news_feed
-  priorityForItem,      // v4 — derived priority, mirrors migrate-v4 SQL
+  priorityForItem,      // derived priority, used by writeNewsItems
   writeNewsItems,
   readNewsFeed,
-  readNewsStatus,       // v4 — GET /api/news/status payload
+  readNewsStatus,       // GET /api/news/status payload
   readHiddenNews,       // v6 — user-hidden rows for "Show hidden" view
   setNewsHidden,        // v6 — soft delete toggle per row
   setNewsNote,          // v6 — user_note writer

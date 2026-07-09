@@ -1,10 +1,9 @@
 'use strict';
 
 // Single source of truth for "which column does a Thai remark text belong
-// in?". Imported by db.js (seed path, writeRows legacy-shape adapter) and
-// migrate.js (SQLite → Postgres). The frontend's classifyEvent() in
-// index.html duplicates the keyword logic — keep both in sync if you add
-// new tokens.
+// in?". Imported by db.js (seed path, writeRows legacy-shape adapter). The
+// frontend's classifyEvent() in index.html duplicates the keyword logic —
+// keep both in sync if you add new tokens.
 //
 // Output mapping (3 columns on daily):
 //   remark_company — ASW-specific events (earnings, JV, presale, project)
@@ -45,11 +44,10 @@ function classifyBucket(remark) {
   return { company: r, sector: null, macro: null };
 }
 
-// Single-bucket mapper — used by migrate-v2.js (live backfill) and
-// migrate.js (fresh install). Returns the highest-priority bucket that
-// matches the Thai keyword rules, falling back to 'other' for unclassified
-// text. The priority order (macro → sector → company) is identical to the
-// SQL CASE in migrate-v2.js so JS-driven and SQL-driven backfills agree.
+// Single-bucket mapper — used by db.js (seed path). Returns the highest-
+// priority bucket that matches the Thai keyword rules, falling back to
+// 'other' for unclassified text. The priority order (macro → sector →
+// company) matches the JS RULES order.
 function classifySingle(remark) {
   const r = String(remark || '').trim();
   if (!r) return { category: null, text: null };
