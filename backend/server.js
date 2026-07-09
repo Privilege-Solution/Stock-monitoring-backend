@@ -523,17 +523,19 @@ cron.schedule('35 3 * * *', async () => {
 // Gemini-search pipeline — 4 cron jobs, all gated on GEMINI_API_KEY.
 //
 // Schedule (ICT):
-//   17:45 daily      gemini-company       → 1 pin to daily.remark + headlines to news_feed
+//   17:30 daily      gemini-company       → 1 pin to daily.remark + headlines to news_feed
 //   17:50 daily      gemini-sector        → 0–3 sector headlines to news_feed
 //   17:55 daily      gemini-macro         → 0–2 macro headlines (severity=high → pin)
 //   08:00 Monday     gemini-morning-brief → weekly brief to daily.morning_*
 //
-// All three 17:xx jobs run after SET close (17:30 ICT) so today's headlines
-// are searchable. The morning-brief runs Monday 08:00 ICT (01:00 UTC) — 1h
-// before market open so analysts have it ready.
+// gemini-company fires at SET close (17:30 ICT) — earliest moment after the
+// final bell when today's headlines are searchable. Sector/macro follow 20
+// and 25 min later so the three pipelines run in series without hitting
+// Gemini's per-minute quota. morning-brief runs Monday 08:00 ICT (01:00 UTC)
+// — 1h before market open so analysts have it ready.
 if (process.env.GEMINI_API_KEY) {
-  // 17:45 ICT — company pin
-  cron.schedule('45 10 * * *', async () => {
+  // 17:30 ICT — company pin (right at SET close)
+  cron.schedule('30 10 * * *', async () => {
     console.log('[scheduler] gemini-company triggered');
     const id = await db.logFetchStart();
     try {
