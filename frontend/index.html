@@ -374,8 +374,6 @@
             ตารางรายละเอียด
             <span class="muted th" id="priceTableCount" style="font-size:11px; font-weight:400;">—</span>
           </h3>
-          <input type="text" id="priceTableSearch" placeholder="กรอง Remark..."
-                 class="th" style="font-size:12px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; width:240px;" />
         </div>
         <div class="data-table-wrap" style="max-height:420px;">
           <table class="data-table" id="priceTable">
@@ -388,7 +386,6 @@
                 <th class="num th">มูลค่า</th>
                 <th class="num">SET</th>
                 <th class="num">PROP</th>
-                <th class="th">Remark</th>
               </tr>
             </thead>
             <tbody id="priceTableBody"></tbody>
@@ -824,19 +821,6 @@ window.ASW_API = {
       const d = await r.json();
       return d.rows || [];
     } catch (e) { return []; }
-  },
-  // User-remark popover on the daily price table (migrate-v7).
-  // Optimistic UI: mutate the local row first, then await this.
-  async dailyRemark(date, note) {
-    try {
-      const r = await fetch(`/api/daily/${date}/remark`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ note: note == null ? null : String(note) }),
-      });
-      if (!r.ok) throw 0;
-      return await r.json();
-    } catch (e) { return { ok: false, error: 'offline' }; }
   },
   async morningBrief() {
     try { const r = await fetch('/api/morning-brief'); if (!r.ok) throw 0; return await r.json(); }
@@ -1850,8 +1834,6 @@ function renderPriceTable() {
   } else {
     filtered = filterByRange(filtered, STATE.priceRange);
   }
-  const search = ($('priceTableSearch').value || '').toLowerCase().trim();
-  if (search) filtered = filtered.filter(r => hasRemark(r) && combinedRemark(r).toLowerCase().includes(search));
 
   const sortKey = STATE.priceTableSort.key;
   const dir = STATE.priceTableSort.dir === 'asc' ? 1 : -1;
@@ -1868,28 +1850,10 @@ function renderPriceTable() {
   body.innerHTML = sorted.map(r => {
     const chg = r.change;
     const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
-    const has = hasRemark(r);
-    const userNote = r.user_note || '';
     // Build the Remark cell body: Gemini badge first (if any), then the
     // user's personal note on a separate line. The cell is wrapped in a
     // clickable role="button" so the user can open the popover (migrate-v7).
-    let inner = '';
-    if (has) {
-      const items = eachRemark(r);
-      const it = items[0];
-      const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other;
-      inner = `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r));
-    }
-    if (userNote) {
-      // Multi-line note rendered below the Gemini line, with an edit icon
-      // to signal that it's editable (migrate-v7).
-      inner += (inner ? '<br/>' : '')
-        + `<span class="user-remark-line">${icon('edit')}<span class="user-remark-text">${escapeHtml(userNote)}</span></span>`;
-    }
-    const hint = inner
-      ? `<span class="muted remark-edit-hint">${icon('edit')}</span>`
-      : `<span class="muted remark-add-hint">+ เพิ่ม note</span>`;
-    return `<tr class="${has || userNote ? 'has-remark' : ''}" data-date="${escapeHtml(r.date)}" title="คลิกเพื่อไฮไลต์จุดนี้บนกราฟ">
+    return `<tr data-date="${escapeHtml(r.date)}" title="คลิกเพื่อไฮไลต์จุดนี้บนกราฟ">
       <td class="th nowrap">${fmtThaiShort(r.date)}</td>
       <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
       <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
@@ -1897,15 +1861,11 @@ function renderPriceTable() {
       <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
       <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
       <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
-      <td class="th price-remark-cell" data-date="${escapeHtml(r.date)}" tabindex="0" role="button"
-          title="คลิกเพื่อเพิ่ม/แก้ไข note ส่วนตัว">
-        ${inner}${hint}
-      </td>
     </tr>`;
   }).join('');
   const countEl = $('priceTableCount');
   if (countEl) countEl.textContent = sorted.length.toLocaleString('en-US') + ' แถว';
-  if (!sorted.length) body.innerHTML = '<tr><td colspan="8" class="empty-state th">ไม่พบข้อมูล</td></tr>';
+  if (!sorted.length) body.innerHTML = '<tr><td colspan="7" class="empty-state th">ไม่พบข้อมูล</td></tr>';
 }
 
 /* ============== Thai Real-Estate Peer Snapshot ============== */
@@ -3177,132 +3137,6 @@ function refreshHiddenCount() {
 // (Removed — app uses bundled sample_data.js only; no upload needed for MVP demo.)
 
 /* ============== Event wiring ============== */
-// ============================================================================
-// Migrate-v7 — User-remark popover on the Daily Price Table.
-//
-// Click any cell in the Remark column to open this popover. It writes to a
-// separate `daily.user_note` column (not the Gemini-generated `remark`).
-// Optimistic UI: mutate the row locally first, then POST. On failure, roll
-// back and toast.
-// ============================================================================
-let ACTIVE_REMARK_POPOVER = null;  // { cleanup() } or null
-
-function closeRemarkPopover() {
-  if (!ACTIVE_REMARK_POPOVER) return;
-  ACTIVE_REMARK_POPOVER.cleanup();
-  ACTIVE_REMARK_POPOVER = null;
-}
-
-function positionPopover(pop, anchor) {
-  const r = anchor.getBoundingClientRect();
-  const PW = 360;
-  const PH_EST = 220;
-  const PAD = 8;
-  const scrollY = window.scrollY || window.pageYOffset;
-  const scrollX = window.scrollX || window.pageXOffset;
-  let top = scrollY + r.bottom + PAD;
-  let left = scrollX + r.left;
-  const vw = document.documentElement.clientWidth;
-  if (left + PW > scrollX + vw) {
-    left = Math.max(scrollX + PAD, scrollX + vw - PW - PAD);
-  }
-  // Flip above if not enough room below the cell.
-  if ((r.bottom + PH_EST) > (window.innerHeight - PAD)) {
-    top = scrollY + r.top - PH_EST - PAD;
-  }
-  pop.style.top  = Math.max(scrollY + PAD, top) + 'px';
-  pop.style.left = Math.max(scrollX + PAD, left) + 'px';
-}
-
-function openRemarkPopover(anchorCell, date) {
-  closeRemarkPopover();
-  const row = (DATA || []).find(r => r.date === date);
-  if (!row) return;
-  const initial = row.user_note || '';
-
-  // Backdrop = click-outside dismiss + click-elsewhere cancels save.
-  const backdrop = document.createElement('div');
-  backdrop.className = 'remark-popover-backdrop';
-  document.body.appendChild(backdrop);
-
-  const pop = document.createElement('div');
-  pop.className = 'remark-popover';
-  pop.innerHTML = `
-    <div class="remark-popover-head">
-      <strong class="th">My note — ${escapeHtml(fmtThaiShort(date))}</strong>
-      <button class="icon-btn" data-action="close" title="ปิด">${icon('x')}</button>
-    </div>
-    <textarea class="remark-popover-text th" rows="4" placeholder="พิมพ์ note ส่วนตัว...">${escapeHtml(initial)}</textarea>
-    <div class="remark-popover-actions">
-      <span class="muted th remark-popover-keys">${icon('check')} Cmd/Ctrl+Enter = save · Esc = close</span>
-      <div style="flex:1"></div>
-      <button class="btn btn-ghost th" data-action="clear" title="ลบ note">ลบ note</button>
-      <button class="btn btn-ghost th" data-action="cancel">ยกเลิก</button>
-      <button class="btn th remark-popover-save" data-action="save">บันทึก</button>
-    </div>
-  `;
-  document.body.appendChild(pop);
-  positionPopover(pop, anchorCell);
-
-  const textarea = pop.querySelector('textarea');
-  textarea.focus();
-  // Caret at the end so the user can keep typing without re-positioning.
-  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-
-  const onBackdrop = () => closeRemarkPopover();
-  const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); closeRemarkPopover(); return; }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      saveRemark();
-    }
-  };
-  backdrop.addEventListener('click', onBackdrop);
-  document.addEventListener('keydown', onKey);
-
-  pop.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    const action = btn.dataset.action;
-    if (action === 'close' || action === 'cancel') return closeRemarkPopover();
-    if (action === 'clear') { textarea.value = ''; textarea.focus(); return; }
-    if (action === 'save') return saveRemark();
-  });
-
-  async function saveRemark() {
-    const v = textarea.value;
-    const newNote = v.trim() || null;
-    // Optimistic update: change local row + re-render so the cell reflects it
-    // immediately, then POST. Rollback on failure.
-    row.user_note = newNote;
-    closeRemarkPopover();
-    renderPriceTable();
-    try {
-      const r = await window.ASW_API.dailyRemark(date, newNote);
-      if (!r || !r.ok) {
-        row.user_note = initial || null;
-        renderPriceTable();
-        showToast('บันทึก note ไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
-      } else {
-        showToast(newNote ? 'บันทึก note แล้ว' : 'ลบ note แล้ว');
-      }
-    } catch (err) {
-      row.user_note = initial || null;
-      renderPriceTable();
-      showToast('บันทึก note ไม่สำเร็จ');
-    }
-  }
-
-  ACTIVE_REMARK_POPOVER = {
-    cleanup() {
-      backdrop.remove();
-      pop.remove();
-      backdrop.removeEventListener('click', onBackdrop);
-      document.removeEventListener('keydown', onKey);
-    },
-  };
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   // Migrate-v7: inject SVG icons into static HTML placeholders (news toolbar).
   // The placeholders can't use ${icon(...)} because they're in HTML markup,
@@ -3377,26 +3211,10 @@ document.addEventListener('DOMContentLoaded', () => {
     STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
     refreshPrice();
   });
-  $('priceTableSearch').addEventListener('input', () => renderPriceTable());
-
-  // Migrate-v7: click/keyboard delegate on the price-table body so users can
-  // click any Remark cell to open the personal-note popover. Bound once.
+  // Click any price-table row → highlight that date on the price chart.
   const priceTableBody = $('priceTableBody');
-  if (priceTableBody && priceTableBody.dataset.popoverBound !== '1') {
-    priceTableBody.dataset.popoverBound = '1';
-    priceTableBody.addEventListener('click', (e) => {
-      const cell = e.target.closest('.price-remark-cell');
-      if (!cell) return;
-      openRemarkPopover(cell, cell.dataset.date);
-    });
-    priceTableBody.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const cell = e.target.closest('.price-remark-cell');
-      if (!cell) return;
-      e.preventDefault();
-      openRemarkPopover(cell, cell.dataset.date);
-    });
-    // Click any row → highlight that date on the price chart (table↔graph link)
+  if (priceTableBody && priceTableBody.dataset.focusBound !== '1') {
+    priceTableBody.dataset.focusBound = '1';
     priceTableBody.addEventListener('click', (e) => {
       const tr = e.target.closest('tr[data-date]');
       if (!tr) return;

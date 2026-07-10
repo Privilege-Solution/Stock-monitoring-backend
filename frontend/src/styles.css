@@ -227,7 +227,7 @@
     @apply text-negative;
   }
   .data-table-wrap {
-    @apply overflow-y-auto border border-border rounded-md;
+    @apply overflow-auto border border-border rounded-md;
   }
 
   /* === Tags / badges === */
@@ -758,6 +758,8 @@
 .price-remark-cell {
   cursor: pointer;
   position: relative;
+  max-width: 260px;
+  overflow-wrap: anywhere;
 }
 .price-remark-cell:hover {
   background: var(--surface-2);
@@ -768,7 +770,7 @@
 }
 .remark-edit-hint,
 .remark-add-hint {
-  display: inline-block;
+  display: inline;
   margin-left: 6px;
   font-size: 11px;
 }
