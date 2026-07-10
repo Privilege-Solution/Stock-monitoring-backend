@@ -472,9 +472,33 @@
     @apply grid gap-3 mb-3;
     grid-template-columns: 1fr 360px;
   }
+  /* Two-panel bottom row (daily data table + Thai-RE peer table).
+     Equal 1fr columns + align-items:stretch forces both CARDS to the same
+     height at every viewport. The inner table regions share one capped
+     max-height (--bottom-panel-maxh) so the side with more content scrolls
+     instead of stretching its card taller than the other — this is what
+     keeps the panels level, not just at one tested width. */
   .bottom-row {
-    @apply grid gap-3 items-stretch;
-    grid-template-columns: 1.4fr 1fr;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: stretch;
+    --bottom-panel-maxh: 380px;
+  }
+  /* Flex-column cards so the footer (pagination / footnote) can be pinned to
+     the bottom and the capped table region sits at the top. */
+  .bottom-row .card {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Shared cap on BOTH table regions → equal height, overflow scrolls. */
+  .bottom-row .data-table-wrap {
+    max-height: var(--bottom-panel-maxh);
+    overflow-y: auto;
+  }
+  /* Pin each card's last child (pagination / footnote) to the bottom. */
+  .bottom-row .card > *:last-child {
+    margin-top: auto;
   }
 
   /* === 52W range bar === */
@@ -704,9 +728,6 @@
     .chart-row {
       grid-template-columns: 1fr;
     }
-    .bottom-row {
-      grid-template-columns: 1fr;
-    }
   }
   @media (max-width: 1100px) {
     .app {
@@ -714,6 +735,11 @@
     }
     .sidebar .sidebar-label {
       display: none;
+    }
+    /* Stack the two bottom panels only below the desktop range so they stay
+       side-by-side (and equal-height) at 1280 / 1440 / 1920. */
+    .bottom-row {
+      grid-template-columns: 1fr;
     }
   }
 }
