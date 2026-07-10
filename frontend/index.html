@@ -370,7 +370,10 @@
 
       <div class="card">
         <div class="row-between mb-8">
-          <h3 class="th" style="font-size:13px;">ตารางรายละเอียด</h3>
+          <h3 class="th row" style="font-size:13px; gap:8px; align-items:baseline;">
+            ตารางรายละเอียด
+            <span class="muted th" id="priceTableCount" style="font-size:11px; font-weight:400;">—</span>
+          </h3>
           <input type="text" id="priceTableSearch" placeholder="กรอง Remark..."
                  class="th" style="font-size:12px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; width:240px;" />
         </div>
@@ -1837,7 +1840,7 @@ function renderPriceTable() {
   });
 
   const body = $('priceTableBody');
-  body.innerHTML = sorted.slice(0, 100).map(r => {
+  body.innerHTML = sorted.map(r => {
     const chg = r.change;
     const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
     const has = hasRemark(r);
@@ -1861,7 +1864,7 @@ function renderPriceTable() {
     const hint = inner
       ? `<span class="muted remark-edit-hint">${icon('edit')}</span>`
       : `<span class="muted remark-add-hint">+ เพิ่ม note</span>`;
-    return `<tr class="${has || userNote ? 'has-remark' : ''}">
+    return `<tr class="${has || userNote ? 'has-remark' : ''}" data-date="${escapeHtml(r.date)}" title="คลิกเพื่อไฮไลต์จุดนี้บนกราฟ">
       <td class="th nowrap">${fmtThaiShort(r.date)}</td>
       <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
       <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
@@ -1875,6 +1878,8 @@ function renderPriceTable() {
       </td>
     </tr>`;
   }).join('');
+  const countEl = $('priceTableCount');
+  if (countEl) countEl.textContent = sorted.length.toLocaleString('en-US') + ' แถว';
   if (!sorted.length) body.innerHTML = '<tr><td colspan="8" class="empty-state th">ไม่พบข้อมูล</td></tr>';
 }
 
@@ -2162,6 +2167,21 @@ function buildVolumeChart(filtered) {
       }
     }
   });
+}
+
+/* Click a price-table row → highlight that date on the price chart
+ * (active point + tooltip). Mirrors the dashboard's focusDashOnDate link,
+ * but non-destructive: it doesn't re-zoom the axis, just pins the tooltip
+ * so the table and graph stay visually connected. */
+function focusPriceOnDate(dateStr) {
+  if (!PRICE_CHART) return;
+  const ds = PRICE_CHART.data.datasets[0];
+  if (!ds || !ds.data) return;
+  const idx = ds.data.findIndex(p => String(p.x).slice(0, 10) === dateStr);
+  if (idx < 0) return;
+  PRICE_CHART.setActiveElements([{ datasetIndex: 0, index: idx }]);
+  PRICE_CHART.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }], { x: 0, y: 0 });
+  PRICE_CHART.update();
 }
 
 function renderPriceStats(filtered) {
@@ -3281,6 +3301,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!cell) return;
       e.preventDefault();
       openRemarkPopover(cell, cell.dataset.date);
+    });
+    // Click any row → highlight that date on the price chart (table↔graph link)
+    priceTableBody.addEventListener('click', (e) => {
+      const tr = e.target.closest('tr[data-date]');
+      if (!tr) return;
+      priceTableBody.querySelectorAll('tr.price-focused').forEach(x => x.classList.remove('price-focused'));
+      tr.classList.add('price-focused');
+      focusPriceOnDate(tr.dataset.date);
     });
   }
 

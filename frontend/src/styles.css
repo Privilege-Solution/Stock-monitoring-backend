@@ -205,6 +205,18 @@
   .data-table tbody tr:hover {
     @apply bg-surface;
   }
+  /* Price-view rows are clickable → pin that date on the chart. */
+  #priceTable tbody tr {
+    @apply cursor-pointer;
+  }
+  /* Row clicked to pin its date on the price chart (table↔graph link). */
+  .data-table tr.price-focused {
+    @apply bg-[#E7F1FB];
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+  .data-table tr.price-focused td {
+    @apply font-semibold;
+  }
   .data-table .num {
     @apply text-right tabular-nums;
   }
