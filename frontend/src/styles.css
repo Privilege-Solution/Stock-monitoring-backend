@@ -310,6 +310,76 @@
     text-decoration: line-through;
   }
 
+  /* === Date-grouped feed card (renderUnifiedNewsItem) ===
+   * 3-column row: meta (short date + weekday) | main (tag + headline +
+   * summary + note) | actions (note/hide). Scoped under the news view so the
+   * dashboard sidebar's .news-item-uniform cards are untouched. */
+  #view-news .news-card {
+    @apply flex items-start gap-3 px-4 py-2.5 border-b border-border bg-card transition-colors;
+  }
+  #view-news .news-card:last-child {
+    border-bottom: 0;
+  }
+  #view-news .news-card:hover {
+    @apply bg-surface;
+  }
+  #view-news .news-card-meta {
+    @apply shrink-0 flex flex-col;
+    width: 72px;
+  }
+  #view-news .news-card-date {
+    @apply text-[13px] font-semibold tabular-nums text-text;
+  }
+  #view-news .news-card-day {
+    @apply text-[11px] leading-tight;
+  }
+  #view-news .news-card-main {
+    @apply flex-1 min-w-0;
+  }
+  #view-news .news-card-tags {
+    @apply flex items-center gap-1.5 flex-wrap mb-1;
+  }
+  #view-news .news-card-src {
+    @apply text-[11px];
+  }
+  #view-news .news-card-title {
+    @apply block text-[14px] leading-snug text-text;
+  }
+  #view-news .news-card-title:hover {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+  #view-news .news-card.hidden-by-user {
+    opacity: 0.55;
+    background: var(--surface-2);
+  }
+  #view-news .news-card.hidden-by-user .news-card-title {
+    text-decoration: line-through;
+  }
+
+  /* Rounded search input with a leading magnifier icon, sitting in the feed
+   * toolbar. The <label> wraps the icon + input so clicking the icon focuses
+   * the field. */
+  .news-search-wrap {
+    @apply relative flex items-center;
+    flex: 1;
+    min-width: 200px;
+  }
+  .news-search-icon {
+    @apply absolute left-3 text-muted pointer-events-none inline-flex;
+  }
+  .news-search-icon .icon-svg {
+    width: 15px;
+    height: 15px;
+  }
+  .news-search-input {
+    @apply pl-9 pr-3 py-2 rounded-md border border-border bg-surface text-text w-full;
+  }
+  .news-search-input:focus {
+    @apply border-primary;
+    outline: none;
+  }
+
   /* === Migrate-v8: dashboard-sidebar uniform card ===
    *
    * Rendered by renderDashNewsCard() — every card (Stream A remark + Stream B
@@ -678,26 +748,44 @@
     color: var(--cat-color);
   }
 
-  /* Collapsible bucket section (Today / Yesterday / etc.). */
-  .feed-bucket {
-    @apply mb-2 rounded-lg border border-border overflow-hidden;
+  /* Date-grouped feed (replaces the old 5 relative buckets). One .news-day
+     section per calendar date; header is a collapsible toggle, body holds the
+     .news-card rows. Newest date renders first (driven by renderUnifiedNews). */
+  .news-day-groups {
+    @apply flex flex-col gap-3;
   }
-  .feed-bucket-toggle {
-    @apply w-full flex justify-between items-center px-4 py-2.5 bg-card border-0 text-text font-semibold cursor-pointer;
+  .news-day {
+    @apply rounded-lg border border-border overflow-hidden bg-card;
   }
-  .feed-bucket-toggle:hover {
+  .news-day-toggle {
+    @apply w-full flex items-center gap-2 px-4 py-2.5 bg-card border-0 text-text font-semibold cursor-pointer transition-colors;
+  }
+  .news-day-toggle:hover {
     @apply bg-surface;
   }
-  .feed-bucket-body {
-    @apply px-4 py-3 bg-surface;
+  .news-day-chevron {
+    @apply inline-flex text-muted transition-transform;
   }
-  .feed-bucket-body[hidden] {
-    display: none;
+  .news-day-chevron .icon-svg {
+    width: 16px;
+    height: 16px;
   }
-  .feed-bucket-count {
-    @apply text-xs text-muted font-normal bg-card px-2 py-0.5 rounded-full;
+  .news-day-toggle.collapsed .news-day-chevron {
+    transform: rotate(-90deg);
+  }
+  .news-day-date {
+    @apply flex-1 text-[14px];
+  }
+  .news-day-count {
+    @apply text-xs text-muted font-normal bg-surface px-2 py-0.5 rounded-full;
     min-width: 24px;
     text-align: center;
+  }
+  .news-day-body {
+    @apply bg-card;
+  }
+  .news-day-body[hidden] {
+    display: none;
   }
 
   /* Severity pill rendered on each Stream B item (high/medium/low). */

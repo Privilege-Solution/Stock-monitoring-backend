@@ -397,19 +397,23 @@
     <!-- ====================== News & Factors View (unified feed, migrate-v4) ====================== -->
     <section class="view" id="view-news">
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
+      <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
 
       <!-- Daily AI digest (one per ICT date, generated after the day's pulls) -->
       <div id="dailySummaryCard"></div>
 
-      <!-- Feed toolbar: search + range pills + refresh -->
+      <!-- Feed toolbar: search + day-count range pills + refresh -->
       <div class="card mb-16">
         <div class="feed-toolbar">
-          <input type="text" id="newsSearch" class="input th" placeholder="ค้นหา (ข่าวทั้ง remark และ feed)..." style="flex:1;min-width:200px;" />
+          <label class="news-search-wrap">
+            <span id="newsSearchIcon" class="news-search-icon" aria-hidden="true"></span>
+            <input type="text" id="newsSearch" class="input th news-search-input" placeholder="ค้นหาข่าว remark และ feed" />
+          </label>
           <div class="pill-row" id="newsRangePills">
-            <button class="pill th" data-range="Today">วันนี้</button>
-            <button class="pill th" data-range="1W">1W</button>
-            <button class="pill active th" data-range="1M">1M</button>
-            <button class="pill th" data-range="3M">3M</button>
+            <button class="pill th" data-range="7D">7 วัน</button>
+            <button class="pill th" data-range="10D">10 วัน</button>
+            <button class="pill th active" data-range="30D">30 วัน</button>
+            <button class="pill th" data-range="90D">90 วัน</button>
             <button class="pill th" data-range="ALL">ทั้งหมด</button>
           </div>
           <button class="pill th" id="newsShowHiddenBtn" data-active="false" title="แสดงข่าวที่ซ่อนไว้">
@@ -420,62 +424,24 @@
           </button>
         </div>
         <div class="feed-cat-row">
-          <span class="muted th feed-cat-label">หมวด:</span>
           <div class="pill-row feed-cat-pills" id="newsCatPills">
             <button class="pill th active" data-cat="__all">ทั้งหมด</button>
-            <button class="pill th" data-cat="COMPANY">COMPANY</button>
-            <button class="pill th" data-cat="COMPETITOR">COMPETITOR</button>
-            <button class="pill th" data-cat="RATES">RATES</button>
-            <button class="pill th" data-cat="GOV_POLICY">GOV_POLICY</button>
-            <button class="pill th" data-cat="POLITICS">POLITICS</button>
-            <button class="pill th" data-cat="INDUSTRY">INDUSTRY</button>
-            <button class="pill th" data-cat="MACRO">MACRO</button>
+            <button class="pill th" data-cat="COMPANY">บริษัท</button>
+            <button class="pill th" data-cat="COMPETITOR">คู่แข่ง</button>
+            <button class="pill th" data-cat="RATES">อัตราดอกเบี้ย</button>
+            <button class="pill th" data-cat="GOV_POLICY">นโยบายรัฐ</button>
+            <button class="pill th" data-cat="POLITICS">การเมือง</button>
+            <button class="pill th" data-cat="INDUSTRY">อุตสาหกรรมอสังหาฯ</button>
+            <button class="pill th" data-cat="MACRO">มหภาค</button>
           </div>
         </div>
       </div>
 
-      <!-- 5 bucket sections (severity-first sort within each) -->
-      <section class="feed-bucket" data-bucket="today">
-        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
-          <span>📌 วันนี้</span>
-          <span class="feed-bucket-count" id="count-today">0</span>
-        </button>
-        <div class="feed-bucket-body" id="bucket-today"></div>
-      </section>
+      <!-- Date-grouped feed: rendered by renderUnifiedNews() into groups of
+           <header toggle> + <body of cards>, newest date first. -->
+      <div id="newsDayGroups" class="news-day-groups"></div>
 
-      <section class="feed-bucket" data-bucket="yesterday">
-        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
-          <span>📅 เมื่อวาน</span>
-          <span class="feed-bucket-count" id="count-yesterday">0</span>
-        </button>
-        <div class="feed-bucket-body" id="bucket-yesterday"></div>
-      </section>
-
-      <section class="feed-bucket" data-bucket="this_week">
-        <button class="feed-bucket-toggle th" type="button" aria-expanded="true">
-          <span>🗓️ สัปดาห์นี้ (2–6 วันที่แล้ว)</span>
-          <span class="feed-bucket-count" id="count-this_week">0</span>
-        </button>
-        <div class="feed-bucket-body" id="bucket-this_week"></div>
-      </section>
-
-      <section class="feed-bucket" data-bucket="last_week">
-        <button class="feed-bucket-toggle th" type="button" aria-expanded="false">
-          <span>📆 สัปดาห์ที่แล้ว (7–13 วัน)</span>
-          <span class="feed-bucket-count" id="count-last_week">0</span>
-        </button>
-        <div class="feed-bucket-body" id="bucket-last_week" hidden></div>
-      </section>
-
-      <section class="feed-bucket" data-bucket="older">
-        <button class="feed-bucket-toggle th" type="button" aria-expanded="false">
-          <span>🗄️ เก่ากว่านั้น</span>
-          <span class="feed-bucket-count" id="count-older">0</span>
-        </button>
-        <div class="feed-bucket-body" id="bucket-older" hidden></div>
-      </section>
-
-      <div id="unifiedEmpty" class="empty-state th" hidden>— ไม่พบข่าวในช่วงเวลานี้ —</div>
+      <div id="unifiedEmpty" class="empty-state th" hidden>— ไม่พบข่าวที่ตรงกับเงื่อนไขที่เลือก —</div>
 
       <!-- Pipeline status row (bottom of feed) -->
       <div class="card mt-16">
@@ -977,9 +943,9 @@ const STATE = {
   focusedDate: null,
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
-  newsRange: '1M',       // 'Today' | '1W' | '1M' | '3M' | 'ALL'
+  newsRange: '30D',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  (day-count filters; 30 วัน default)
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
-  newsCollapsed: { last_week: true, older: true },  // today/yesterday/this_week expanded by default
+  newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
   // User-action state (migrate-v6): hide toggle, note cache, toast timer.
   newsShowHidden: false, // when true, buildMergedNewsItems() includes hidden rows
   hiddenNewsCache: [],   // populated lazily on first toggle; appended into NEWS_DATA
@@ -1036,6 +1002,15 @@ const fmtThaiShort = (d) => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
   return dt.getDate() + '/' + (dt.getMonth()+1) + '/' + ((dt.getFullYear()+543) % 100);
+};
+// Thai weekday (e.g. "วันพุธ") for a 'YYYY-MM-DD' string. News items only
+// store a date (no time), so the card meta shows weekday + short date rather
+// than a clock time.
+const fmtThaiWeekday = (d) => {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  if (isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString('th-TH', { weekday: 'long' });
 };
 const showToast = (msg) => {
   const t = $('toast');
@@ -1163,14 +1138,20 @@ const REMARK_BADGE = {
   //   POLITICS   — general political news (not housing-specific)
   //   INDUSTRY   — RE market trends / peer activity / supply-demand
   //   MACRO      — broad economic indicators (GDP/CPI/FX/trade)
-  COMPANY:    { label: 'COMPANY',     cls: 'cat-company',    color: '#1D9E75' },
-  COMPETITOR: { label: 'คู่แข่ง',      cls: 'cat-competitor', color: '#C2185B' },
-  RATES:      { label: 'RATES',       cls: 'cat-rates',      color: '#A32D2D' },
-  GOV_POLICY: { label: 'GOV_POLICY',  cls: 'cat-gov-policy', color: '#7F77DD' },
-  POLITICS:   { label: 'POLITICS',    cls: 'cat-politics',   color: '#EF9F27' },
-  INDUSTRY:   { label: 'INDUSTRY',    cls: 'cat-industry',   color: '#3B8BD4' },
-  MACRO:      { label: 'MACRO',       cls: 'cat-macro',      color: '#185FA5' },
+  COMPANY:    { label: 'COMPANY',     thaiLabel: 'บริษัท',            cls: 'cat-company',    color: '#1D9E75' },
+  COMPETITOR: { label: 'คู่แข่ง',      thaiLabel: 'คู่แข่ง',             cls: 'cat-competitor', color: '#C2185B' },
+  RATES:      { label: 'RATES',       thaiLabel: 'อัตราดอกเบี้ย',       cls: 'cat-rates',      color: '#A32D2D' },
+  GOV_POLICY: { label: 'GOV_POLICY',  thaiLabel: 'นโยบายรัฐ',          cls: 'cat-gov-policy', color: '#7F77DD' },
+  POLITICS:   { label: 'POLITICS',    thaiLabel: 'การเมือง',           cls: 'cat-politics',   color: '#EF9F27' },
+  INDUSTRY:   { label: 'INDUSTRY',    thaiLabel: 'อุตสาหกรรมอสังหาฯ',  cls: 'cat-industry',   color: '#3B8BD4' },
+  MACRO:      { label: 'MACRO',       thaiLabel: 'มหภาค',             cls: 'cat-macro',      color: '#185FA5' },
 };
+
+// Thai display label for a taxonomy-v2 category key. Falls back to the raw
+// key for any unknown value so old/offline rows still render something.
+// Used by both the category tabs (HTML is static, but kept consistent here)
+// and the colored tag inside each news card (renderUnifiedNewsItem).
+const catLabel = (cat) => (REMARK_BADGE[cat] && REMARK_BADGE[cat].thaiLabel) || cat;
 
 // Note: impact_level is still stored in the DB (column 14, added by
 // migrate-v9) and emitted by the Gemini / RSS classifiers, but the UI
@@ -1769,14 +1750,16 @@ function bucketByRelativeDate(dateStr, nowStr) {
 }
 
 // Unified-feeds range filter. Reuses STATE.newsRange so the pills stay in
-// sync with whatever the user clicked. 'Today' = today only; 'ALL' = no cap.
+// sync with whatever the user clicked. 'ALL' = no cap; the day-count keys
+// (7D/10D/30D/90D) cap to a rolling N-day window. Legacy 'Today' is kept so
+// any stale callers still resolve, but no toolbar pill emits it anymore.
 function inNewsRange(dateStr, range) {
   if (!dateStr) return true;
   if (!range || range === 'ALL') return true;
   if (range === 'Today') {
     return dateStr === new Date().toISOString().slice(0, 10);
   }
-  const days = { '1W': 7, '1M': 30, '3M': 90, '6M': 180 }[range];
+  const days = { '7D': 7, '10D': 10, '30D': 30, '90D': 90, '1W': 7, '1M': 30, '3M': 90, '6M': 180 }[range];
   if (!days) return true;
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   return dateStr >= cutoff;
@@ -2310,7 +2293,6 @@ function syncNewsCatPills() {
 }
 
 function renderUnifiedNews() {
-  const today = new Date().toISOString().slice(0, 10);
   let items = buildMergedNewsItems();
   // Range filter (uses STATE.newsRange — matches toolbar pills).
   items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
@@ -2318,43 +2300,55 @@ function renderUnifiedNews() {
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
   // Migrate-v9 + 1:1 single-select: when not on "ทั้งหมด", keep only items
-  // whose category equals the selected chip. The DB stores one of the 6
-  // taxonomy-v2 keys directly (COMPANY / RATES / GOV_POLICY / POLITICS /
-  // INDUSTRY / MACRO), so the check is direct equality — no bucketFor()
-  // collapse needed. Items whose category isn't a known key are dropped
-  // from filtered views, matching what migrate-v9.js wrote to the DB.
+  // whose category equals the selected chip. The DB stores one of the
+  // taxonomy-v2 keys directly (COMPANY / COMPETITOR / RATES / GOV_POLICY /
+  // POLITICS / INDUSTRY / MACRO), so the check is direct equality — no
+  // bucketFor() collapse needed. Items whose category isn't a known key are
+  // dropped from filtered views, matching what migrate-v9.js wrote to the DB.
   if (STATE.newsCats !== '__all') {
     const want = STATE.newsCats;
     items = items.filter(it => it.category === want);
   }
-  // Sort: priority desc, then date desc.
+  // Sort: date desc primary, then severity/priority desc WITHIN a date. The
+  // date-first ordering is what makes the date-grouped feed read naturally
+  // (newest day on top, most-important item first within each day).
   items.sort((a, b) => {
+    const dd = (b.date || '').localeCompare(a.date || '');
+    if (dd !== 0) return dd;
     const pa = (a.display_priority != null) ? a.display_priority : priorityForItem(a);
     const pb = (b.display_priority != null) ? b.display_priority : priorityForItem(b);
-    if (pa !== pb) return pb - pa;
-    return (b.date || '').localeCompare(a.date || '');
+    return pb - pa;
   });
-  // Bucket into 5 groups.
-  const buckets = { today: [], yesterday: [], this_week: [], last_week: [], older: [] };
-  items.forEach(it => buckets[bucketByRelativeDate(it.date, today)].push(it));
-  // Render each bucket body + count badge + collapsed flag.
-  ['today', 'yesterday', 'this_week', 'last_week', 'older'].forEach(b => {
-    const list = buckets[b];
-    const body = $('bucket-' + b);
-    const badge = $('count-' + b);
-    if (!body || !badge) return;
-    badge.textContent = list.length;
-    body.hidden = !!STATE.newsCollapsed[b];
-    body.innerHTML = list.length
-      ? list.map(renderUnifiedNewsItem).join('')
-      : '<div class="muted th" style="font-size:11px;padding:8px;">— ไม่มีข่าว —</div>';
+  // Group by calendar date (YYYY-MM-DD). Because the array is date-sorted,
+  // Map insertion order is already newest-first — no re-sort of the keys.
+  const groups = new Map();
+  items.forEach(it => {
+    const k = it.date || '—';
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(it);
   });
-  // Empty state when search/range filtered everything out.
+  // Render one <header toggle> + <body> block per date into the container.
+  const container = $('newsDayGroups');
+  if (container) {
+    container.innerHTML = items.length
+      ? [...groups.entries()].map(([date, list]) => {
+          const collapsed = !!STATE.newsCollapsed[date];
+          return `<section class="news-day">
+            <button class="news-day-toggle th" type="button" data-date="${escapeHtml(date)}" aria-expanded="${!collapsed}">
+              <span class="news-day-chevron">${icon('chevron-down')}</span>
+              <span class="news-day-date">${escapeHtml(fmtThaiDate(date))}</span>
+              <span class="news-day-count">${list.length} ข่าว</span>
+            </button>
+            <div class="news-day-body" data-date="${escapeHtml(date)}"${collapsed ? ' hidden' : ''}>
+              ${list.map(renderUnifiedNewsItem).join('')}
+            </div>
+          </section>`;
+        }).join('')
+      : '';
+  }
+  // Empty state when search/range/category filtered everything out.
   const empty = $('unifiedEmpty');
   if (empty) empty.hidden = items.length > 0;
-  // Note: click handlers for .news-item[data-date] are bound globally on
-  // document.body (lines ~3261-3270). They jump to Dashboard and focus the
-  // chart on the event date — no per-render rebind needed.
 }
 
 function renderUnifiedNewsItem(item) {
@@ -2362,11 +2356,10 @@ function renderUnifiedNewsItem(item) {
   // feed never has to choose between `<a>` and `<span>` rendering. Every
   // item here is guaranteed to have a non-empty url (enforced by the
   // buildMergedNewsItems() filter) and opens in a new tab on click.
-  // Migrate-v9: badge label + color come from the 6 taxonomy-v2 keys
-  // (COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO) — direct
-  // lookup, no bucketFor() collapse. Matches the chip the user clicked.
+  // Badge color comes from the taxonomy-v2 key; the displayed label is the
+  // Thai thaiLabel (catLabel) so the tag matches the Thai category tab the
+  // user clicked.
   const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
-  const dateStr = fmtThaiShort(item.date);
   const sev = classifySeverity(item);
   // Suppress the low pill for low severity — it would be visual noise on
   // every feed item (Stream B rows default to low).
@@ -2392,10 +2385,18 @@ function renderUnifiedNewsItem(item) {
   const hideTitle = item.hidden ? 'แสดงกลับ (unhide)' : 'ซ่อนข่าวนี้ (hide)';
   const hideIcon  = item.hidden ? icon('eye') : icon('eye-off');
   const noteTitle = item.user_note ? 'แก้ไข note' : 'เพิ่ม note';
-  return `<div class="news-item feed-dash-item${hiddenCls}"${idAttr}>
-    <div class="news-date th">${dateStr} · <span class="muted">${escapeHtml(item.sourceLabel || '')}</span>${sevPill}</div>
-    <div>
-      <div><span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span> <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="th news-text-link">${escapeHtml(item.text)}</a></div>
+  const src = item.sourceLabel ? `<span class="news-card-src muted th">${escapeHtml(item.sourceLabel)}</span>` : '';
+  // 3-column card: meta (date+weekday) | main (tag+headline+summary+note) | actions.
+  return `<div class="news-card${hiddenCls}"${idAttr}>
+    <div class="news-card-meta th">
+      <div class="news-card-date">${escapeHtml(fmtThaiShort(item.date))}</div>
+      <div class="news-card-day muted">${escapeHtml(fmtThaiWeekday(item.date))}</div>
+    </div>
+    <div class="news-card-main">
+      <div class="news-card-tags">
+        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}
+      </div>
+      <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>
       ${summaryHtml}
       ${noteHtml}
     </div>
@@ -3143,6 +3144,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // not JS template literals.
   const shI = $('newsShowHiddenIcon'); if (shI) shI.innerHTML = icon('eye-off');
   const rfI = $('newsRefreshIcon');   if (rfI) rfI.innerHTML = icon('refresh');
+  const scI = $('newsSearchIcon');    if (scI) scI.innerHTML = icon('search');
 
   // Sidebar
   document.querySelectorAll('.sidebar-item').forEach(b => {
@@ -3265,16 +3267,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   syncNewsCatPills();
-  document.querySelectorAll('.feed-bucket-toggle').forEach(b => {
-    b.addEventListener('click', () => {
-      const key = b.dataset.bucket;
-      if (!key || !STATE.newsCollapsed) return;
+  // Date-group collapse: delegated on the persistent #newsDayGroups
+  // container (its innerHTML is rebuilt every render, so per-button binding
+  // would leak — delegation survives). Clicking a day header toggles that
+  // date's body + aria-expanded and records the state in STATE.newsCollapsed
+  // keyed by the 'YYYY-MM-DD' date string.
+  const dayGroups = $('newsDayGroups');
+  if (dayGroups && dayGroups.dataset.daysBound !== '1') {
+    dayGroups.dataset.daysBound = '1';
+    dayGroups.addEventListener('click', (e) => {
+      const toggle = e.target.closest('.news-day-toggle');
+      if (!toggle) return;
+      const key = toggle.dataset.date;
+      if (!key) return;
       STATE.newsCollapsed[key] = !STATE.newsCollapsed[key];
-      const body = $('bucket-' + key);
-      if (body) body.hidden = STATE.newsCollapsed[key];
-      b.setAttribute('aria-expanded', String(!STATE.newsCollapsed[key]));
+      const collapsed = STATE.newsCollapsed[key];
+      const body = toggle.parentElement.querySelector('.news-day-body');
+      if (body) body.hidden = collapsed;
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.classList.toggle('collapsed', collapsed);
     });
-  });
+  }
   // News refresh button — POST /api/news/refresh (default = gemini-sector)
   // then reload the feed and the status row.
   const newsRefreshBtn = $('newsRefreshBtn');
