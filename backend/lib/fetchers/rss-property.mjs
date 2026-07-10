@@ -25,6 +25,7 @@
 // =============================================================================
 
 import db from '../../db.js';
+import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
 
 const QUERIES = [
   { q: 'อสังหาริมทรัพย์+ไทย',  category: 'sector_data',  pipeline: 'sector' },
@@ -194,7 +195,11 @@ function parseItem(itemXml, query) {
   return {
     title: headline,
     date: date.toISOString().slice(0, 10),
-    category: query.category,
+    // Classify through the shared taxonomy so rss-property rows emit the same
+    // 7 keys (COMPANY/COMPETITOR/RATES/GOV_POLICY/POLITICS/INDUSTRY/MACRO) the
+    // frontend filters on — previously this wrote the legacy query hint
+    // (sector_data / interest_rate / peer_news …) which matched no chip.
+    category: classifyCategory(headline, query.category),
     source_url: link,                 // Google News redirect (valid link)
     source_label: sourceName || 'Google News',
     title_hash: titleHash,
@@ -204,6 +209,7 @@ function parseItem(itemXml, query) {
     show_pin: false,
     summary: null,
     display_priority: displayPriority,
+    impact_level: impactLevelFromSeverity('medium'),
   };
 }
 

@@ -401,6 +401,9 @@
     <section class="view" id="view-news">
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
 
+      <!-- Daily AI digest (one per ICT date, generated after the day's pulls) -->
+      <div id="dailySummaryCard"></div>
+
       <!-- Feed toolbar: search + range pills + refresh -->
       <div class="card mb-16">
         <div class="feed-toolbar">
@@ -424,6 +427,7 @@
           <div class="pill-row feed-cat-pills" id="newsCatPills">
             <button class="pill th active" data-cat="__all">ทั้งหมด</button>
             <button class="pill th" data-cat="COMPANY">COMPANY</button>
+            <button class="pill th" data-cat="COMPETITOR">COMPETITOR</button>
             <button class="pill th" data-cat="RATES">RATES</button>
             <button class="pill th" data-cat="GOV_POLICY">GOV_POLICY</button>
             <button class="pill th" data-cat="POLITICS">POLITICS</button>
@@ -842,6 +846,26 @@ window.ASW_API = {
     try { const r = await fetch('/api/morning-brief/refresh', { method: 'POST' }); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { ok: false, error: 'offline' }; }
   },
+  // Daily news digest (migrate-v10). ?date=YYYY-MM-DD optional (defaults to
+  // latest). Returns {date, digest, tone, reason, source_count, generated_at}.
+  async dailySummary(date) {
+    try {
+      const qs = date ? `?date=${encodeURIComponent(date)}` : '';
+      const r = await fetch('/api/daily-summary' + qs);
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { date: null, digest: null }; }
+  },
+  async dailySummaryRefresh(date) {
+    try {
+      const body = date ? JSON.stringify({ date }) : undefined;
+      const r = await fetch('/api/daily-summary/refresh', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body,
+      });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
 };
 </script>
 
@@ -1156,6 +1180,7 @@ const REMARK_BADGE = {
   //   INDUSTRY   — RE market trends / peer activity / supply-demand
   //   MACRO      — broad economic indicators (GDP/CPI/FX/trade)
   COMPANY:    { label: 'COMPANY',     cls: 'cat-company',    color: '#1D9E75' },
+  COMPETITOR: { label: 'คู่แข่ง',      cls: 'cat-competitor', color: '#C2185B' },
   RATES:      { label: 'RATES',       cls: 'cat-rates',      color: '#A32D2D' },
   GOV_POLICY: { label: 'GOV_POLICY',  cls: 'cat-gov-policy', color: '#7F77DD' },
   POLITICS:   { label: 'POLITICS',    cls: 'cat-politics',   color: '#EF9F27' },
@@ -2539,6 +2564,7 @@ async function loadNewsStatus() {
       <span><span class="dot ${dotClass(s.lastRuns.sector)}"></span> <strong>sector</strong> · ${fmtRun(s.lastRuns.sector)}</span>
       <span><span class="dot ${dotClass(s.lastRuns.macro)}"></span> <strong>macro</strong> · ${fmtRun(s.lastRuns.macro)}</span>
       <span><span class="dot ${dotClass(s.lastRuns.brief)}"></span> <strong>brief</strong> · ${fmtRun(s.lastRuns.brief)}</span>
+      <span><span class="dot ${dotClass(s.lastRuns['daily-summary'])}"></span> <strong>สรุปวัน</strong> · ${fmtRun(s.lastRuns['daily-summary'])}</span>
     </div>
     <div class="muted th mt-8" style="font-size:11px;">
       📊 ทั้งหมด <strong>${s.counts.total}</strong> รายการ · high <strong>${s.counts.high}</strong> · priority ≥75 <strong>${s.counts.high_priority}</strong> · วันนี้ <strong>${s.counts.today}</strong>
@@ -2603,6 +2629,73 @@ function renderMorningBrief() {
         : ''}
     </div>
   `;
+}
+
+// Daily news digest card (top of News view) — migrate-v10. One AI summary
+// per ICT date of that day's news_feed rows. Cached in window.DAILY_SUMMARY
+// (filled on bootstrap + by the regenerate button); renderDailySummary() is
+// called from refreshNews() so opening the News view paints the cached card.
+async function loadDailySummary() {
+  const s = await window.ASW_API.dailySummary();
+  window.DAILY_SUMMARY = s || null;
+  renderDailySummary();
+}
+
+function renderDailySummary() {
+  const el = $('dailySummaryCard');
+  if (!el) return;
+  const s = window.DAILY_SUMMARY || {};
+  if (!s || !s.date || !s.digest) {
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกด "รีเฟรชสรุป" —</div>';
+    return;
+  }
+  const bullets = String(s.digest).split('\n').map(x => x.trim()).filter(Boolean);
+  const tone = (s.tone || 'neutral').toLowerCase();
+  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
+  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const dt = new Date(s.date + 'T00:00:00');
+  const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  const updated = s.generated_at
+    ? ' · อัปเดต ' + new Date(s.generated_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) + ' น.'
+    : '';
+  el.innerHTML = `
+    <div class="card mb-16">
+      <div class="row-between mb-12">
+        <div>
+          <span class="muted th" style="font-size:11px;">🤖 สรุปข่าวประจำวัน</span>
+          <h3 class="th" style="font-size:15px;margin:4px 0 0 0;">${escapeHtml(dateStr)}</h3>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:13px;padding:6px 12px;">${escapeHtml(toneLabel)}</span>
+          <button class="btn btn-ghost" id="dailySummaryRefreshBtn" title="สร้างสรุปข่าววันนี้ใหม่"><span class="th" style="font-size:12px;">🔄 รีเฟรชสรุป</span></button>
+        </div>
+      </div>
+      ${bullets.length
+        ? `<ul class="th" style="margin:0 0 8px 0;padding-left:20px;line-height:1.7;">
+            ${bullets.map(b => `<li>${escapeHtml(b.replace(/^-\s*/, ''))}</li>`).join('')}
+          </ul>`
+        : ''}
+      ${s.reason ? `<div class="muted th" style="font-size:12px;font-style:italic;">${escapeHtml(s.reason)}</div>` : ''}
+      <div class="muted th" style="font-size:11px;margin-top:8px;">สรุปจากข่าว ${s.source_count != null ? s.source_count : '?'} รายการของวันนี้${escapeHtml(updated)}</div>
+    </div>
+  `;
+  const btn = $('dailySummaryRefreshBtn');
+  if (btn) btn.addEventListener('click', refreshDailySummary);
+}
+
+async function refreshDailySummary() {
+  const btn = $('dailySummaryRefreshBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await window.ASW_API.dailySummaryRefresh();
+    if (r && r.ok) {
+      await loadDailySummary();   // reload the freshly-generated digest
+    } else {
+      alert('สร้างสรุปไม่สำเร็จ: ' + ((r && (r.error || r.reason)) || 'unknown'));
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ============== Report Builder Wizard ============== */
@@ -3065,6 +3158,7 @@ function refreshNews() {
   // Wrap each step so a UI failure (e.g. canvas missing) doesn't take down
   // loadNewsStatus() — the status row should still populate.
   try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
+  try { renderDailySummary(); } catch (e) { console.warn('refreshNews: renderDailySummary failed:', e.message); }
   loadNewsStatus();
   refreshHiddenCount();
 }
@@ -3520,11 +3614,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // data on first paint (no need to wait for the user to click Feed tab).
   (async () => {
     try {
-      const [rows, meta, newsRows, brief] = await Promise.all([
+      const [rows, meta, newsRows, brief, dailySummary] = await Promise.all([
         window.ASW_API.daily(),
         window.ASW_API.metadata(),
         window.ASW_API.newsFeed(),
         window.ASW_API.morningBrief(),
+        window.ASW_API.dailySummary(),
       ]);
       if (rows && rows.length) {
         DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -3537,6 +3632,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       if (brief && brief.date) {
         window.MORNING_BRIEF = brief;
+      }
+      if (dailySummary && dailySummary.date) {
+        window.DAILY_SUMMARY = dailySummary;
       }
       if (meta && meta.lastFetchSource) {
         CURRENT_FILE_NAME = meta.lastFetchSource === 'bundled' ? 'sample_data.js' : ('Live · ' + meta.lastFetchSource);

@@ -432,6 +432,48 @@ app.post('/api/morning-brief/refresh', async (req, res) => {
   }
 });
 
+// --- Daily news summary (Gemini-search: gemini-daily-summary) ---
+//
+// One AI digest per ICT date of that day's news_feed rows, generated after the
+// day's final pull (chained into the rss-extended cron below). Source news
+// rows are kept untouched — the digest is additive.
+
+// Read the latest digest, or a specific date via ?date=YYYY-MM-DD.
+app.get('/api/daily-summary', async (req, res) => {
+  try {
+    const date = req.query.date || null;
+    const row = await db.readDailySummary(date);
+    res.json(row || {
+      date: null, digest: null, tone: null, reason: null,
+      bullets: null, source_count: null, generated_at: null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'daily_summary_failed' });
+  }
+});
+
+// Manually (re)generate a digest. Body may pass {date} to backfill a past day;
+// defaults to today. Gated on GEMINI_API_KEY.
+app.post('/api/daily-summary/refresh', async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(400).json({
+      ok: false,
+      error: 'GEMINI_API_KEY not set in server environment',
+      code: 'gemini_key_missing',
+    });
+  }
+  const sinceDate = (req.body && req.body.date) || null;
+  const id = await db.logFetchStart();
+  try {
+    const result = await runFetch({ source: 'gemini-daily-summary', sinceDate });
+    await db.logFetchFinish(id, result.ok ? 1 : 0, 'gemini-daily-summary', result.ok ? 1 : 0, 0, result.error || null);
+    res.json({ ok: result.ok, ...result });
+  } catch (e) {
+    await db.logFetchFinish(id, 0, 'gemini-daily-summary', 0, 0, String(e.message || e));
+    res.json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // --- Bootstrap ---
 
 db.openDb();
@@ -646,6 +688,24 @@ cron.schedule('30 11 * * *', async () => {
   } catch (e) {
     await db.logFetchFinish(id, 0, 'rss-extended', 0, 0, String(e.message || e));
     console.error('[scheduler] rss-extended failed:', e.message || e);
+  }
+
+  // Daily digest — chained after the day's final news pull so it summarizes
+  // the full day's news_feed rows. rss-extended is the last pull (after the
+  // 17:30–17:55 Gemini pulls + market-hours/18:00 rss-property pulls), so this
+  // runs "after the pull" by construction. Gated on GEMINI_API_KEY and run in
+  // its OWN try/catch with its own fetch_log entry so a summary failure never
+  // marks rss-extended (or the day's news) as failed.
+  if (process.env.GEMINI_API_KEY) {
+    const sid = await db.logFetchStart();
+    try {
+      const s = await runFetch({ source: 'gemini-daily-summary' });
+      await db.logFetchFinish(sid, s.ok ? 1 : 0, 'gemini-daily-summary', s.ok ? 1 : 0, 0, s.error || null);
+      console.log(`[scheduler] gemini-daily-summary ok date=${s.date || '∅'} tone=${s.tone || '∅'} items=${s.sourceCount != null ? s.sourceCount : '∅'}`);
+    } catch (e) {
+      await db.logFetchFinish(sid, 0, 'gemini-daily-summary', 0, 0, String(e.message || e));
+      console.error('[scheduler] gemini-daily-summary failed:', e.message || e);
+    }
   }
 }, { timezone: 'Asia/Bangkok' });
 

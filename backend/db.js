@@ -165,6 +165,20 @@ async function ensureSchema() {
       rows_updated INTEGER,
       error        TEXT
     );
+
+    -- Per-day AI digest of news_feed (migrate-v10). One row per ICT date,
+    -- upserted on each run. Dedicated table (not the daily price row) so a
+    -- summary can be written even on a non-trading day with no price row, and
+    -- so backfilling a past date is a clean upsert.
+    CREATE TABLE IF NOT EXISTS news_daily_summary (
+      date         TEXT PRIMARY KEY,
+      digest       TEXT,            -- newline-separated KEY_POINTS bullets
+      tone         TEXT,            -- bullish | bearish | neutral
+      reason       TEXT,            -- 1-sentence rationale (for ASW)
+      bullets      JSONB,           -- future: structured {CATEGORY: [...]}
+      source_count INTEGER,         -- how many news_feed rows were summarized
+      generated_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -426,6 +440,61 @@ async function readMorningBrief() {
   return r.rows[0] || null;
 }
 
+// =============================================================================
+// Daily news summary (gemini-search 'gemini-daily-summary' source)
+//
+// One AI digest per ICT date, written after the day's final news pull. Upsert
+// so re-runs (manual refresh / backfill of a past date) regenerate cleanly.
+// Source news_feed rows are NEVER modified by this path — the summary is
+// additive.
+// =============================================================================
+
+async function upsertDailySummary(date, {
+  digest = null, tone = null, reason = null, bullets = null, sourceCount = null,
+} = {}) {
+  await getPool().query(
+    `INSERT INTO news_daily_summary (date, digest, tone, reason, bullets, source_count, generated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (date) DO UPDATE SET
+       digest       = EXCLUDED.digest,
+       tone         = EXCLUDED.tone,
+       reason       = EXCLUDED.reason,
+       bullets      = EXCLUDED.bullets,
+       source_count = EXCLUDED.source_count,
+       generated_at = EXCLUDED.generated_at`,
+    [date, digest, tone, reason, bullets, sourceCount, new Date().toISOString()]
+  );
+}
+
+// Latest digest, or a specific date when passed. Ordered by date DESC so the
+// default returns the most recent day that has a digest.
+async function readDailySummary(date = null) {
+  const p = getPool();
+  const sql = `SELECT date, digest, tone, reason, bullets, source_count, generated_at
+                 FROM news_daily_summary`;
+  if (date) {
+    const r = await p.query(sql + ' WHERE date = $1', [date]);
+    return r.rows[0] || null;
+  }
+  const r = await p.query(sql + ' ORDER BY date DESC LIMIT 1');
+  return r.rows[0] || null;
+}
+
+// All news_feed rows for one ICT date — the input the daily summary digests.
+// hidden rows are excluded (user-dismissed). Capped at 500 to bound the prompt.
+async function readNewsFeedForDate(date) {
+  const p = getPool();
+  const r = await p.query(
+    `SELECT id, title, date, category, source_label, severity, impact_level, display_priority
+       FROM news_feed
+       WHERE date = $1 AND hidden = FALSE
+       ORDER BY display_priority DESC, id DESC
+       LIMIT 500`,
+    [date]
+  );
+  return r.rows;
+}
+
 // ── peer_prices ────────────────────────────────────────────────────────────
 
 // peers is an array of arrays: peers[i] is the price series for the i-th ticker.
@@ -639,7 +708,7 @@ async function setNewsNote(id, note) {
 // + medium severity), the bar the unified feed renders as a pin.
 async function readNewsStatus() {
   const p = getPool();
-  const sources = ['gemini-company', 'gemini-sector', 'gemini-macro', 'gemini-morning-brief'];
+  const sources = ['gemini-company', 'gemini-sector', 'gemini-macro', 'gemini-morning-brief', 'gemini-daily-summary'];
   const lastRuns = {};
   // 4 simple queries — fetch_log is small (append-only). Could be combined
   // into one LATERAL but readability wins here.
@@ -690,6 +759,9 @@ module.exports = {
   appendRemarkPin,      // v3 — MACRO pipeline appends high-severity pins here
   updateMorningBrief,   // v3 — Monday weekly brief writer
   readMorningBrief,     // Monday weekly brief reader
+  upsertDailySummary,   // v10 — per-day AI digest writer
+  readDailySummary,     // v10 — per-day AI digest reader
+  readNewsFeedForDate,  // v10 — news rows for one date (summary input)
   setDailyRemark,       // user note writer on daily.price table popover
   // peer_prices
   writePeers,

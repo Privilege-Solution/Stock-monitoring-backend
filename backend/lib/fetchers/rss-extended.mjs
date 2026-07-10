@@ -36,6 +36,9 @@
 
 import { createHash } from 'node:crypto';
 import db from '../../db.js';
+import {
+  classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
+} from '../news-taxonomy.mjs';
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -89,8 +92,6 @@ const QUERIES = [
   { q: 'เอกชนถือครอง ภูเก็ต พัทยา',   category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium' },
 ];
 
-const ASW_TOKENS = ['ASW', 'Assetwise', 'แอสเซทไวส์', 'แอสเสทไวส์'];
-
 // Broker signals — require at least one of these to land in the broker
 // bucket. Without these tokens a matched headline ("ASW ลุยตลาดภูเก็ต")
 // would be misrouted to broker instead of peer_news / company_filing.
@@ -113,65 +114,11 @@ const FILING_TOKENS = [
 ];
 
 // ----------------------------------------------------------------------------
-// Taxonomy-v2 classifier (mirrors migrate-v9.js CASE priority + post-passes).
-// Title pattern is the primary signal; the query's legacy `category` is a
-// fallback when the title is generic (e.g. บาท USD/THB where the title is
-// just "เงินบาทเปิด 33.30 บ./ดอลลาร์" — no rate keyword, no housing policy,
-// but the query knows this is macro FX).
+// Taxonomy-v2 classifier — now lives in the shared `news-taxonomy.mjs` module
+// (imported above) so rss-property, rss-extended and gemini-search all emit
+// the same 7 keys (incl. the new COMPETITOR bucket). The query's legacy
+// `category` is passed as the `hint` fallback for generic titles.
 // ----------------------------------------------------------------------------
-function classifyCategory(title, hint) {
-  if (!title) return 'MACRO';
-
-  // (a) ASW-name wins over everything per the spec's disambiguation rules.
-  if (headlineMentionsAsw(title)) return 'COMPANY';
-
-  // (b) BoT rate-decision keywords — main subject IS the rate decision.
-  if (/กนง\.|ดอกเบี้ยนโยบาย|อัตราดอกเบี้ย/.test(title)) return 'RATES';
-
-  // (c) Housing-policy keywords — government measures for real estate.
-  if (/LTV|ค่าโอน|ค่าจดจำนอง|สมาคมบ้านจัดสรร|มาตรการอสังหาฯ/.test(title)) return 'GOV_POLICY';
-
-  // (c') Post-pass GOV_POLICY variants — "ลดค่าธรรมเนียมโอน", etc.
-  if (/ลดค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน|อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
-  if (/ค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน).*(อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
-  if (/มาตรการกระตุ้นอสังหาฯ/.test(title)) return 'GOV_POLICY';
-
-  // (d) Legacy sector_policy hint → GOV_POLICY.
-  if (hint === 'sector_policy') return 'GOV_POLICY';
-
-  // (e) Legacy interest_rate hint → RATES.
-  if (hint === 'interest_rate') return 'RATES';
-
-  // (f) Legacy political hint → POLITICS.
-  if (hint === 'political') return 'POLITICS';
-
-  // (g) Legacy sector_data / peer_news hint → INDUSTRY.
-  if (hint === 'sector_data' || hint === 'peer_news') return 'INDUSTRY';
-
-  // (g') Post-pass INDUSTRY — RE market trends without a specific policy.
-  if (/อสังหา|ที่อยู่อาศัย|คอนโด|บ้านจัดสรร/.test(title)) return 'INDUSTRY';
-
-  // (h) Catch-all — broker non-ASW, debt_rating non-ASW, investor_alert
-  //     non-ASW, insider_trade non-ASW, macro_fx (FX/baht/employment),
-  //     corporate, dividend, fundraise, project, insider, company,
-  //     company_filing (non-ASW), economic_data, global, disaster.
-  return 'MACRO';
-}
-
-// Map the query's severity to the new impact_level. severity=high means the
-// item materially affects ASW fundamentals; severity=low is background only;
-// everything else is the regular sector/macro backdrop.
-function impactLevelFromSeverity(sev) {
-  if (sev === 'high') return 'HIGH';
-  if (sev === 'low')  return 'LOW';
-  return 'MEDIUM';
-}
-
-function headlineMentionsAsw(title) {
-  if (!title) return false;
-  const t = title.toLowerCase();
-  return ASW_TOKENS.some(kw => t.includes(kw.toLowerCase()));
-}
 
 function headlineMentionsBroker(title) {
   if (!title) return false;
