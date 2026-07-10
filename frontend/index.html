@@ -332,6 +332,7 @@
                 <button class="pill" data-prange="6M">6M</button>
                 <button class="pill" data-prange="1Y">1Y</button>
                 <button class="pill" data-prange="ALL">All</button>
+                <button class="pill" data-prange="IPO">IPO</button>
               </div>
               <div class="pill-row">
                 <button class="pill active" data-chartmode="line">Line</button>
@@ -989,6 +990,10 @@ let DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompar
 let DASH_CHART = null, VOL_CHART = null, PRICE_CHART = null;
 let CURRENT_FILE_NAME = 'sample_data.js';
 
+// ASW.BK (AssetWise) IPO date — first trading day (2021-04-28, close ฿8.76).
+// Anchors the "since IPO" pill, the IPO annotation line, and the return-since-IPO stat.
+const IPO_DATE = '2021-04-28';
+
 /* ============== Utilities ============== */
 const $ = (id) => document.getElementById(id);
 const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -1202,7 +1207,7 @@ function getCSS(v) {
 
 /* ============== Time Range Filter ============== */
 function filterByRange(data, range) {
-  if (range === 'ALL' || !data.length) return data;
+  if (range === 'ALL' || range === 'IPO' || !data.length) return data;
   const withPrice = data.filter(r => r.close != null);
   if (!withPrice.length) return data;
   const last = new Date(withPrice[withPrice.length-1].date + 'T00:00:00');
@@ -2010,6 +2015,23 @@ function buildPriceChart() {
   }
 
   const annotations = STATE.priceShowEvents ? buildPinAnnotations(filtered) : {};
+  // IPO vertical line — only when the IPO date is inside the visible range
+  // (All/IPO), so it doesn't clutter short windows (1W/1M/3M/1Y).
+  if (filtered.length && filtered[0].date <= IPO_DATE && IPO_DATE <= filtered[filtered.length - 1].date) {
+    annotations.ipoLine = {
+      type: 'line',
+      xMin: IPO_DATE + 'T00:00:00',
+      xMax: IPO_DATE + 'T00:00:00',
+      borderColor: '#f59e0b',
+      borderWidth: 2,
+      borderDash: [6, 4],
+      label: {
+        content: 'IPO', display: true, position: 'start',
+        backgroundColor: 'rgba(245,158,11,0.9)', color: '#fff',
+        font: { size: 10, weight: '600' },
+      },
+    };
+  }
   const datasets = [];
   if (STATE.priceChartMode === 'line') {
     datasets.push({
@@ -2154,12 +2176,22 @@ function renderPriceStats(filtered) {
   const first = withPrice[0].close;
   const last = withPrice[withPrice.length-1].close;
   const ret = ((last - first) / first) * 100;
+  // Return since IPO — anchored to the IPO close vs the latest available close,
+  // independent of the current filter window.
+  const ipoRow = DATA.find(r => r.date === IPO_DATE) || (DATA.length ? DATA[0] : null);
+  const latestRow = [...DATA].reverse().find(r => r.close != null);
+  let ipoRet = null;
+  if (ipoRow && latestRow && ipoRow.close) ipoRet = ((latestRow.close - ipoRow.close) / ipoRow.close) * 100;
   const vols = filtered.filter(r => r.volume != null).map(r => r.volume);
   const avgVol = vols.length ? vols.reduce((a,b) => a+b, 0) / vols.length : 0;
   const events = filtered.reduce((n, r) => n + eachRemark(r).length, 0);
   $('priceStats').innerHTML = `
     <div class="stat-row"><span class="label th">ผลตอบแทน (%)</span>
       <span class="val ${ret > 0 ? 'text-pos' : ret < 0 ? 'text-neg' : ''}">${fmtPct(ret)}</span></div>
+    <div class="stat-row"><span class="label th">IPO</span>
+      <span class="val">฿${ipoRow ? fmtNum(ipoRow.close) : '—'} (${fmtThaiShort(IPO_DATE)})</span></div>
+    <div class="stat-row"><span class="label th">ผลตอบแทนตั้งแต่ IPO</span>
+      <span class="val ${ipoRet > 0 ? 'text-pos' : ipoRet < 0 ? 'text-neg' : ''}">${ipoRet == null ? '—' : fmtPct(ipoRet)}</span></div>
     <div class="stat-row"><span class="label th">ราคาสูงสุด</span><span class="val">฿${fmtNum(hi)}</span></div>
     <div class="stat-row"><span class="label th">ราคาต่ำสุด</span><span class="val">฿${fmtNum(lo)}</span></div>
     <div class="stat-row"><span class="label th">ปริมาณเฉลี่ย</span><span class="val">${fmtBigNum(avgVol)} พันหุ้น</span></div>
