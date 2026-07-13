@@ -471,10 +471,18 @@
   .chart-row {
     @apply grid gap-3 mb-3;
     grid-template-columns: 1fr 360px;
-    /* Stretch both cards to the row's height so the chart card and the news
-       card are always equal-height; the news list scrolls internally
-       (flex:1 + min-height:0) rather than capping the card. */
+    /* Stretch both cards to the same height. The news card is content-sized
+       (capped at 500px, scrolls past that), so it sets the row height; the
+       chart card stretches to match and its canvas fills the available
+       space — no gap, and no empty space inside the news list. */
     align-items: stretch;
+  }
+  /* Lay the chart card out as a flex column so the chart container can flex
+     to fill the card's height (which now follows the news card) instead of
+     a fixed pixel height. */
+  .chart-row > .card:first-child {
+    display: flex;
+    flex-direction: column;
   }
   /* Two-panel bottom row (daily data table + Thai-RE peer table).
      Equal 1fr columns + align-items:stretch forces both CARDS to the same
@@ -541,7 +549,8 @@
   }
   .chart-container-tall {
     @apply relative;
-    height: 400px;
+    flex: 1 1 0;
+    min-height: 150px;
   }
   .chart-toolbar {
     @apply flex items-center justify-between mb-2 gap-2 flex-wrap;
