@@ -484,22 +484,36 @@
     gap: 16px;
     align-items: stretch;
     --bottom-panel-maxh: 380px;
+    /* Height reserved for the subtitle line that sits above the peer table.
+       Reserved on BOTH cards so the two tables start at the same Y — the
+       data table has no subtitle, but its title row leaves the same gap. */
+    --bottom-sub-h: 20px;
   }
-  /* Flex-column cards so the footer (pagination / footnote) can be pinned to
-     the bottom and the capped table region sits at the top. */
+  /* Lay each card out as four aligned rows: title · subtitle · table · footer.
+     The subtitle row is reserved on every card, so a card without one (the
+     data table) still keeps the gap and its table lands at the same Y as the
+     peer table that sits below a subtitle. The table row shares one cap, so
+     both table boxes are the same height and the footers line up too. Grid
+     gap replaces the ad-hoc mb-8 / mt-8 margins so spacing stays uniform. */
   .bottom-row .card {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto var(--bottom-sub-h) auto auto;
+    grid-template-areas: "title" "subtitle" "table" "footer";
+    gap: 8px;
   }
-  /* Shared cap on BOTH table regions → equal height, overflow scrolls. */
-  .bottom-row .data-table-wrap {
+  .bottom-row .card > .row-between:first-child { grid-area: title; margin-bottom: 0; }
+  /* Peer subtitle ("เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์"); absent on the
+     data card, where the reserved row stays empty but keeps its height. */
+  .bottom-row .card > .muted.mb-8 { grid-area: subtitle; margin: 0; }
+  .bottom-row .card > .data-table-wrap {
+    grid-area: table;
+    min-height: 0;
     max-height: var(--bottom-panel-maxh);
     overflow-y: auto;
   }
-  /* Pin each card's last child (pagination / footnote) to the bottom. */
-  .bottom-row .card > *:last-child {
-    margin-top: auto;
-  }
+  /* Pagination (data card) / footnote (peer card) — both pinned just under
+     the table, so the footers start at the same line. */
+  .bottom-row .card > *:last-child { grid-area: footer; margin-top: 0; }
 
   /* === 52W range bar === */
   .range-bar {
