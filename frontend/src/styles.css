@@ -541,7 +541,7 @@
   }
   .chart-container-tall {
     @apply relative;
-    height: 440px;
+    height: 400px;
   }
   .chart-toolbar {
     @apply flex items-center justify-between mb-2 gap-2 flex-wrap;
