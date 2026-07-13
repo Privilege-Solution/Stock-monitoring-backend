@@ -2,7 +2,9 @@
 
 // Load .env (gitignored) BEFORE any module that reads process.env at import
 // time — dotenv mutates process.env in place, so require-order matters.
-require('dotenv').config();
+// Path is resolved from __dirname (backend/) so it works regardless of the
+// CWD `npm run dev` is launched from — the env file lives at backend/.env.
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const fs = require('fs');
 const path = require('path');

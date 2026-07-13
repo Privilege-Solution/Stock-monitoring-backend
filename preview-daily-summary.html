@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>พรีวิว: สรุปข่าวประจำวัน (หลังแก้ไข)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#3B8BD4; --card:#FFFFFF; --border:#D3D1C7; --text:#1A1A18; --muted:#888780;
+    --bull:#1D9E75; --bear:#A32D2D; --neut:#888780; --warn:#EF9F27;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#ECEAE3;color:var(--text);font-family:Sarabun,Inter,sans-serif;padding:32px 20px 64px}
+  .wrap{max-width:780px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 4px;font-weight:700}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:6px;line-height:1.5}
+  .label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:30px 0 10px}
+  .th{font-family:Sarabun,Inter,sans-serif}
+  .card{border-radius:.5rem;border:1px solid var(--border);background:var(--card);padding:.875rem 1rem}
+  .mb-16{margin-bottom:1rem}.mb-12{margin-bottom:.75rem}
+  .row-between{display:flex;align-items:center;gap:.5rem;justify-content:space-between}
+  .muted{color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;gap:.375rem;border-radius:.375rem;border:1px solid var(--border);background:var(--card);padding:.375rem .75rem;font-size:13px;font-weight:500;color:var(--text)}
+  .btn-ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .tag{display:inline-block;border-radius:9999px;padding:.125rem .625rem;font-size:11px;font-weight:500}
+  ul.th{margin:0 0 8px 0;padding-left:20px;line-height:1.7}
+  ul.th li{margin-bottom:2px;font-size:14px}
+  .ghost{opacity:.6}
+  .old-line{display:block;font-size:13px;color:var(--text);background:#FFF7E6;border-left:3px solid var(--warn);padding:8px 10px;border-radius:4px;line-height:1.55}
+  .note{font-size:12px;color:var(--muted);background:#FBFAF6;border:1px dashed var(--border);padding:10px 12px;border-radius:6px;line-height:1.55}
+  .pill-ok{display:inline-block;font-size:11px;font-weight:600;color:var(--bull);background:#1D9E751a;border-radius:6px;padding:2px 8px}
+  .pill-bad{display:inline-block;font-size:11px;font-weight:600;color:var(--warn);background:#EF9F271a;border-radius:6px;padding:2px 8px}
+  .tone-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .tone-chip{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+  .swatch{width:12px;height:12px;border-radius:9999px;display:inline-block}
+  .changes{list-style:none;margin:10px 0 0;padding:0}
+  .changes li{font-size:13px;color:var(--text);padding:4px 0;line-height:1.5}
+  .changes li::before{content:"";display:inline-block;width:6px;height:6px;background:var(--primary);border-radius:9999px;margin-right:8px;vertical-align:middle}
+  code{background:#F0EFE9;border-radius:4px;padding:1px 5px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="th">🤖 พรีวิว: สรุปข่าวประจำวัน — หลังแก้ไข</h1>
+  <div class="sub th">ภาพจำลองว่าการ์ดจะหน้าตาเป็นอย่างไร <strong>หลัง deploy + กดรีเฟรช</strong> (ข้อมูล bullet เป็นตัวอย่างที่เขียนขึ้นมาให้ดูเป็นแนว)</div>
+
+  <div class="note th" style="margin-top:14px">
+    <strong>สรุปสิ่งที่เปลี่ยน:</strong>
+    <ul class="changes th">
+      <li>bullet เป็นประเด็นสรุปจริง ๆ หลายบรรทัด (ไม่ใช่ headline ต่อ ๆ กันเป็นบรรทัดเดียว)</li>
+      <li>tone เป็นภาษาไทย: <strong>บวก / ลบ / เป็นกลาง</strong> (เดิมโผล่เป็น <code>MEDIUM</code>)</li>
+      <li>สรุปวันใหม่จะถูกสร้างทุกวัน <strong>18:30 น.</strong> แทน 11:30 น. (ครอบคลุมข่าวทั้งวัน)</li>
+    </ul>
+  </div>
+
+  <!-- ============ AFTER ============ -->
+  <div class="label th">➡️ หลังแก้ไข <span class="pill-ok">สิ่งที่คุณจะเห็น</span></div>
+  <div class="card mb-16">
+    <div class="row-between mb-12">
+      <div>
+        <span class="muted th" style="font-size:11px;">🤖 สรุปข่าวประจำวัน</span>
+        <h3 class="th" style="font-size:15px;margin:4px 0 0 0;font-weight:600;">13 กรกฎาคม 2569</h3>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="tag th" style="background:#1D9E751a;color:#1D9E75;font-size:13px;padding:6px 12px;">บวก</span>
+        <button class="btn btn-ghost"><span class="th" style="font-size:12px;">🔄 รีเฟรชสรุป</span></button>
+      </div>
+    </div>
+    <ul class="th" style="margin:0 0 8px 0;padding-left:20px;line-height:1.7;">
+      <li>บริษัทประกาศโครงการใหม่มูลค่า 5,200 ล้านบาทในกรุงเทพฯ–ปริมณฑล น่าเพิ่มรายได้รับรู้ในปีหน้า</li>
+      <li>ธปก. คงดอกเบี้ยที่ 2.00% ต่อไป ช่วยลดต้นทุนทางการเงินและหนุนอุปสงค์ผู้ซื้อบ้าน</li>
+      <li>ยอดโอนกรรมสิทธิ์ที่อยู่อาศัยเดือน มิ.ย. ขยายตัว 6% YoY สะท้อนอุปสงค์ที่ฟื้นตัว</li>
+      <li>คู่แข่งหลักออกโปรโมชั่นพิเศษ อาจกดดันส่วนแบ่งตลาดไตรมาส 3 ได้บ้าง แต่ผลกระทบจำกัด</li>
+    </ul>
+    <div class="muted th" style="font-size:12px;font-style:italic;">แนวโน้มยังเป็นบวกจากโครงการใหม่และดอกเบี้ยที่คงต่ำ แม้จะมีแรงกดดันจากคู่แข่งในระยะสั้น</div>
+    <div class="muted th" style="font-size:11px;margin-top:8px;">สรุปจากข่าว 8 รายการของวันนี้ · อัปเดต 13 ก.ค. 18:31 น.</div>
+  </div>
+
+  <!-- ============ BEFORE ============ -->
+  <div class="label th">⬅️ ก่อนแก้ไข <span class="pill-bad">ปัญหาเดิมที่เคยเห็น</span></div>
+  <div class="card mb-16 ghost">
+    <div class="row-between mb-12">
+      <div>
+        <span class="muted th" style="font-size:11px;">🤖 สรุปข่าวประจำวัน</span>
+        <h3 class="th" style="font-size:15px;margin:4px 0 0 0;font-weight:600;">12 กรกฎาคม 2569</h3>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="tag th" style="background:#8887801a;color:#888780;font-size:13px;padding:6px 12px;">medium</span>
+        <button class="btn btn-ghost"><span class="th" style="font-size:12px;">🔄 รีเฟรชสรุป</span></button>
+      </div>
+    </div>
+    <ul class="th" style="margin:0 0 8px 0;padding-left:20px;line-height:1.7;">
+      <li><span class="old-line">ธนาคาร ธ.ก.ส. เผย 8 เดือนแรกของปี โอกาสเติบโตปานกลาง ก้าวไกลเพื่อเศรษกิจ ตอบโต้ QE ไทยฮาลูไลน์ : สู้เศรษกิจ</span></li>
+    </ul>
+    <div class="muted th" style="font-size:11px;margin-top:8px;">สรุปจากข่าว 8 รายการของวันนี้ · อัปเดต 12 ก.ค. 11:31 น.</div>
+    <div class="note th" style="margin-top:10px">❌ headline ทั้งหมดถูกต่อกันเป็นบรรทัดเดียว · tone แสดง <code>medium</code> (ค่าที่รั่วมาจาก impact-level HIGH/MEDIUM/LOW) แทน bullish/bearish/neutral</div>
+  </div>
+
+  <!-- ============ TONE VARIANTS ============ -->
+  <div class="label th">🎨 tone ทั้ง 3 แบบ (ภาษาไทย)</div>
+  <div class="card">
+    <div class="tone-row th">
+      <span class="tone-chip"><span class="swatch" style="background:#1D9E75"></span> bullish → <strong>บวก</strong></span>
+      <span class="tone-chip"><span class="swatch" style="background:#A32D2D"></span> bearish → <strong>ลบ</strong></span>
+      <span class="tone-chip"><span class="swatch" style="background:#888780"></span> neutral → <strong>เป็นกลาง</strong></span>
+    </div>
+    <div class="tone-row th" style="margin-top:14px">
+      <span class="tag th" style="background:#1D9E751a;color:#1D9E75;font-size:13px;padding:6px 12px;">บวก</span>
+      <span class="tag th" style="background:#A32D2D1a;color:#A32D2D;font-size:13px;padding:6px 12px;">ลบ</span>
+      <span class="tag th" style="background:#8887801a;color:#888780;font-size:13px;padding:6px 12px;">เป็นกลาง</span>
+    </div>
+  </div>
+
+  <div class="note th" style="margin-top:24px">
+    ℹ️ ไฟล์นี้เป็นพรีวิวสแตติก (ไม่ใช่หน้าจริง) — บนเซิร์ฟเวอร์ bullet จะถูกสรุปโดย AI จากข่าวจริงของวันนั้น หลัง deploy ให้เข้าหน้า <strong>ข่าวและปัจจัย</strong> แล้วกด <strong>🔄 รีเฟรชสรุป</strong> เพื่อสร้างสรุปใหม่ (row เก่าจะถูกแทนที่)
+  </div>
+</div>
+</body>
+</html>
