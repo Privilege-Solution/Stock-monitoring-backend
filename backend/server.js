@@ -678,7 +678,9 @@ cron.schedule('0 11 * * 1-5', async () => {
 // without contention. maxAge=14d because insider-trading + broker reports
 // lose actionability fast and a 14-day trailing window ensures we don't
 // miss late retro-published entries from SET.
-cron.schedule('30 11 * * *', async () => {
+// Cron expr is LOCAL (timezone:'Asia/Bangkok') → '30 18' = 18:30 ICT, after
+// the day's news pulls so the chained daily summary covers the full day.
+cron.schedule('30 18 * * *', async () => {
   console.log('[scheduler] rss-extended triggered (daily 18:30 ICT)');
   const id = await db.logFetchStart();
   try {

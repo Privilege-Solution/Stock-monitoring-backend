@@ -243,13 +243,22 @@ const PROMPT_DAILY_SUMMARY = (date, items) => {
 
 ${block}
 
-จงสรุปประเด็นสำคัญของวันนี้เพื่อให้ผู้บริหารอ่านเร็ว ตอบในรูปแบบนี้เท่านั้น:
+งานของคุณ: สรุปประเด็นสำคัญของวันนี้ให้ผู้บริหารอ่านเร็ว
+กฎ:
+- สรุปและรวมประเด็นด้วยภาษาของคุณเอง — ห้ามทำซ้ำ headline ต้นฉบับ ห้ามตัดแปะชื่อข่าวมาต่อกันเป็นประโยคเดียว
+- ไม่เกิน 6 ประเด็น เรียงจากสำคัญที่สุด → น้อยที่สุด สำหรับหุ้น ASW
+- แต่ละประเด็นอยู่คนละบรรทัด ขึ้นต้นด้วย "- "
+- TONE ต้องเป็นค่าใดค่าหนึ่งจาก bullish | bearish | neutral เท่านั้น (ห้ามใช้ HIGH/MEDIUM/LOW)
+
+ตัวอย่างรูปแบบคำตอบ (ห้ามคัดลอกเนื้อหา — เขียนจากข่าวจริงของวันนี้เท่านั้น):
 
 KEY_POINTS:
-- [ประเด็นสำคัญภาษาไทย สั้น ๆ ไม่เกิน 6 ข้อ เรียงตามความสำคัญต่อหุ้น ASW]
+- บริษัทเปิดตัวโครงการใหม่มูลค่า 5 พันล้านบาท น่าจะเพิ่มรายได้ในปีหน้า
+- ธปก. ลดดอกเบี้ย 0.25% ช่วยลดต้นทุนทางการเงิน
+- คู่แข่งออกผลิตภัณฑ์ทดแทน กดดันส่วนแบ่งในตลาดเป้าหมายเดียวกัน
 
-TONE: [bullish | bearish | neutral]
-REASON: [1 ประโยคอธิบายว่าทำไมวันนี้ tone นี้ สำหรับหุ้น ASW]`;
+TONE: bullish
+REASON: ปัจจัยบวกจากโครงการใหม่และดอกเบี้ยที่ลดลง มีน้ำหนักมากกว่าแรงกดดันจากคู่แข่ง`;
 };
 
 // =============================================================================
@@ -315,15 +324,20 @@ function parseAIResult(text, pipeline) {
 // =============================================================================
 
 // One POST per pipeline. The body shape is the v1beta `generateContent`
-// format with `tools: [{ google_search: {} }]` enabling grounding. If Gemini
-// ever returns 429 we surface the error to the caller — the scheduler wraps
-// each invocation in logFetchFinish so retry logic lives at that layer.
-async function geminiSearch(prompt) {
+// format. Google Search grounding (`tools:[{google_search:{}}]`) is OPT-IN
+// via the `ground` flag: the news-SEARCH pipelines (company/sector/macro)
+// need it to pull real articles; synthesis tasks (daily summary) must work
+// only from the provided items, so they pass { ground:false } and we omit
+// `tools` entirely (grounding would send the model off to search and it'd
+// regurgitate snippets). If Gemini ever returns 429 we surface the error to
+// the caller — the scheduler wraps each invocation in logFetchFinish so
+// retry logic lives at that layer.
+async function geminiSearch(prompt, { ground = true } = {}) {
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    tools: [{ google_search: {} }],
     generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
   };
+  if (ground) body.tools = [{ google_search: {} }];
   // Bound the wait: Node's global fetch has no default timeout, so a hung
   // Gemini connection would stall the cron indefinitely on Railway. 30s is
   // generous for a grounded-search generate call.
@@ -381,6 +395,42 @@ function extractSection(text, key) {
   const m = text.match(re);
   if (!m) return '';
   return m[1].trim();
+}
+
+// Coerce a raw TONE: value to the canonical vocabulary the frontend knows
+// (bullish/bearish/neutral). Gemini occasionally leaks the impact_level vocab
+// (HIGH/MEDIUM/LOW) into TONE, or appends a trailing explanation
+// ("bullish (ข่าวดี)"). startsWith tolerates the trailing text; anything
+// unrecognized falls back to neutral and is logged so format drift is
+// visible in Railway logs. Returns { tone, raw }.
+function parseTone(raw) {
+  const r = (raw || '').trim().toLowerCase();
+  let tone;
+  if (r.startsWith('bull')) tone = 'bullish';
+  else if (r.startsWith('bear')) tone = 'bearish';
+  else if (r.startsWith('neut')) tone = 'neutral';
+  if (!tone) {
+    if (r) console.warn(`[gemini] unexpected TONE "${raw}" → coerced to neutral`);
+    tone = 'neutral';
+  }
+  return { tone, raw: r };
+}
+
+// Repair a KEY_POINTS section that Gemini collapsed onto a single line (the
+// observed failure mode with grounding on). Happy path — multiple lines — is
+// returned as-is. Only when the section is a single line do we try to recover
+// bullets by splitting on • or inter-clause " - " (never on sentence
+// boundaries — too risky for Thai). Returns a newline-joined string; the
+// frontend splits it back into <li> and strips a leading "- ".
+function normalizeBullets(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  if (text.includes('\n')) return text;
+  let parts;
+  if (text.includes('•')) parts = text.split('•');
+  else if (/\s+-\s+/.test(text)) parts = text.split(/\s+-\s+/);
+  else return text;
+  return parts.map(p => p.replace(/^[-•\s]+/, '').trim()).filter(Boolean).join('\n');
 }
 
 // =============================================================================
@@ -455,12 +505,13 @@ async function runMorningBrief(sinceDate) {
     console.log('[gemini-morning-brief] no content');
     return { ok: false, reason: 'empty' };
   }
+  console.log(`[gemini-morning-brief] raw=${text.slice(0, 500)}`);
 
   const lastWeek = extractSection(text, 'LAST_WEEK');
   const thisWeek = extractSection(text, 'THIS_WEEK_WATCH');
   const toneMatch = text.match(/TONE:\s*(.+)/);
   const reasonMatch = text.match(/REASON:\s*(.+)/);
-  const tone = toneMatch ? toneMatch[1].trim() : 'neutral';
+  const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
   const reason = reasonMatch ? reasonMatch[1].trim() : '';
 
   const date = new Date().toISOString().slice(0, 10);
@@ -482,16 +533,17 @@ async function runDailySummary(sinceDate) {
     return { ok: false, reason: 'no-news', date };
   }
 
-  const text = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items));
+  const text = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), { ground: false });
   if (!text || text.trim() === 'NONE') {
     console.log(`[gemini-daily-summary] ${date} → empty digest`);
     return { ok: false, reason: 'empty', date };
   }
+  console.log(`[gemini-daily-summary] raw=${text.slice(0, 500)}`);
 
-  const keyPoints = extractSection(text, 'KEY_POINTS');
+  const keyPoints = normalizeBullets(extractSection(text, 'KEY_POINTS'));
   const toneMatch = text.match(/TONE:\s*(.+)/);
   const reasonMatch = text.match(/REASON:\s*(.+)/);
-  const tone = toneMatch ? toneMatch[1].trim() : 'neutral';
+  const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
   const reason = reasonMatch ? reasonMatch[1].trim() : '';
 
   await db.upsertDailySummary(date, {
@@ -523,5 +575,5 @@ async function run({ source, sinceDate } = {}) {
   }
 }
 
-export { run, parseAIResult, geminiSearch, normalizeForNewsFeed };
+export { run, parseAIResult, geminiSearch, normalizeForNewsFeed, extractSection, parseTone, normalizeBullets };
 export default { run };

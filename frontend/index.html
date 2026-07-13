@@ -2553,7 +2553,7 @@ function renderMorningBrief() {
   const lastWeekBullets = (b.morning_brief || '').split('\n').map(s => s.trim()).filter(Boolean);
   const watchBullets    = (b.morning_watch || '').split('\n').map(s => s.trim()).filter(Boolean);
   const tone = (b.morning_remark || 'neutral').toLowerCase();
-  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
+  const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
   const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
   const dt = new Date(b.date + 'T00:00:00');
   const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -2612,7 +2612,7 @@ function renderDailySummary() {
   }
   const bullets = String(s.digest).split('\n').map(x => x.trim()).filter(Boolean);
   const tone = (s.tone || 'neutral').toLowerCase();
-  const toneLabel = ({ bullish: 'Bullish', bearish: 'Bearish', neutral: 'Neutral' })[tone] || tone;
+  const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
   const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
   const dt = new Date(s.date + 'T00:00:00');
   const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
