@@ -302,10 +302,10 @@
             <table class="data-table" id="peerTable">
               <thead>
                 <tr>
-                  <th class="th" style="position:static;">Ticker</th>
-                  <th class="th" style="position:static;">บริษัท</th>
-                  <th class="num th" style="position:static;">ราคาปิด</th>
-                  <th class="num th" style="position:static;">%เปลี่ยนแปลง</th>
+                  <th class="th">Ticker</th>
+                  <th class="th">บริษัท</th>
+                  <th class="num th">ราคาปิด</th>
+                  <th class="num th">%เปลี่ยนแปลง</th>
                 </tr>
               </thead>
               <tbody id="peerTableBody"></tbody>
@@ -1902,8 +1902,9 @@ async function buildPeerSnapshot() {
   // with "—" placeholders for close/change (no fake-hash values).
   // ASW leads THAI_RE_PEERS (position 1) — its row pulls from peerByTicker
   // just like every other peer (no splice from DATA). The ASW row is also
-  // styled `position:sticky; top:0` so it stays pinned at the top of the
-  // scrollable table while the other 19 peers scroll below.
+  // pinned just below the sticky <thead> so it stays visible while the other
+  // 19 peers scroll under it (sticky is applied per-<td> in the row builder
+  // below — a collapsed table won't paint a sticky <tr> background).
   const peerRows = THAI_RE_PEERS.map(p => {
     const live = peerByTicker.get(p.ticker);
     const isASW = p.ticker === 'ASW';
@@ -1926,11 +1927,23 @@ async function buildPeerSnapshot() {
       ? 'color:var(--muted)'
       : chg > 0.05 ? 'color:var(--positive)' : chg < -0.05 ? 'color:var(--negative)' : 'color:var(--muted)';
     const chgText = !hasData ? '—' : `${arrow}${(chg >= 0 ? '+' : '')}${chg.toFixed(2)}%`;
-    return `<tr style="${r.isASW ? 'background:var(--sidebar-active); font-weight:600; position:sticky; top:0; z-index:1;' : ''}">
-      <td><strong>${r.ticker}</strong>${aswBadge}</td>
-      <td class="th muted">${r.name}</td>
-      <td class="num">${closeText}</td>
-      <td class="num" style="${colorStyle}; font-weight:500;">${chgText}</td>
+    // Sticky lives on the <td>s, not the <tr>: in a border-collapse table a
+    // sticky <tr> doesn't paint its background, so scrolling rows bleed through
+    // behind it. Each ASW cell is pinned at the header's content height (2rem),
+    // overlapping the <thead>'s bottom border by 1px so the row sits hard
+    // against the header — border-collapse + sticky otherwise opens a hairline
+    // slit between the two pinned rows. The background is --card (not a tint)
+    // so the row connects seamlessly with the white peer rows while staying
+    // opaque enough to occlude the rows scrolling behind it; ASW is still set
+    // apart by the bold weight + badge, not a background band.
+    const aswPin = r.isASW
+      ? 'background:var(--card); position:sticky; top:calc(2rem); z-index:1;'
+      : '';
+    return `<tr style="${r.isASW ? 'font-weight:600;' : ''}">
+      <td style="${aswPin}"><strong>${r.ticker}</strong>${aswBadge}</td>
+      <td class="th muted" style="${aswPin}">${r.name}</td>
+      <td class="num" style="${aswPin}">${closeText}</td>
+      <td class="num" style="${colorStyle}; font-weight:500; ${aswPin}">${chgText}</td>
     </tr>`;
   }).join('');
 }
