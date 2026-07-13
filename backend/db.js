@@ -480,6 +480,18 @@ async function readDailySummary(date = null) {
   return r.rows[0] || null;
 }
 
+// All digests, ascending by date. Powers the chart "pin per day" + the Remark
+// column: each day that has a digest gets a short remark derived client-side
+// from the first bullet. One row per ICT date, so the set stays small.
+async function readAllDailySummaries() {
+  const r = await getPool().query(
+    `SELECT date, digest, tone, reason, source_count, generated_at
+       FROM news_daily_summary
+      ORDER BY date ASC`
+  );
+  return r.rows || [];
+}
+
 // All news_feed rows for one ICT date — the input the daily summary digests.
 // hidden rows are excluded (user-dismissed). Capped at 500 to bound the prompt.
 async function readNewsFeedForDate(date) {
@@ -761,6 +773,7 @@ module.exports = {
   readMorningBrief,     // Monday weekly brief reader
   upsertDailySummary,   // v10 — per-day AI digest writer
   readDailySummary,     // v10 — per-day AI digest reader
+  readAllDailySummaries,// v10 — every digest, for chart pins + Remark column
   readNewsFeedForDate,  // v10 — news rows for one date (summary input)
   setDailyRemark,       // user note writer on daily.price table popover
   // peer_prices

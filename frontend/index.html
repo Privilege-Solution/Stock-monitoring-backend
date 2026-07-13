@@ -806,6 +806,17 @@ window.ASW_API = {
       return await r.json();
     } catch (e) { return { date: null, digest: null }; }
   },
+  // Every digest (ascending). Returns { items: [...] }. Powers the chart
+  // "pin per day" + the Remark column — each day with a digest becomes one
+  // pin + one Remark cell, derived client-side from the first bullet.
+  async dailySummaries() {
+    try {
+      const r = await fetch('/api/daily-summaries');
+      if (!r.ok) throw 0;
+      const j = await r.json();
+      return (j && j.items) || [];
+    } catch (e) { return []; }
+  },
   async dailySummaryRefresh(date) {
     try {
       const body = date ? JSON.stringify({ date }) : undefined;
@@ -1158,8 +1169,92 @@ const catLabel = (cat) => (REMARK_BADGE[cat] && REMARK_BADGE[cat].thaiLabel) || 
 // decided not to render it on cards. The column is kept as a hook for
 // future filters (HIGH-only toggle, etc.) without requiring a schema
 // change.
+
+/* ============== Daily-digest remark (สรุปข่าว → pin + Remark) ==============
+ * One short remark per ICT date, derived from that day's AI digest
+ * (news_daily_summary.digest). Built into window.DIGEST_REMARKS (a Map keyed
+ * by date) by loadAllDigests(), then stamped onto DATA rows by
+ * applyDigestRemarks() as `row.digestRemark` + `row.digestCategory`. Because
+ * eachRemark() prefers the digest remark, everything downstream — chart pins
+ * (buildPinAnnotations), the Remark column (combinedRemark), search, and the
+ * report builder — picks it up with no extra wiring. classifyEvent() runs its
+ * keyword scan on the short text, so each pin lands in one of the 6 legend
+ * colours (ดอกเบี้ย / ผลประกอบการ / การเมือง / โครงการ / มหภาค / อื่นๆ).
+ */
+window.DIGEST_REMARKS = new Map();
+
+// Collapse a multi-bullet digest into one short line: first non-empty bullet,
+// leading "- " stripped, trimmed to ~50 chars. Returns '' when there's nothing
+// usable so the caller can skip pinning that day.
+function deriveDigestRemark(digest) {
+  const lines = String(digest || '').split('\n')
+    .map(s => s.trim().replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+  if (!lines.length) return '';
+  let s = lines[0];
+  const MAX = 50;
+  if (s.length > MAX) s = s.slice(0, MAX).trimEnd() + '…';
+  return s;
+}
+
+// First non-empty bullet, untruncated — used to classify the pin colour so
+// keywords past the 50-char display cut (e.g. "ดอกเบี้ย" at the end of a long
+// bullet) still drive the category. Returns '' when there's nothing usable.
+function firstDigestLine(digest) {
+  const lines = String(digest || '').split('\n')
+    .map(s => s.trim().replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+  return lines[0] || '';
+}
+
+// Populate window.DIGEST_REMARKS from /api/daily-summaries items, then
+// (re)stamp every DATA row with its short remark + category. Safe to re-run:
+// stale rows are cleared first so deleted/changed digests don't leak. The pin
+// colour is classified off the FULL bullet while the cell shows the short text.
+function applyDigestRemarks(items) {
+  const map = new Map();
+  (items || []).forEach(s => {
+    if (!s || !s.date) return;
+    const text = deriveDigestRemark(s.digest);
+    if (!text) return;
+    const full = firstDigestLine(s.digest);
+    const cls = classifyEvent(full || text);
+    map.set(s.date, { text, tone: s.tone || null, category: cls ? cls.type : null });
+  });
+  window.DIGEST_REMARKS = map;
+  let pinned = 0;
+  (window.DATA || DATA || []).forEach(r => {
+    const d = map.get(r.date);
+    if (d) {
+      r.digestRemark = d.text;
+      r.digestCategory = d.category;   // chart type for classifyEvent()'s map
+      pinned++;
+    } else {
+      r.digestRemark = undefined;
+      r.digestCategory = undefined;
+    }
+  });
+  return pinned;
+}
+
 function eachRemark(row) {
   if (!row) return [];
+  // Daily news digest (สรุปข่าวประจำวัน) — the user-facing source for chart
+  // pins + the Remark column. One short remark per day, derived from the
+  // digest's first bullet (see deriveDigestRemark / applyDigestRemarks). It
+  // takes precedence over the legacy gemini-company `remark` so a day shows
+  // exactly one pin and one short Remark cell — the legacy field only fills
+  // in for old dates that predate the digest pipeline.
+  if (row.digestRemark) {
+    return [{
+      date: row.date,
+      category: row.digestCategory || 'other',
+      text: row.digestRemark,
+      source: 'digest',
+      close: row.close,
+      change: row.change,
+    }];
+  }
   // v2: single remark + category (the main path going forward).
   if (row.remark) {
     return [{
@@ -2615,6 +2710,19 @@ async function loadDailySummary() {
   renderDailySummary();
 }
 
+// Reload every digest, re-stamp DATA rows with their short remark, and
+// re-render the active view so chart pins + the Remark column reflect the
+// latest news summary. We call the per-view refresh (not setView) so the
+// user's range / zoom / focus is preserved.
+async function loadAllDigests() {
+  const items = await window.ASW_API.dailySummaries();
+  applyDigestRemarks(items);
+  const v = STATE.view;
+  if (v === 'dashboard') refreshDashboard();
+  else if (v === 'price') refreshPrice();
+  else if (v === 'news') refreshNews();
+}
+
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
@@ -2664,6 +2772,7 @@ async function refreshDailySummary() {
     const r = await window.ASW_API.dailySummaryRefresh();
     if (r && r.ok) {
       await loadDailySummary();   // reload the freshly-generated digest
+      await loadAllDigests();     // re-stamp rows + re-render pins / Remark
     } else {
       alert('สร้างสรุปไม่สำเร็จ: ' + ((r && (r.error || r.reason)) || 'unknown'));
     }
@@ -3458,16 +3567,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // data on first paint (no need to wait for the user to click Feed tab).
   (async () => {
     try {
-      const [rows, meta, newsRows, brief, dailySummary] = await Promise.all([
+      const [rows, meta, newsRows, brief, dailySummary, allDigests] = await Promise.all([
         window.ASW_API.daily(),
         window.ASW_API.metadata(),
         window.ASW_API.newsFeed(),
         window.ASW_API.morningBrief(),
         window.ASW_API.dailySummary(),
+        window.ASW_API.dailySummaries(),
       ]);
       if (rows && rows.length) {
         DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
       }
+      // Stamp each DATA row with its digest-derived short remark BEFORE the
+      // first render — eachRemark() (and thus chart pins + the Remark column)
+      // reads `row.digestRemark`, so this must happen before setView().
+      applyDigestRemarks(allDigests);
       // Cache news_feed items + morning brief globally so renderDashNews() and
       // the Morning Brief tab can read them without an extra round-trip.
       if (newsRows) {

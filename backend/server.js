@@ -454,6 +454,19 @@ app.get('/api/daily-summary', async (req, res) => {
   }
 });
 
+// Every digest (ascending by date). Powers the chart "pin per day" and the
+// Remark column on the daily price tables: the frontend derives a short
+// remark from each day's first bullet, so each day with a digest gets one
+// pin + one Remark cell, updating as new digests arrive.
+app.get('/api/daily-summaries', async (req, res) => {
+  try {
+    const items = await db.readAllDailySummaries();
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'daily_summaries_failed' });
+  }
+});
+
 // Manually (re)generate a digest. Body may pass {date} to backfill a past day;
 // defaults to today. Gated on GEMINI_API_KEY.
 app.post('/api/daily-summary/refresh', async (req, res) => {
