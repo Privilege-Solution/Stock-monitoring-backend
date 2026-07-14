@@ -760,6 +760,13 @@
   .feed-toolbar .input {
     @apply px-3 py-2 rounded-md border border-border bg-surface text-text;
   }
+  /* Specificity bump: .feed-toolbar .input (0,2,0) above flattens padding to a
+   * uniform 12px, which would let typed text overlap the leading magnifier
+   * icon. Re-assert the icon-clearing left padding at matching specificity,
+   * placed after that rule so source order makes it win. */
+  .feed-toolbar .news-search-input {
+    @apply pl-9;
+  }
   /* Migrate-v8 — category-filter chip row inside the News toolbar.
      Wraps below .feed-toolbar so the search field stays on the first line. */
   .feed-cat-row {
