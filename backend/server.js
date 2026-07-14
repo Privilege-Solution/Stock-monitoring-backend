@@ -297,16 +297,14 @@ app.post('/api/remarks/refresh', async (req, res) => {
 // --- News feed (Gemini-search: gemini-sector + gemini-macro) ---
 
 // Read recent news items, newest first. Optional ?category= and ?since= filters.
-// ?showHidden=1 includes user-hidden rows (default = hidden only) — used by the
-// "Show hidden" toggle on the unified feed so the client cache is complete.
+// User-hidden rows are always excluded (see db.readNewsFeed).
 app.get('/api/news', async (req, res) => {
   try {
-    const { category, since, limit, showHidden } = req.query;
+    const { category, since, limit } = req.query;
     const rows = await db.readNewsFeed({
       category: category || null,
       since: since || null,
       limit: Math.min(parseInt(limit || '100', 10) || 100, 500),
-      includeHidden: showHidden === '1' || showHidden === 'true',
     });
     res.json({ rows, count: rows.length });
   } catch (e) {
@@ -359,26 +357,9 @@ app.post('/api/news/rss-refresh', async (req, res) => {
 
 // User actions on a single news row.
 //
-//   POST /api/news/:id/hide   body: {hidden: bool}     — default true
 //   POST /api/news/:id/note   body: {note: string|null}— empty/null clears
-//   GET  /api/news/hidden     — list user-hidden rows, newest hide first
 //
 // Single-tenant model — no per-user scope. All clients see the same state.
-app.post('/api/news/:id/hide', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id', code: 'news_hide_bad_id' });
-    // Default hidden=true when the caller doesn't pass it (e.g. a one-click
-    // "hide" button with no body). `!== false` means anything but explicit
-    // false counts as hide.
-    const hidden = !!(req.body && req.body.hidden !== false);
-    await db.setNewsHidden(id, hidden);
-    res.json({ ok: true, id, hidden });
-  } catch (e) {
-    res.status(500).json({ error: String(e.message || e), code: 'news_hide_failed' });
-  }
-});
-
 app.post('/api/news/:id/note', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -389,16 +370,6 @@ app.post('/api/news/:id/note', async (req, res) => {
     res.json({ ok: true, id, note: note && note.trim() ? note.trim() : null });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_note_failed' });
-  }
-});
-
-app.get('/api/news/hidden', async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 500);
-    const rows = await db.readHiddenNews(limit);
-    res.json({ rows, count: rows.length });
-  } catch (e) {
-    res.status(500).json({ error: String(e.message || e), code: 'news_hidden_failed' });
   }
 });
 

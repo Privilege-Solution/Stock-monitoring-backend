@@ -284,7 +284,7 @@
   .news-meta .chg {
     @apply text-[11px];
   }
-  /* Migrate-v6: user actions on news items (note + hide). */
+  /* Migrate-v6: user actions on news items (note). */
   .news-actions {
     @apply flex flex-col gap-1 items-end;
     align-self: center;
@@ -302,17 +302,10 @@
     background: rgba(59, 139, 212, 0.08);
     border-left: 2px solid var(--primary);
   }
-  .news-item.hidden-by-user {
-    opacity: 0.55;
-    background: var(--surface-2);
-  }
-  .news-item.hidden-by-user .news-text-link {
-    text-decoration: line-through;
-  }
 
   /* === Date-grouped feed card (renderUnifiedNewsItem) ===
    * 3-column row: meta (short date + weekday) | main (tag + headline +
-   * summary + note) | actions (note/hide). Scoped under the news view so the
+   * summary + note) | actions (note). Scoped under the news view so the
    * dashboard sidebar's .news-item-uniform cards are untouched. */
   #view-news .news-card {
     @apply flex items-start gap-3 px-4 py-2.5 border-b border-border bg-card transition-colors;
@@ -348,13 +341,6 @@
   #view-news .news-card-title:hover {
     color: var(--primary);
     text-decoration: underline;
-  }
-  #view-news .news-card.hidden-by-user {
-    opacity: 0.55;
-    background: var(--surface-2);
-  }
-  #view-news .news-card.hidden-by-user .news-card-title {
-    text-decoration: line-through;
   }
 
   /* Rounded search input with a leading magnifier icon, sitting in the feed
@@ -430,24 +416,6 @@
   #dashNewsList .news-item-uniform .ni-chg {
     @apply text-[11px];
   }
-  /* Toast for hide/unhide undo (auto-dismiss after 5s). */
-  .toast-undo {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-    z-index: 9999;
-    font-size: 13px;
-  }
-  .toast-undo button { font-size: 12px; }
 
   /* === Sub-tabs === */
   .subtabs {
@@ -649,12 +617,9 @@
     @apply grid gap-3;
     grid-template-columns: 1fr 1fr 1fr;
   }
-  .mt-8  { @apply mt-2; }
-  .mt-12 { @apply mt-3; }
-  .mt-16 { @apply mt-4; }
-  .mb-8  { @apply mb-2; }
-  .mb-12 { @apply mb-3; }
-  .mb-16 { @apply mb-4; }
+  /* Compact spacing scale (8/12/16 → .5/.75/1rem). Defined in @layer utilities
+     below so they override Tailwind's same-named utilities, which would
+     otherwise clobber them with 2/3/4rem and blow up every box gap. */
   .row {
     @apply flex items-center gap-2;
   }
@@ -744,6 +709,21 @@
   }
 }
 
+/* Compact spacing scale. Tailwind scans the markup, sees these class names in
+   use, and generates same-named utilities (mb-8/12/16 = 2/3/4rem) that it
+   appends AFTER all user CSS — so a plain single-class rule loses to its 4rem
+   "mb-16" (60px). Doubling the selector raises specificity to (0,2,0), beating
+   the utility (0,1,0) while STILL losing to higher-specificity overrides like
+   ".bottom-row ... .muted.mb-8" and to inline styles (preserving the export
+   buttons' margin-top:8px). Values are the app's intended scale (8/12/16 →
+   .5/.75/1rem); without this every inter-box gap renders 4× too large. */
+.mt-8.mt-8   { margin-top: 0.5rem; }
+.mt-12.mt-12 { margin-top: 0.75rem; }
+.mt-16.mt-16 { margin-top: 1rem; }
+.mb-8.mb-8   { margin-bottom: 0.5rem; }
+.mb-12.mb-12 { margin-bottom: 0.75rem; }
+.mb-16.mb-16 { margin-bottom: 1rem; }
+
 /* === Breakpoints === */
 @layer components {
   @media (max-width: 1400px) {
@@ -805,7 +785,7 @@
      section per calendar date; header is a collapsible toggle, body holds the
      .news-card rows. Newest date renders first (driven by renderUnifiedNews). */
   .news-day-groups {
-    @apply flex flex-col gap-3;
+    @apply flex flex-col gap-2;
   }
   .news-day {
     @apply rounded-lg border border-border overflow-hidden bg-card;

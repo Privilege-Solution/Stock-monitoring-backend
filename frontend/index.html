@@ -416,12 +416,6 @@
             <button class="pill th" data-range="90D">90 วัน</button>
             <button class="pill th" data-range="ALL">ทั้งหมด</button>
           </div>
-          <button class="pill th" id="newsShowHiddenBtn" data-active="false" title="แสดงข่าวที่ซ่อนไว้">
-            <span id="newsShowHiddenIcon"></span> ที่ซ่อน (<span id="newsHiddenCount">0</span>)
-          </button>
-          <button class="btn btn-ghost" id="newsRefreshBtn" title="ดึงข่าวใหม่จาก Gemini Search">
-            <span id="newsRefreshIcon"></span><span class="th"> รีเฟรช</span>
-          </button>
         </div>
         <div class="feed-cat-row">
           <div class="pill-row feed-cat-pills" id="newsCatPills">
@@ -755,20 +749,8 @@ window.ASW_API = {
       return await r.json();
     } catch (e) { return { lastRuns: {}, counts: { total: 0, high: 0, high_priority: 0, today: 0 }, fetchedAt: null }; }
   },
-  // User-action endpoints (migrate-v6) — hide/dismiss and note on a single
-  // news row. Both default to optimistic UI in the caller (mutate NEWS_DATA
-  // first, then await this); failures should rollback locally.
-  async hideNews(id, hidden = true) {
-    try {
-      const r = await fetch(`/api/news/${id}/hide`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ hidden: !!hidden }),
-      });
-      if (!r.ok) throw 0;
-      return await r.json();
-    } catch (e) { return { ok: false, error: 'offline' }; }
-  },
+  // User-action endpoint (migrate-v6) — note on a single news row. Defaults
+  // to optimistic UI in the caller (mutate NEWS_DATA first, then await this).
   async noteNews(id, note) {
     try {
       const r = await fetch(`/api/news/${id}/note`, {
@@ -779,14 +761,6 @@ window.ASW_API = {
       if (!r.ok) throw 0;
       return await r.json();
     } catch (e) { return { ok: false, error: 'offline' }; }
-  },
-  async hiddenNews(limit = 100) {
-    try {
-      const r = await fetch(`/api/news/hidden?limit=${limit}`);
-      if (!r.ok) throw 0;
-      const d = await r.json();
-      return d.rows || [];
-    } catch (e) { return []; }
   },
   async morningBrief() {
     try { const r = await fetch('/api/morning-brief'); if (!r.ok) throw 0; return await r.json(); }
@@ -957,10 +931,6 @@ const STATE = {
   newsRange: '30D',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  (day-count filters; 30 วัน default)
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
-  // User-action state (migrate-v6): hide toggle, note cache, toast timer.
-  newsShowHidden: false, // when true, buildMergedNewsItems() includes hidden rows
-  hiddenNewsCache: [],   // populated lazily on first toggle; appended into NEWS_DATA
-  toastUndoTimer: null,  // setTimeout handle for the 5s Undo window after a hide
   wizardStep: 1,
   report: {
     template: 'summary',
@@ -2312,10 +2282,9 @@ window.NEWS_DATA = window.NEWS_DATA || [];
 
 async function loadNewsFeed() {
   try {
-    // Fetch with showHidden=1 so the cache is complete; filter functions
-    // (buildMergedNewsItems + renderDashNews) decide what to surface based
-    // on STATE.newsShowHidden. Keeps NEWS_DATA authoritative across views.
-    const r = await fetch('/api/news?limit=200&showHidden=1');
+    // User-hidden rows are already excluded server-side; this cache is the
+    // single source of truth for both renderDashNews() and renderUnifiedNews().
+    const r = await fetch('/api/news?limit=200');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     window.NEWS_DATA = d.rows || [];
@@ -2375,17 +2344,11 @@ function buildMergedNewsItems() {
     display_priority: n.display_priority,
     impact_level: n.impact_level || null,    // migrate-v9 — HIGH/MEDIUM/LOW
     id: n.id,
-    hidden: !!n.hidden,
-    hidden_at: n.hidden_at || null,
     user_note: n.user_note || null,
   }));
   // Valid-link filter: drop items with empty/null source_url. Required so
-  // the feed never shows a non-clickable headline. Hidden filter: drop
-  // user-hidden rows unless STATE.newsShowHidden is true (Show hidden pill).
-  return b.filter(it =>
-    it.text && it.url && it.url.length > 0 &&
-    (STATE.newsShowHidden || !it.hidden)
-  );
+  // the feed never shows a non-clickable headline.
+  return b.filter(it => it.text && it.url && it.url.length > 0);
 }
 
 // Migrate-v8: paint the .active state on category chips based on
@@ -2485,17 +2448,11 @@ function renderUnifiedNewsItem(item) {
   const noteHtml = item.user_note
     ? `<div class="news-user-note th">${icon('edit')} ${escapeHtml(item.user_note)}</div>`
     : '';
-  // Hidden-by-user state — when STATE.newsShowHidden is on, hidden rows
-  // render with strikethrough + reduced opacity so the user can see what
-  // they've dismissed and click the eye to restore.
-  const hiddenCls = item.hidden ? ' hidden-by-user' : '';
   const idAttr = item.id != null ? ` data-id="${item.id}"` : '';
-  const hideTitle = item.hidden ? 'แสดงกลับ (unhide)' : 'ซ่อนข่าวนี้ (hide)';
-  const hideIcon  = item.hidden ? icon('eye') : icon('eye-off');
   const noteTitle = item.user_note ? 'แก้ไข note' : 'เพิ่ม note';
   const src = item.sourceLabel ? `<span class="news-card-src muted th">${escapeHtml(item.sourceLabel)}</span>` : '';
   // 3-column card: meta (date+weekday) | main (tag+headline+summary+note) | actions.
-  return `<div class="news-card${hiddenCls}"${idAttr}>
+  return `<div class="news-card"${idAttr}>
     <div class="news-card-meta th">
       <div class="news-card-date">${escapeHtml(fmtThaiShort(item.date))}</div>
       <div class="news-card-day muted">${escapeHtml(fmtThaiWeekday(item.date))}</div>
@@ -2510,7 +2467,6 @@ function renderUnifiedNewsItem(item) {
     </div>
     <div class="news-actions">
       <button class="news-action-btn" data-action="note" data-id="${item.id}" title="${noteTitle}">${icon('edit')}</button>
-      <button class="news-action-btn" data-action="hide" data-id="${item.id}" title="${hideTitle}">${hideIcon}</button>
     </div>
   </div>`;
 }
@@ -2537,23 +2493,7 @@ function bindUnifiedItemClick() {
     const item = (window.NEWS_DATA || []).find(n => n.id === id);
     if (!item) return;
 
-    if (action === 'hide') {
-      const newHidden = !item.hidden;
-      item.hidden = newHidden;
-      item.hidden_at = newHidden ? new Date().toISOString() : null;
-      renderUnifiedNews();
-      renderDashNews(filterByRange(DATA, STATE.range)); // sync sidebar
-      const r = await window.ASW_API.hideNews(id, newHidden);
-      if (!r.ok) {
-        // Rollback on failure.
-        item.hidden = !newHidden;
-        item.hidden_at = item.hidden ? new Date().toISOString() : null;
-        renderUnifiedNews();
-        renderDashNews(filterByRange(DATA, STATE.range));
-        return;
-      }
-      showHideToast(id, item.title, newHidden);
-    } else if (action === 'note') {
+    if (action === 'note') {
       const note = window.prompt('Note (ว่าง/ยกเลิก = ลบ note):', item.user_note || '');
       if (note == null) return;        // user pressed Cancel
       const newNote = note.trim() || null;
@@ -2567,51 +2507,6 @@ function bindUnifiedItemClick() {
       }
     }
   });
-}
-
-// 5-second toast with an Undo button. Used after a hide/unhide so the user
-// can reverse the action without manually re-toggling the pill.
-function showHideToast(id, title, wasHidden) {
-  const old = $('hideToast');
-  if (old) old.remove();
-  if (STATE.toastUndoTimer) {
-    clearTimeout(STATE.toastUndoTimer);
-    STATE.toastUndoTimer = null;
-  }
-
-  const t = (title || '').slice(0, 50);
-  const ellipsis = (title || '').length > 50 ? '…' : '';
-  const verb = wasHidden ? 'ซ่อน' : 'แสดงกลับ';
-
-  const toast = document.createElement('div');
-  toast.id = 'hideToast';
-  toast.className = 'toast-undo th';
-  toast.innerHTML = `
-    <span>${escapeHtml(verb)}: ${escapeHtml(t)}${ellipsis}</span>
-    <button class="btn btn-ghost th" id="hideToastUndo">${icon('undo')} Undo</button>
-  `;
-  document.body.appendChild(toast);
-
-  $('hideToastUndo').addEventListener('click', async () => {
-    if (STATE.toastUndoTimer) {
-      clearTimeout(STATE.toastUndoTimer);
-      STATE.toastUndoTimer = null;
-    }
-    toast.remove();
-    const item = (window.NEWS_DATA || []).find(n => n.id === id);
-    if (!item) return;
-    const restoreHidden = !wasHidden;       // flip back
-    item.hidden = restoreHidden;
-    item.hidden_at = restoreHidden ? new Date().toISOString() : null;
-    renderUnifiedNews();
-    renderDashNews(filterByRange(DATA, STATE.range));
-    await window.ASW_API.hideNews(id, restoreHidden);
-  });
-
-  STATE.toastUndoTimer = setTimeout(() => {
-    toast.remove();
-    STATE.toastUndoTimer = null;
-  }, 5000);
 }
 
 async function loadNewsStatus() {
@@ -2728,7 +2623,7 @@ function renderDailySummary() {
   if (!el) return;
   const s = window.DAILY_SUMMARY || {};
   if (!s || !s.date || !s.digest) {
-    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกด "รีเฟรชสรุป" —</div>';
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" ด้านบน —</div>';
     return;
   }
   const bullets = String(s.digest).split('\n').map(x => x.trim()).filter(Boolean);
@@ -2747,10 +2642,7 @@ function renderDailySummary() {
           <span class="muted th" style="font-size:11px;">🤖 สรุปข่าวประจำวัน</span>
           <h3 class="th" style="font-size:15px;margin:4px 0 0 0;">${escapeHtml(dateStr)}</h3>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:13px;padding:6px 12px;">${escapeHtml(toneLabel)}</span>
-          <button class="btn btn-ghost" id="dailySummaryRefreshBtn" title="สร้างสรุปข่าววันนี้ใหม่"><span class="th" style="font-size:12px;">🔄 รีเฟรชสรุป</span></button>
-        </div>
+        <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:13px;padding:6px 12px;">${escapeHtml(toneLabel)}</span>
       </div>
       ${bullets.length
         ? `<ul class="th" style="margin:0 0 8px 0;padding-left:20px;line-height:1.7;">
@@ -2761,24 +2653,36 @@ function renderDailySummary() {
       <div class="muted th" style="font-size:11px;margin-top:8px;">สรุปจากข่าว ${s.source_count != null ? s.source_count : '?'} รายการของวันนี้${escapeHtml(updated)}</div>
     </div>
   `;
-  const btn = $('dailySummaryRefreshBtn');
-  if (btn) btn.addEventListener('click', refreshDailySummary);
 }
 
+// Regenerate today's news digest on the server, then reload it. Invoked by
+// the single top-level Refresh button — there's no per-card button anymore.
 async function refreshDailySummary() {
-  const btn = $('dailySummaryRefreshBtn');
-  if (btn) btn.disabled = true;
   try {
     const r = await window.ASW_API.dailySummaryRefresh();
     if (r && r.ok) {
       await loadDailySummary();   // reload the freshly-generated digest
       await loadAllDigests();     // re-stamp rows + re-render pins / Remark
     } else {
-      alert('สร้างสรุปไม่สำเร็จ: ' + ((r && (r.error || r.reason)) || 'unknown'));
+      showToast('สร้างสรุปไม่สำเร็จ: ' + ((r && (r.error || r.reason)) || 'unknown'));
     }
-  } finally {
-    if (btn) btn.disabled = false;
+  } catch (e) {
+    showToast('สร้างสรุปไม่สำเร็จ');
   }
+}
+
+// Pull fresh news from Gemini Search, then reload the feed + status row.
+// Distinct from the render-only refreshNews() below — this one hits the API.
+async function refreshNewsFeed() {
+  const r = await window.ASW_API.newsRefresh();
+  if (!r || !r.ok) {
+    showToast('รีเฟรชข่าวไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
+    return;
+  }
+  showToast('รีเฟรช Gemini Search แล้ว');
+  await loadNewsFeed();
+  renderUnifiedNews();
+  await loadNewsStatus();
 }
 
 /* ============== Report Builder Wizard ============== */
@@ -3243,17 +3147,6 @@ function refreshNews() {
   try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
   try { renderDailySummary(); } catch (e) { console.warn('refreshNews: renderDailySummary failed:', e.message); }
   loadNewsStatus();
-  refreshHiddenCount();
-}
-
-// Migrate-v6: count hidden rows in the canonical NEWS_DATA cache and update
-// the toolbar pill badge. Called on every load and after each hide/unhide so
-// the counter always reflects the current cache state.
-function refreshHiddenCount() {
-  const el = $('newsHiddenCount');
-  if (!el) return;
-  const hidden = (window.NEWS_DATA || []).filter(n => n && n.hidden).length;
-  el.textContent = String(hidden);
 }
 
 /* ============== File upload ============== */
@@ -3264,8 +3157,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Migrate-v7: inject SVG icons into static HTML placeholders (news toolbar).
   // The placeholders can't use ${icon(...)} because they're in HTML markup,
   // not JS template literals.
-  const shI = $('newsShowHiddenIcon'); if (shI) shI.innerHTML = icon('eye-off');
-  const rfI = $('newsRefreshIcon');   if (rfI) rfI.innerHTML = icon('refresh');
   const scI = $('newsSearchIcon');    if (scI) scI.innerHTML = icon('search');
 
   // Sidebar
@@ -3410,50 +3301,8 @@ document.addEventListener('DOMContentLoaded', () => {
       toggle.classList.toggle('collapsed', collapsed);
     });
   }
-  // News refresh button — POST /api/news/refresh (default = gemini-sector)
-  // then reload the feed and the status row.
-  const newsRefreshBtn = $('newsRefreshBtn');
-  if (newsRefreshBtn) {
-    newsRefreshBtn.addEventListener('click', async () => {
-      newsRefreshBtn.disabled = true;
-      try {
-        const r = await window.ASW_API.newsRefresh();
-        if (!r || !r.ok) {
-          showToast('รีเฟรชไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
-        } else {
-          showToast('รีเฟรช Gemini Search แล้ว');
-        }
-        await loadNewsFeed();
-        renderUnifiedNews();
-        await loadNewsStatus();
-      } finally {
-        newsRefreshBtn.disabled = false;
-      }
-    });
-  }
-  // Migrate-v6: "Show hidden" pill — toggles STATE.newsShowHidden and (on
-  // first enable) lazily fetches the hidden-rows cache so the unified feed
-  // can render them. The counter badge next to the label updates whenever
-  // the cache changes via refreshHiddenCount().
-  const newsShowHiddenBtn = $('newsShowHiddenBtn');
-  if (newsShowHiddenBtn) {
-    newsShowHiddenBtn.addEventListener('click', async () => {
-      STATE.newsShowHidden = !STATE.newsShowHidden;
-      newsShowHiddenBtn.dataset.active = String(STATE.newsShowHidden);
-      newsShowHiddenBtn.classList.toggle('active', STATE.newsShowHidden);
-      // Lazy fetch hidden rows on first enable; the cache is then merged
-      // into NEWS_DATA so the unified-feed filter sees them.
-      if (STATE.newsShowHidden && !STATE.hiddenNewsCache.length) {
-        const hidden = await window.ASW_API.hiddenNews();
-        STATE.hiddenNewsCache = hidden;
-        const ids = new Set((window.NEWS_DATA || []).map(n => n.id));
-        hidden.forEach(h => { if (!ids.has(h.id) && (window.NEWS_DATA || []).push) window.NEWS_DATA.push(h); });
-      }
-      refreshHiddenCount();
-      renderUnifiedNews();
-    });
-  }
-  refreshHiddenCount();
+  // News refresh is driven by the single top-level Refresh button now — see
+  // refreshNewsFeed() and the #refreshBtn handler (no per-panel button).
   // Report language toggle — re-render preview on change
   const rptLang = $('rptLang');
   if (rptLang) rptLang.addEventListener('change', () => {
@@ -3631,33 +3480,43 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rb) rb.addEventListener('click', async () => {
       const icon = $('refreshIcon');
       if (icon) icon.classList.add('spin');
-      showToast('กำลังดึงข้อมูล...');
-      const r = await window.ASW_API.refresh();
-      if (!r || !r.ok) {
-        showToast('ดึงข้อมูลไม่สำเร็จ' + (r && r.error ? ': ' + r.error : ''));
-        if (icon) icon.classList.remove('spin');
-        return;
-      }
+      showToast('กำลังรีเฟรช...');
       try {
-        const rows = await window.ASW_API.daily();
-        DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
-        const meta2 = await window.ASW_API.metadata();
-        CURRENT_FILE_NAME = 'Live · ' + (meta2.lastFetchSource || 'yahoo');
-        $('sbFile').textContent = CURRENT_FILE_NAME;
-        const lu2 = $('lastUpdated');
-        if (lu2 && meta2.lastFetched) {
-          lu2.textContent = new Date(meta2.lastFetched).toLocaleString('th-TH',
-            { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
-        }
-        // Invalidate peer cache so buildPeerSnapshot re-pulls fresh prices.
-        if (typeof PEER_CACHE !== 'undefined') PEER_CACHE = null;
-        setView(STATE.view);
-        updateStatusBar();
-        showToast('อัปเดตข้อมูลแล้ว · ' + (r.added + r.updated) + ' แถว');
-      } catch (e) {
-        showToast('อัปเดตข้อมูลไม่สำเร็จ');
+        // Single refresh button: pull price data + crawl fresh news together,
+        // then regenerate today's digest (it summarizes the news). Each leg
+        // handles its own failures so one slow/broken source can't abort the
+        // others, and the spin always stops via finally.
+        const dataP = (async () => {
+          const r = await window.ASW_API.refresh();
+          if (!r || !r.ok) {
+            showToast('ดึงข้อมูลไม่สำเร็จ' + (r && r.error ? ': ' + r.error : ''));
+            return;
+          }
+          try {
+            const rows = await window.ASW_API.daily();
+            DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+            const meta2 = await window.ASW_API.metadata();
+            CURRENT_FILE_NAME = 'Live · ' + (meta2.lastFetchSource || 'yahoo');
+            $('sbFile').textContent = CURRENT_FILE_NAME;
+            const lu2 = $('lastUpdated');
+            if (lu2 && meta2.lastFetched) {
+              lu2.textContent = new Date(meta2.lastFetched).toLocaleString('th-TH',
+                { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
+            }
+            // Invalidate peer cache so buildPeerSnapshot re-pulls fresh prices.
+            if (typeof PEER_CACHE !== 'undefined') PEER_CACHE = null;
+            setView(STATE.view);
+            updateStatusBar();
+            showToast('อัปเดตข้อมูลแล้ว · ' + (r.added + r.updated) + ' แถว');
+          } catch (e) {
+            showToast('อัปเดตข้อมูลไม่สำเร็จ');
+          }
+        })();
+        await Promise.all([dataP, refreshNewsFeed()]);
+        await refreshDailySummary();
+      } finally {
+        if (icon) icon.classList.remove('spin');
       }
-      if (icon) icon.classList.remove('spin');
     });
     const hrb = $('healthRefillBtn');
     if (hrb) hrb.addEventListener('click', async () => {

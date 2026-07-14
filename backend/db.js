@@ -633,58 +633,24 @@ async function writeNewsItems(items) {
 // The composite index on (display_priority DESC, date DESC, id DESC) backs
 // this sort — high-severity items surface first, same priority keeps date
 // order, id tiebreaks identical timestamps deterministically.
-async function readNewsFeed({ category = null, since = null, limit = 100, includeHidden = false } = {}) {
+async function readNewsFeed({ category = null, since = null, limit = 100 } = {}) {
   const p = getPool();
-  const where = [];
+  // User-dismissed (hidden) rows are always excluded. The hide feature was
+  // removed; the column/flag is kept so previously-hidden rows stay dismissed.
+  const where = ['hidden = FALSE'];
   const params = [];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
-  // hidden items are user-dismissed and dropped by default. Pass
-  // `includeHidden: true` to fetch them anyway (used by /api/news?showHidden=1
-  // for the "Show hidden" toggle).
-  if (!includeHidden) where.push('hidden = FALSE');
   params.push(Math.min(limit || 100, 500));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
-                      impact_level,
-                      hidden, hidden_at, user_note
+                      impact_level, user_note
                FROM news_feed
-               ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+               WHERE ${where.join(' AND ')}
                ORDER BY display_priority DESC, date DESC, id DESC
                LIMIT $${params.length}`;
   const r = await p.query(sql, params);
   return r.rows;
-}
-
-// Read just the user-hidden rows (newest hide first) for the "Show hidden"
-// toggle. Backs GET /api/news/hidden.
-async function readHiddenNews(limit = 100) {
-  const p = getPool();
-  const sql = `SELECT id, title, date, category, source_url, source_label,
-                      pipeline, impact, severity, show_pin, display_priority, summary,
-                      impact_level,
-                      hidden, hidden_at, user_note
-               FROM news_feed
-               WHERE hidden = TRUE
-               ORDER BY hidden_at DESC
-               LIMIT $1`;
-  const r = await p.query(sql, [Math.min(limit || 100, 500)]);
-  return r.rows;
-}
-
-// Set the hidden flag for a single row by id. Toggles `hidden_at` to NOW()
-// on hide, NULL on unhide. Returns nothing — caller just awaits.
-async function setNewsHidden(id, hidden = true) {
-  if (!Number.isFinite(parseInt(id, 10))) {
-    throw new Error('setNewsHidden: id must be an integer');
-  }
-  await getPool().query(
-    `UPDATE news_feed
-       SET hidden = $1,
-           hidden_at = CASE WHEN $1 = TRUE THEN NOW() ELSE NULL END
-     WHERE id = $2`,
-    [!!hidden, id]
-  );
 }
 
 // Set/clear the user_note for a single row by id. Empty / null / whitespace
@@ -784,7 +750,5 @@ module.exports = {
   writeNewsItems,
   readNewsFeed,
   readNewsStatus,       // GET /api/news/status payload
-  readHiddenNews,       // v6 — user-hidden rows for "Show hidden" view
-  setNewsHidden,        // v6 — soft delete toggle per row
   setNewsNote,          // v6 — user_note writer
 };
