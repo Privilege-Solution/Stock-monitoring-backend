@@ -1025,6 +1025,7 @@ function classifyEvent(x) {
       macro:   { type: 'macro',        color: getCSS('--evt-macro'), label: 'มหภาค' },
       pol:     { type: 'political',    color: getCSS('--evt-pol'),   label: 'การเมือง' },
       other:   { type: 'other',        color: getCSS('--evt-other'), label: 'อื่นๆ' },
+      summary: { type: 'other',        color: getCSS('--evt-other'), label: 'สรุป' },   // daily digest remark
       // company pipeline (5)
       corporate:     { type: 'corporate',    color: getCSS('--evt-corp'),  label: 'ผลประกอบการ' },
       project:       { type: 'project',      color: getCSS('--evt-proj'),  label: 'โครงการใหม่' },
@@ -1088,6 +1089,7 @@ const REMARK_BADGE = {
   sector:  { label: 'อสังหาฯ', cls: 'sector',    color: '#3B8BD4' },
   macro:   { label: 'มหภาค',  cls: 'macro',     color: '#EF9F27' },
   other:   { label: 'อื่นๆ',  cls: 'other',     color: '#888780' },
+  summary: { label: 'สรุป',   cls: 'other',     color: '#888780' },   // daily digest remark
   // legacy categories from earlier Gemini pipelines + v8 RSS — retained
   // so any offline data, old rows in the DB, or external consumers still
   // see a coloured badge. Live news rows from Gemini/RSS now write one
@@ -1218,9 +1220,16 @@ function eachRemark(row) {
   // exactly one pin and one short Remark cell — the legacy field only fills
   // in for old dates that predate the digest pipeline.
   if (row.digestRemark) {
+    // The daily digest is itself a summary — when classifyEvent() couldn't
+    // bucket the first bullet into a real category (-> 'other'), label the
+    // badge "สรุป" instead of the generic "อื่นๆ". A bucketed digest (e.g.
+    // 'ดอกเบี้ย') keeps its label so the pin + badge still reflect the day's
+    // dominant theme. Pin colour is unchanged: 'summary' maps to the same
+    // gray as 'other' in classifyEvent()'s map.
+    const dc = row.digestCategory;
     return [{
       date: row.date,
-      category: row.digestCategory || 'other',
+      category: (dc && dc !== 'other') ? dc : 'summary',
       text: row.digestRemark,
       source: 'digest',
       close: row.close,
