@@ -128,6 +128,37 @@
   }
   .news-card:hover .news-card-delete { opacity: 1; }
   .news-card-delete:hover { color: var(--negative); background: color-mix(in srgb, var(--negative) 10%, transparent); }
+
+  /* Pin-on-chart picker — a single button at the ข่าวล่าสุด header opens a
+     modal listing feed news; each row toggles chart_marked. Replaces the
+     per-card pin buttons so the sidebar stays scannable. */
+  .pin-picker-btn {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.3rem 0.6rem; border-radius: 0.375rem;
+    background: transparent; color: var(--primary); border: 1px solid var(--primary);
+    font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .pin-picker-btn:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+  .pin-picker-btn .icon-svg { width: 12px; height: 12px; }
+
+  .pin-picker-list { max-height: 60vh; overflow-y: auto; margin-top: 0.5rem; }
+  .pin-picker-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.45rem 0.3rem; border-bottom: 1px solid var(--border);
+  }
+  .pin-picker-item .pp-date { font-size: 0.7rem; color: var(--muted); flex: 0 0 3.5rem; }
+  .pin-picker-item .pp-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.4rem; }
+  .pin-picker-item .pp-title { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pp-toggle {
+    flex: 0 0 auto; width: 1.6rem; height: 1.6rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    border-radius: 0.25rem; transition: color .15s, background .15s;
+  }
+  .pp-toggle:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+  .pp-toggle.is-marked { color: var(--primary); }
+  .pp-toggle .icon-svg { width: 14px; height: 14px; }
 </style>
 </head>
 <body>
@@ -305,19 +336,20 @@
             <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--primary)"></span> ASW Close</div>
             <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--muted); border-top:1px dashed var(--muted)"></span> SET Index</div>
             <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--teal); border-top:1px dashed var(--teal)"></span> PROP Index</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-rate)"></span> ดอกเบี้ย</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-corp)"></span> ผลประกอบการ</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-pol)"></span> การเมือง</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-proj)"></span> โครงการ</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-macro)"></span> มหภาค</div>
-            <div class="chart-legend-item"><span class="legend-pin" style="background:var(--evt-other)"></span> อื่นๆ</div>
+            <!-- Dashboard pins are now user-placed "marks" (chart_marked news),
+                 coloured by the same badge as the ข่าวล่าสุด card beside the chart —
+                 so a pin decodes by matching its colour to that card, no separate
+                 pin legend needed. (The old 6-bucket digest legend is removed.) -->
           </div>
         </div>
 
         <div class="card" style="display:flex; flex-direction:column; max-height: 500px;">
           <div class="row-between mb-8">
             <h3 class="th" style="font-size:13px;">ข่าวล่าสุด</h3>
-            <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
+            <div class="row" style="gap:8px; align-items:center;">
+              <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
+              <button class="pin-picker-btn th" id="pinPickerBtn" type="button" title="ปักหมุดข่าวบนกราฟ"><span id="pinPickerBtnIcon"></span> ปักหมุด</button>
+            </div>
           </div>
           <input type="text" id="dashNewsSearch" placeholder="ค้นหาในหัวข้อ + สรุป..."
                  class="th" style="font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;" />
@@ -791,6 +823,20 @@
   </div>
 </div>
 
+<!-- Pin-on-chart picker (ปักหมุดข่าวบนกราฟ). A single button at the ข่าวล่าสุด
+     header opens this modal; each row toggles chart_marked on a feed item.
+     Replaces the per-card pin buttons so the sidebar stays scannable. -->
+<div class="modal-overlay" id="pinPickerModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pinPickerTitle">
+    <h3 class="th" id="pinPickerTitle">ปักหมุดข่าวบนกราฟ</h3>
+    <p class="modal-sub th">เลือกข่าวที่จะปักหมุดบนกราฟ Dashboard — ปักแล้วอยู่ถาวรข้ามรีเฟรช</p>
+    <div id="pinPickerList" class="pin-picker-list"></div>
+    <div class="modal-actions">
+      <button type="button" id="pinPickerClose" class="th">ปิด</button>
+    </div>
+  </div>
+</div>
+
 <!-- Data bootstrap: pulls from the Node backend at /api/daily and /api/metadata.
      Falls back to bundled SAMPLE_DATA when the backend is unreachable (e.g. opened
      directly via file://) so the demo still renders without a server. -->
@@ -860,6 +906,20 @@ window.ASW_API = {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ note: note == null ? null : String(note) }),
+      });
+      if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  // Toggle the dashboard chart "mark" on a news row (POST /api/news/:id/mark).
+  // chart_marked replaces digest Event Pins on the Dashboard chart only. Returns
+  // {ok, id, chart_marked} or {ok:false, error:'offline'}.
+  async markNews(id, marked) {
+    try {
+      const r = await fetch(`/api/news/${id}/mark`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ marked: !!marked }),
       });
       if (!r.ok) throw 0;
       return await r.json();
@@ -1621,13 +1681,64 @@ function buildPinAnnotations(rows, showOnlyTypes) {
   return ann;
 }
 
+/* ============== User Chart Marks (Dashboard) ==============
+ * Replaces the digest-driven Event Pins on the Dashboard chart: each news_feed
+ * row the user has marked (chart_marked=TRUE) becomes one point annotation at
+ * its date. If the news date isn't a trading day in `filtered`, snap to the
+ * nearest in-view day so the pin lands on the price line. Colour comes from
+ * REMARK_BADGE — the same colour as the card's badge, so pin + card read as one.
+ *
+ * Price History view still calls buildPinAnnotations() (digest) — untouched.
+ */
+function buildMarkAnnotations(filtered) {
+  const ann = {};
+  const marked = (window.NEWS_DATA || []).filter(n => n.chart_marked);
+  if (!marked.length || !filtered.length) return ann;
+
+  const days = filtered.map(r => r.date).sort((a, b) => a.localeCompare(b));
+  const byDate = new Map(filtered.map(r => [r.date, r]));
+  const dayMs = days.map(d => new Date(d + 'T00:00:00').getTime());
+  const firstMs = dayMs[0], lastMs = dayMs[dayMs.length - 1];
+  const nearestDay = (ms) => {
+    let best = days[0], bestDist = Infinity;
+    for (let k = 0; k < dayMs.length; k++) {
+      const dist = Math.abs(dayMs[k] - ms);
+      if (dist < bestDist) { bestDist = dist; best = days[k]; }
+    }
+    return best;
+  };
+
+  let i = 0;
+  for (const n of marked) {
+    const d = (n.date || '').slice(0, 10);
+    if (!d) continue;
+    const ms = new Date(d + 'T00:00:00').getTime();
+    if (!(ms >= firstMs && ms <= lastMs)) continue;   // outside the visible range
+    const day = byDate.has(d) ? d : nearestDay(ms);
+    const row = byDate.get(day);
+    if (!row || row.close == null) continue;
+    const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+    ann['usrMark_' + (i++)] = {
+      type: 'point',
+      xValue: day + 'T00:00:00',
+      yValue: row.close,
+      backgroundColor: badge.color,
+      borderColor: '#ffffff',
+      borderWidth: 2,
+      radius: 6,
+    };
+  }
+  return ann;
+}
+
 /* ============== Dashboard Chart ============== */
 function buildDashChart(filtered) {
   const ctx = $('dashChart').getContext('2d');
   const priceData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
   const setData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.setIdx }));
   const propData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
-  const annotations = buildPinAnnotations(filtered);
+  // Dashboard pins = user-placed marks (chart_marked news), NOT digest pins.
+  const annotations = buildMarkAnnotations(filtered);
 
   // Tighten price-axis range so the line fills the chart (don't span to zero)
   const priceVals = priceData.map(p => p.y).filter(v => v != null);
@@ -1710,16 +1821,15 @@ function buildDashChart(filtered) {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
-              const row = DATA.find(r => r.date === ymd);
-              if (row) {
-                const items_ = eachRemark(row);
-                if (items_.length) {
-                  const it = items_[0];
-                  const c = classifyEvent(it);
-                  return ['', (c ? '[' + c.label + '] ' : '📰 ') + it.text];
-                }
-              }
-              return '';
+              // Dashboard pin layer = user marks (chart_marked), not digest
+              // remarks. Surface the pinned news for the hovered date.
+              const marks = (window.NEWS_DATA || []).filter(
+                n => n.chart_marked && (n.date || '').slice(0,10) === ymd);
+              if (!marks.length) return '';
+              return [''].concat(marks.map(n => {
+                const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+                return '[' + badge.label + '] ' + (n.title || '');
+              }));
             }
           }
         },
@@ -1794,7 +1904,8 @@ function renderDashNewsCard(item) {
   // Falls back to MACRO for unknown legacy values (offline sample data).
   const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
   const focused = item.date === STATE.focusedDate ? ' focused' : '';
-  const dataAttrs = item.source === 'feed'
+  const isFeed = item.source === 'feed';
+  const dataAttrs = isFeed
     ? ` data-source="feed" data-id="${item.id != null ? escapeHtml(String(item.id)) : ''}"`
     : ` data-source="remark" data-date="${escapeHtml(item.date)}"`;
   const priceCell = item.close  != null ? '฿' + fmtNum(item.close)  : '—';
@@ -1866,8 +1977,8 @@ function renderDashNews(filtered) {
   // Click handler — one delegated handler for both streams.
   //   * data-source="remark" → focus chart on that date.
   //   * data-source="feed"   → open the source_url in a new tab.
-  // Note/hide buttons no longer live on the sidebar cards — those live in
-  // the News & Factors view (renderUnifiedNewsItem).
+  // (Pin-on-chart is now a single button at the ข่าวล่าสุด header → picker,
+  //  not a per-card button, so the sidebar stays scannable.)
   list.querySelectorAll('.news-item-uniform').forEach(el => {
     el.addEventListener('click', () => {
       if (el.dataset.source === 'feed') {
@@ -1914,6 +2025,7 @@ function icon(name) {
     case 'chevron-down':return wrap('<polyline points="6 9 12 15 18 9"/>');
     case 'plus':        return wrap('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>');
     case 'trash':       return wrap('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>');
+    case 'pin':         return wrap('<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>');
     default:            return '';
   }
 }
@@ -2846,6 +2958,59 @@ function closeAddNewsModal() {
   m.setAttribute('aria-hidden', 'true');
 }
 
+/* ============== Pin-on-chart picker ==============
+ * A single "ปักหมุด" button at the ข่าวล่าสุด header opens this modal — it
+ * lists feed news (newest first) with a pin toggle per row, replacing the
+ * per-card pin buttons so the sidebar stays scannable. Toggling a row calls
+ * handleMarkNews(); the list re-renders to reflect the new state.
+ */
+function renderPinPickerList() {
+  const list = $('pinPickerList');
+  if (!list) return;
+  // Feed items only (remark/digest rows can't be marked). NEWS_DATA is already
+  // capped server-side; sort newest first.
+  const items = (window.NEWS_DATA || [])
+    .filter(n => n.title && n.source_url && n.id != null)
+    .slice()
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state th">ไม่มีข่าวให้ปักหมุด</div>';
+    return;
+  }
+  list.innerHTML = items.map(n => {
+    const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+    const marked = !!n.chart_marked;
+    return `<div class="pin-picker-item">
+      <div class="pp-date th">${fmtThaiShort((n.date || '').slice(0, 10))}</div>
+      <div class="pp-main">
+        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(n.category))}</span>
+        <span class="pp-title th">${escapeHtml(n.title)}</span>
+      </div>
+      <button class="pp-toggle${marked ? ' is-marked' : ''}" type="button" data-mark-id="${n.id}" title="${marked ? 'เลิกปักหมุด' : 'ปักหมุดบนกราฟ'}" aria-label="${marked ? 'เลิกปักหมุด' : 'ปักหมุดบนกราฟ'}" aria-pressed="${marked}">${icon('pin')}</button>
+    </div>`;
+  }).join('');
+}
+
+function refreshPinPickerIfOpen() {
+  const pp = $('pinPickerModal');
+  if (pp && pp.classList.contains('show')) renderPinPickerList();
+}
+
+function openPinPicker() {
+  const m = $('pinPickerModal');
+  if (!m) return;
+  renderPinPickerList();
+  m.classList.add('show');
+  m.setAttribute('aria-hidden', 'false');
+}
+
+function closePinPicker() {
+  const m = $('pinPickerModal');
+  if (!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden', 'true');
+}
+
 // Submit handler. Validates title + http(s) URL client-side, calls addNews,
 // then reloads the feed so the new card lands in its date group. Duplicate
 // (same title+link) is reported via a toast, not an error.
@@ -2900,6 +3065,30 @@ async function handleDeleteNews(id) {
     return;
   }
   showToast('ลบข่าวแล้ว');
+}
+
+// Toggle the dashboard chart "mark" on a feed item. Optimistic: flip
+// chart_marked in NEWS_DATA and re-render the chart (pins) + sidebar (toggle
+// state) first, then persist. On failure, refetch to restore truth — the row
+// itself is untouched, only its pin state could drift.
+async function handleMarkNews(id) {
+  if (!id) return;
+  const item = (window.NEWS_DATA || []).find(n => String(n.id) === String(id));
+  if (!item) return;
+  const newVal = !item.chart_marked;
+  item.chart_marked = newVal;
+  buildDashChart(filterByRange(DATA, STATE.range));
+  renderDashNews(filterByRange(DATA, STATE.range));
+  refreshPinPickerIfOpen();
+  showToast(newVal ? 'ปักหมุดบนกราฟแล้ว' : 'เลิกปักหมุดแล้ว');
+  const r = await window.ASW_API.markNews(id, newVal);
+  if (!r || !r.ok) {
+    showToast('ปักหมุดไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
+    await loadNewsFeed();   // restore truth
+    buildDashChart(filterByRange(DATA, STATE.range));
+    renderDashNews(filterByRange(DATA, STATE.range));
+    refreshPinPickerIfOpen();
+  }
 }
 
 /* ============== Report Builder Wizard ============== */
@@ -3376,6 +3565,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // not JS template literals.
   const scI = $('newsSearchIcon');    if (scI) scI.innerHTML = icon('search');
   const anI = $('addNewsBtnIcon');    if (anI) anI.innerHTML = icon('plus');
+  const ppI = $('pinPickerBtnIcon');  if (ppI) ppI.innerHTML = icon('pin');
 
   // Sidebar
   document.querySelectorAll('.sidebar-item').forEach(b => {
@@ -3489,6 +3679,28 @@ document.addEventListener('DOMContentLoaded', () => {
     addNewsModal.addEventListener('click', (e) => { if (e.target === addNewsModal) closeAddNewsModal(); });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && addNewsModal.classList.contains('show')) closeAddNewsModal();
+    });
+  }
+  // Pin-on-chart picker: header button opens, ปิด/overlay/Esc close, each row
+  // toggles chart_marked via a delegated click on the list container.
+  const pinPickerBtn = $('pinPickerBtn');
+  if (pinPickerBtn) pinPickerBtn.addEventListener('click', openPinPicker);
+  const pinPickerClose = $('pinPickerClose');
+  if (pinPickerClose) pinPickerClose.addEventListener('click', closePinPicker);
+  const pinPickerModal = $('pinPickerModal');
+  if (pinPickerModal) {
+    pinPickerModal.addEventListener('click', (e) => { if (e.target === pinPickerModal) closePinPicker(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pinPickerModal.classList.contains('show')) closePinPicker();
+    });
+  }
+  const pinPickerList = $('pinPickerList');
+  if (pinPickerList) {
+    pinPickerList.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pp-toggle');
+      if (!btn) return;
+      e.preventDefault();
+      handleMarkNews(btn.dataset.markId);
     });
   }
   // Migrate-v9: paint the 6 category chips with REMARK_BADGE colors so they

@@ -139,10 +139,15 @@ async function ensureSchema() {
       impact_level  TEXT
     );
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS impact_level TEXT;
+    -- User-pinned "mark" on the dashboard chart (replaces digest Event Pins
+    -- there). Distinct from show_pin, which the pipeline uses to boost display
+    -- priority — kept separate so the two never interact.
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS chart_marked BOOLEAN NOT NULL DEFAULT FALSE;
     CREATE UNIQUE INDEX IF NOT EXISTS news_feed_title_hash_idx ON news_feed (title_hash);
     CREATE INDEX IF NOT EXISTS news_feed_date_idx     ON news_feed (date DESC);
     CREATE INDEX IF NOT EXISTS news_feed_category_idx ON news_feed (category);
     CREATE INDEX IF NOT EXISTS news_feed_show_pin_idx ON news_feed (date DESC) WHERE show_pin = TRUE;
+    CREATE INDEX IF NOT EXISTS news_feed_chart_marked_idx ON news_feed (date DESC) WHERE chart_marked = TRUE;
     CREATE INDEX IF NOT EXISTS news_feed_pipeline_idx ON news_feed (pipeline);
     CREATE INDEX IF NOT EXISTS news_feed_priority_date_idx ON news_feed (display_priority DESC, date DESC, id DESC);
     CREATE INDEX IF NOT EXISTS news_feed_hidden_at_idx ON news_feed (hidden_at DESC NULLS LAST) WHERE hidden = TRUE;
@@ -652,7 +657,7 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   params.push(Math.min(limit || 100, 500));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
-                      impact_level, user_note
+                      impact_level, user_note, chart_marked
                FROM news_feed
                WHERE ${where.join(' AND ')}
                ORDER BY display_priority DESC, date DESC, id DESC
@@ -671,6 +676,20 @@ async function setNewsNote(id, note) {
   await getPool().query(
     `UPDATE news_feed SET user_note = $1 WHERE id = $2`,
     [trimmed || null, id]
+  );
+}
+
+// Set/clear the chart "mark" for a single row by id (POST /api/news/:id/mark).
+// Any feed row can be marked — no pipeline guard (unlike deleteNewsItem). The
+// dashboard chart reads chart_marked rows to place user pins, replacing the
+// digest-driven Event Pins on that chart only (Price History keeps digest pins).
+async function setNewsMark(id, marked) {
+  if (!Number.isFinite(parseInt(id, 10))) {
+    throw new Error('setNewsMark: id must be an integer');
+  }
+  await getPool().query(
+    `UPDATE news_feed SET chart_marked = $1 WHERE id = $2`,
+    [!!marked, id]
   );
 }
 
@@ -803,6 +822,7 @@ module.exports = {
   readNewsFeed,
   readNewsStatus,       // GET /api/news/status payload
   setNewsNote,          // v6 — user_note writer
+  setNewsMark,          // POST /api/news/:id/mark — dashboard chart pin toggle
   insertManualNews,     // POST /api/news — user-added news
   deleteNewsItem,       // DELETE /api/news/:id — manual rows only
 };

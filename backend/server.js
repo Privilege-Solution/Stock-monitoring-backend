@@ -445,6 +445,7 @@ app.post('/api/news/rss-refresh', async (req, res) => {
 // User actions on a single news row.
 //
 //   POST /api/news/:id/note   body: {note: string|null}— empty/null clears
+//   POST /api/news/:id/mark   body: {marked: true|false} — pin on dashboard chart
 //
 // Single-tenant model — no per-user scope. All clients see the same state.
 app.post('/api/news/:id/note', async (req, res) => {
@@ -457,6 +458,21 @@ app.post('/api/news/:id/note', async (req, res) => {
     res.json({ ok: true, id, note: note && note.trim() ? note.trim() : null });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_note_failed' });
+  }
+});
+
+// Toggle the dashboard chart "mark" on a news row. chart_marked replaces the
+// digest-driven Event Pins on the Dashboard chart only (Price History view is
+// unchanged). Any feed row can be marked — there is no pipeline guard.
+app.post('/api/news/:id/mark', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'invalid id', code: 'news_mark_bad_id' });
+    const marked = !!(req.body && req.body.marked);
+    await db.setNewsMark(id, marked);
+    res.json({ ok: true, id, chart_marked: marked });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_mark_failed' });
   }
 });
 
