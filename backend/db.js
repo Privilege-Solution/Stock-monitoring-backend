@@ -173,12 +173,14 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS news_daily_summary (
       date         TEXT PRIMARY KEY,
       digest       TEXT,            -- newline-separated KEY_POINTS bullets
+      headline     TEXT,            -- ≤30-char one-sentence summary → Remark cell
       tone         TEXT,            -- bullish | bearish | neutral
       reason       TEXT,            -- 1-sentence rationale (for ASW)
       bullets      JSONB,           -- future: structured {CATEGORY: [...]}
       source_count INTEGER,         -- how many news_feed rows were summarized
       generated_at TEXT NOT NULL
     );
+    ALTER TABLE news_daily_summary ADD COLUMN IF NOT EXISTS headline TEXT;
   `);
 }
 
@@ -450,19 +452,20 @@ async function readMorningBrief() {
 // =============================================================================
 
 async function upsertDailySummary(date, {
-  digest = null, tone = null, reason = null, bullets = null, sourceCount = null,
+  digest = null, headline = null, tone = null, reason = null, bullets = null, sourceCount = null,
 } = {}) {
   await getPool().query(
-    `INSERT INTO news_daily_summary (date, digest, tone, reason, bullets, source_count, generated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO news_daily_summary (date, digest, headline, tone, reason, bullets, source_count, generated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (date) DO UPDATE SET
        digest       = EXCLUDED.digest,
+       headline     = EXCLUDED.headline,
        tone         = EXCLUDED.tone,
        reason       = EXCLUDED.reason,
        bullets      = EXCLUDED.bullets,
        source_count = EXCLUDED.source_count,
        generated_at = EXCLUDED.generated_at`,
-    [date, digest, tone, reason, bullets, sourceCount, new Date().toISOString()]
+    [date, digest, headline, tone, reason, bullets, sourceCount, new Date().toISOString()]
   );
 }
 
@@ -470,7 +473,7 @@ async function upsertDailySummary(date, {
 // default returns the most recent day that has a digest.
 async function readDailySummary(date = null) {
   const p = getPool();
-  const sql = `SELECT date, digest, tone, reason, bullets, source_count, generated_at
+  const sql = `SELECT date, digest, headline, tone, reason, bullets, source_count, generated_at
                  FROM news_daily_summary`;
   if (date) {
     const r = await p.query(sql + ' WHERE date = $1', [date]);
@@ -481,11 +484,12 @@ async function readDailySummary(date = null) {
 }
 
 // All digests, ascending by date. Powers the chart "pin per day" + the Remark
-// column: each day that has a digest gets a short remark derived client-side
-// from the first bullet. One row per ICT date, so the set stays small.
+// column: each day that has a digest gets the `headline` shown in the Remark
+// cell (falling back to the first bullet client-side when there's none). One
+// row per ICT date, so the set stays small.
 async function readAllDailySummaries() {
   const r = await getPool().query(
-    `SELECT date, digest, tone, reason, source_count, generated_at
+    `SELECT date, digest, headline, tone, reason, source_count, generated_at
        FROM news_daily_summary
       ORDER BY date ASC`
   );

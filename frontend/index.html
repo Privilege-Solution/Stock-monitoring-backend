@@ -1155,7 +1155,8 @@ window.DIGEST_REMARKS = new Map();
 
 // Collapse a multi-bullet digest into one short line: first non-empty bullet,
 // leading "- " stripped, trimmed to ~50 chars. Returns '' when there's nothing
-// usable so the caller can skip pinning that day.
+// usable so the caller can skip pinning that day. (Fallback only — the Remark
+// cell now prefers the stored `headline` field; see applyDigestRemarks.)
 function deriveDigestRemark(digest) {
   const lines = String(digest || '').split('\n')
     .map(s => s.trim().replace(/^[-•*]\s*/, '').trim())
@@ -1179,13 +1180,15 @@ function firstDigestLine(digest) {
 
 // Populate window.DIGEST_REMARKS from /api/daily-summaries items, then
 // (re)stamp every DATA row with its short remark + category. Safe to re-run:
-// stale rows are cleared first so deleted/changed digests don't leak. The pin
-// colour is classified off the FULL bullet while the cell shows the short text.
+// stale rows are cleared first so deleted/changed digests don't leak. The
+// Remark text is the digest's `headline` (a ≤30-char one-sentence summary the
+// AI writes); it falls back to the first bullet (deriveDigestRemark) for rows
+// without one. The pin colour is classified off the FULL bullet regardless.
 function applyDigestRemarks(items) {
   const map = new Map();
   (items || []).forEach(s => {
     if (!s || !s.date) return;
-    const text = deriveDigestRemark(s.digest);
+    const text = (s.headline && s.headline.trim()) || deriveDigestRemark(s.digest);
     if (!text) return;
     const full = firstDigestLine(s.digest);
     const cls = classifyEvent(full || text);

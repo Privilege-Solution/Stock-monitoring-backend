@@ -417,7 +417,7 @@ app.get('/api/daily-summary', async (req, res) => {
     const date = req.query.date || null;
     const row = await db.readDailySummary(date);
     res.json(row || {
-      date: null, digest: null, tone: null, reason: null,
+      date: null, digest: null, headline: null, tone: null, reason: null,
       bullets: null, source_count: null, generated_at: null,
     });
   } catch (e) {

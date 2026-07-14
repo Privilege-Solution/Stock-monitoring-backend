@@ -235,7 +235,7 @@ const PROMPT_DAILY_SUMMARY = (date, items) => {
   const block = order
     .filter(c => byCat[c] && byCat[c].length)
     .map(c => `${c}:\n` + byCat[c].slice(0, 6)
-      .map(it => `- ${it.title} (${it.source_label || '—'})`).join('\n'))
+      .map(it => `- [${it.impact_level || '—'}] ${it.title} (${it.source_label || '—'})`).join('\n'))
     .join('\n\n');
   return `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปข่าวประจำวันที่ ${date}
 
@@ -248,10 +248,19 @@ ${block}
 - สรุปและรวมประเด็นด้วยภาษาของคุณเอง — ห้ามทำซ้ำ headline ต้นฉบับ ห้ามตัดแปะชื่อข่าวมาต่อกันเป็นประโยคเดียว
 - ไม่เกิน 6 ประเด็น เรียงจากสำคัญที่สุด → น้อยที่สุด สำหรับหุ้น ASW
 - แต่ละประเด็นอยู่คนละบรรทัด ขึ้นต้นด้วย "- "
+- HEADLINE คือ 1 ประโยคสรุปข่าวทั้งวัน ไม่เกิน 100 ตัวอักษร (นับรวมช่องว่าง) จะใช้เป็น Remark — เขียนตามกฎ:
+  1) เริ่มจากข่าว impact สูงสุดก่อน (HIGH > MEDIUM > LOW) เป็นประเด็นหลักของประโยค
+  2) ข่าวบริษัทเป้าหมาย (ASW) ใส่เป็นประธานประโยค แม้ไม่ใช่ HIGH ก็ตาม
+  3) ข่าวรอง (มหภาค/ตลาดโดยรวม) ย่อต่อท้ายด้วยวลีสั้น ๆ คั่นคำเชื่อม เช่น "ท่ามกลาง..." หรือ "พร้อม..."
+  4) ตัดซ้ำ — หลายข่าวเรื่องเดียวกัน (เช่น TRIS อัปเกรดเครดิต ถูกรายงานซ้ำจากหลายสำนัก) นับเป็นประเด็นเดียว ไม่พูดซ้ำ
+  5) ใช้ตัวเลขสำคัญแทนคำอธิบายยาว (เช่น "หุ้นกู้ 920 ลบ." แทน "เสนอขายหุ้นกู้ 2 ชุด มูลค่ารวมไม่เกิน 920 ล้านบาท")
+  6) ห้ามใส่ชื่อแหล่งข่าว/สำนักข่าวในประโยคสรุป
+  7) ใช้ภาษากระชับแบบข่าวหุ้น เช่น "ปรับขึ้น" "อ่อนค่า" "อัปเกรด" "เสนอขาย" แทนประโยคเต็ม
 - TONE ต้องเป็นค่าใดค่าหนึ่งจาก bullish | bearish | neutral เท่านั้น (ห้ามใช้ HIGH/MEDIUM/LOW)
 
 ตัวอย่างรูปแบบคำตอบ (ห้ามคัดลอกเนื้อหา — เขียนจากข่าวจริงของวันนี้เท่านั้น):
 
+HEADLINE: ASW เปิดโครงการ 5 พันล้าน ท่ามกลางดอกเบี้ยลดและแรงกดดันจากคู่แข่ง
 KEY_POINTS:
 - บริษัทเปิดตัวโครงการใหม่มูลค่า 5 พันล้านบาท น่าจะเพิ่มรายได้ในปีหน้า
 - ธปก. ลดดอกเบี้ย 0.25% ช่วยลดต้นทุนทางการเงิน
@@ -332,20 +341,21 @@ function parseAIResult(text, pipeline) {
 // regurgitate snippets). If Gemini ever returns 429 we surface the error to
 // the caller — the scheduler wraps each invocation in logFetchFinish so
 // retry logic lives at that layer.
-async function geminiSearch(prompt, { ground = true } = {}) {
+async function geminiSearch(prompt, { ground = true, maxTokens = 2048, timeoutMs = 30_000 } = {}) {
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+    generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens },
   };
   if (ground) body.tools = [{ google_search: {} }];
   // Bound the wait: Node's global fetch has no default timeout, so a hung
   // Gemini connection would stall the cron indefinitely on Railway. 30s is
-  // generous for a grounded-search generate call.
+  // generous for a grounded-search generate call; synthesis tasks that let the
+  // model think (daily summary) pass a larger budget + timeout.
   const res = await fetch(`${ENDPOINT}?key=${process.env.GEMINI_API_KEY}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const j = await res.json();
@@ -533,7 +543,13 @@ async function runDailySummary(sinceDate) {
     return { ok: false, reason: 'no-news', date };
   }
 
-  const text = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), { ground: false });
+  // Give the model room to think through the HEADLINE rules and still emit the
+  // full KEY_POINTS/TONE/REASON — the shared 2048 default cuts mid-bullet when
+  // thinking runs long, truncating the digest and dropping tone/reason. 8192
+  // covers thinking + answer; 90s is the matching upper bound on the wait.
+  const text = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), {
+    ground: false, maxTokens: 8192, timeoutMs: 90_000,
+  });
   if (!text || text.trim() === 'NONE') {
     console.log(`[gemini-daily-summary] ${date} → empty digest`);
     return { ok: false, reason: 'empty', date };
@@ -541,6 +557,18 @@ async function runDailySummary(sinceDate) {
   console.log(`[gemini-daily-summary] raw=${text.slice(0, 500)}`);
 
   const keyPoints = normalizeBullets(extractSection(text, 'KEY_POINTS'));
+  // HEADLINE: one ≤100-char sentence summing up the day — becomes the Remark
+  // cell. First line only (the spec is a single sentence), leading bullet
+  // stripped. If Gemini runs long, cut at the last phrase boundary (space) at
+  // or before 100 so we don't sever a Thai word; fall back to a hard slice
+  // when there's no space. A prefix slice is safe for Thai either way:
+  // combining marks attach to the preceding base, never leaving a dangling mark.
+  let headline = String(extractSection(text, 'HEADLINE') || '')
+    .split('\n')[0].replace(/^[-•*]\s*/, '').trim();
+  if (headline.length > 100) {
+    const cut = headline.lastIndexOf(' ', 100);
+    headline = (cut > 0 ? headline.slice(0, cut) : headline.slice(0, 100)).trimEnd() + '…';
+  }
   const toneMatch = text.match(/TONE:\s*(.+)/);
   const reasonMatch = text.match(/REASON:\s*(.+)/);
   const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
@@ -548,6 +576,7 @@ async function runDailySummary(sinceDate) {
 
   await db.upsertDailySummary(date, {
     digest: keyPoints,
+    headline,
     tone,
     reason,
     sourceCount: items.length,
