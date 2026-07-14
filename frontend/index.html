@@ -332,7 +332,6 @@
                 <button class="pill" data-prange="6M">6M</button>
                 <button class="pill" data-prange="1Y">1Y</button>
                 <button class="pill" data-prange="ALL">All</button>
-                <button class="pill" data-prange="IPO">IPO</button>
               </div>
               <div class="pill-row">
                 <button class="pill active" data-chartmode="line">Line</button>
@@ -1268,7 +1267,7 @@ function getCSS(v) {
 
 /* ============== Time Range Filter ============== */
 function filterByRange(data, range) {
-  if (range === 'ALL' || range === 'IPO' || !data.length) return data;
+  if (range === 'ALL' || !data.length) return data;
   const withPrice = data.filter(r => r.close != null);
   if (!withPrice.length) return data;
   const last = new Date(withPrice[withPrice.length-1].date + 'T00:00:00');
@@ -2070,7 +2069,7 @@ function buildPriceChart() {
 
   const annotations = STATE.priceShowEvents ? buildPinAnnotations(filtered) : {};
   // IPO vertical line — only when the IPO date is inside the visible range
-  // (All/IPO), so it doesn't clutter short windows (1W/1M/3M/1Y).
+  // (All), so it doesn't clutter short windows (1W/1M/3M/1Y).
   if (filtered.length && filtered[0].date <= IPO_DATE && IPO_DATE <= filtered[filtered.length - 1].date) {
     annotations.ipoLine = {
       type: 'line',
