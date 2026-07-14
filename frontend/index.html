@@ -2460,9 +2460,8 @@ function renderUnifiedNewsItem(item) {
     ? `<div class="news-user-note th">${icon('edit')} ${escapeHtml(item.user_note)}</div>`
     : '';
   const idAttr = item.id != null ? ` data-id="${item.id}"` : '';
-  const noteTitle = item.user_note ? 'แก้ไข note' : 'เพิ่ม note';
   const src = item.sourceLabel ? `<span class="news-card-src muted th">${escapeHtml(item.sourceLabel)}</span>` : '';
-  // 3-column card: meta (date+weekday) | main (tag+headline+summary+note) | actions.
+  // 2-column card: meta (date+weekday) | main (tag+headline+summary+note).
   return `<div class="news-card"${idAttr}>
     <div class="news-card-meta th">
       <div class="news-card-date">${escapeHtml(fmtThaiShort(item.date))}</div>
@@ -2476,48 +2475,7 @@ function renderUnifiedNewsItem(item) {
       ${summaryHtml}
       ${noteHtml}
     </div>
-    <div class="news-actions">
-      <button class="news-action-btn" data-action="note" data-id="${item.id}" title="${noteTitle}">${icon('edit')}</button>
-    </div>
   </div>`;
-}
-
-function bindUnifiedItemClick() {
-  // Migrate-v6: action-button delegation inside the news view. Bound once
-  // via dataset flag so re-renders don't double-attach. Note: clicks on
-  // .news-item without data-date do NOT go to the body handler (only
-  // data-date items do), so e.stopPropagation() here is mostly future-proof.
-  const view = $('view-news');
-  if (!view || view.dataset.actionsBound === '1') return;
-  view.dataset.actionsBound = '1';
-
-  view.addEventListener('click', async (e) => {
-    const btn = e.target.closest('.news-action-btn');
-    if (!btn) return;                  // not an action button — let click pass through
-    e.stopPropagation();                // don't bubble to the body handler
-    e.preventDefault();                 // don't navigate the surrounding <a>
-    const id = parseInt(btn.dataset.id, 10);
-    if (!Number.isFinite(id)) return;
-    const action = btn.dataset.action;
-    // Mutate the canonical cache so other views (dashboard sidebar) re-render
-    // consistently — single source of truth on the client too.
-    const item = (window.NEWS_DATA || []).find(n => n.id === id);
-    if (!item) return;
-
-    if (action === 'note') {
-      const note = window.prompt('Note (ว่าง/ยกเลิก = ลบ note):', item.user_note || '');
-      if (note == null) return;        // user pressed Cancel
-      const newNote = note.trim() || null;
-      item.user_note = newNote;
-      renderUnifiedNews();
-      renderDashNews(filterByRange(DATA, STATE.range));
-      const r = await window.ASW_API.noteNews(id, newNote);
-      if (!r.ok) {
-        alert('บันทึก note ไม่สำเร็จ: ' + (r.error || 'unknown'));
-        // Don't auto-rollback note — easier to re-edit than re-type.
-      }
-    }
-  });
 }
 
 async function loadNewsStatus() {
