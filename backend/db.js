@@ -13,6 +13,10 @@
 //   fetch_log      — append-only fetch audit trail, SERIAL id
 
 const { Pool } = require('pg');
+const { createHash } = require('node:crypto');
+
+// sha1 seed for title_hash — mirrors the fetchers (rss-property.mjs / gemini-search.mjs).
+const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
 let pool = null;
 
@@ -670,6 +674,50 @@ async function setNewsNote(id, note) {
   );
 }
 
+// Manually-added news (POST /api/news). Builds the full news_feed row shape and
+// reuses writeNewsItems() so dedup (title_hash unique index), display_priority
+// derivation, and indexing all happen for free. pipeline='manual' tags the row so
+// the frontend can show a "เพิ่มเอง" badge and the DELETE guard below can
+// restrict removal to user-added rows only.
+//
+// title_hash = sha1(title|url) — stable per headline+link, so re-adding the same
+// pair is a no-op (writeNewsItems returns inserted:0). date defaults to today ICT.
+// `category` is resolved by the caller (user pick or classifyCategory); MACRO is
+// the defensive fallback so the NOT NULL column is never violated.
+async function insertManualNews({ title, source_url, category, severity, summary } = {}) {
+  const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  let hostname = 'เพิ่มเอง';
+  try { hostname = new URL(source_url).hostname || hostname; } catch {}
+  const { inserted } = await writeNewsItems([{
+    title,
+    date: todayICT,
+    category: category || 'MACRO',
+    source_url,
+    source_label: hostname,
+    title_hash: sha1(`${String(title).trim()}|${source_url}`),
+    pipeline: 'manual',
+    impact: null,
+    severity: severity || null,
+    show_pin: false,
+    summary: summary || null,
+  }]);
+  return { inserted };
+}
+
+// Delete a single news row — but ONLY when it was user-added (pipeline='manual').
+// The WHERE guard stops a stray DELETE from removing a pipeline-sourced row even
+// if someone hits the endpoint with its id. Returns { deleted } (0 = not found or
+// not deletable).
+async function deleteNewsItem(id) {
+  const n = parseInt(id, 10);
+  if (!Number.isFinite(n)) throw new Error('deleteNewsItem: id must be an integer');
+  const r = await getPool().query(
+    `DELETE FROM news_feed WHERE id = $1 AND pipeline = 'manual'`,
+    [n]
+  );
+  return { deleted: r.rowCount };
+}
+
 // Aggregate status for the unified-feed header. Reads from `fetch_log` (last
 // run per Gemini sub-pipeline) and counts the news_feed table for the badge.
 //
@@ -755,4 +803,6 @@ module.exports = {
   readNewsFeed,
   readNewsStatus,       // GET /api/news/status payload
   setNewsNote,          // v6 — user_note writer
+  insertManualNews,     // POST /api/news — user-added news
+  deleteNewsItem,       // DELETE /api/news/:id — manual rows only
 };

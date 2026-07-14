@@ -65,6 +65,69 @@
     50%      { opacity: 0.4; transform: scale(0.7); }
   }
   .kpi-value.dim { opacity: 0.55; }   /* visual hint when KPI shows stale EOD close */
+
+  /* ===== Manual add-news (เพิ่มข่าวเอง) ===== */
+  /* Primary action button at the right of the news toolbar. */
+  .add-news-btn {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    margin-left: auto;
+    padding: 0.4rem 0.8rem; border-radius: 0.375rem;
+    background: var(--primary); color: #fff; border: 0;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .add-news-btn:hover { opacity: .9; }
+  .add-news-btn .icon-svg { width: 13px; height: 13px; }
+
+  /* Centered modal overlay — toggled via .show (display:none by default). */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(26,26,24,0.45);
+    display: none; align-items: center; justify-content: center; padding: 1rem;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-card {
+    width: 100%; max-width: 460px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 0.625rem; padding: 1.25rem;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  }
+  .modal-card h3 { margin: 0 0 0.25rem; font-size: 1rem; }
+  .modal-card .modal-sub { margin: 0 0 1rem; font-size: 0.75rem; color: var(--muted); }
+  .modal-field { margin-bottom: 0.85rem; }
+  .modal-field label { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 0.25rem; font-weight: 500; }
+  .modal-field input, .modal-field select {
+    width: 100%; padding: 0.5rem 0.6rem; border: 1px solid var(--border);
+    border-radius: 0.375rem; background: var(--surface); color: var(--text);
+    font-size: 0.85rem; font-family: inherit;
+  }
+  .modal-field input:focus, .modal-field select:focus {
+    outline: 2px solid var(--primary); border-color: var(--primary);
+  }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.1rem; }
+  .modal-actions button {
+    padding: 0.5rem 1rem; border-radius: 0.375rem; font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text);
+  }
+  .modal-actions .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .modal-actions .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .modal-err { color: var(--negative); font-size: 0.72rem; margin-top: 0.4rem; min-height: 0.9rem; }
+
+  /* "เพิ่มเอง" badge + hover-only delete button on manual news cards. */
+  .news-card { position: relative; }
+  .news-manual-badge {
+    font-size: 0.62rem; font-weight: 600; color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 14%, transparent);
+    padding: 0.05rem 0.4rem; border-radius: 0.25rem; margin-left: 0.35rem;
+  }
+  .news-card-delete {
+    position: absolute; top: 0.35rem; right: 0.35rem;
+    width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; background: transparent; color: var(--muted); cursor: pointer;
+    border-radius: 0.25rem; opacity: 0; transition: opacity .15s, color .15s;
+  }
+  .news-card:hover .news-card-delete { opacity: 1; }
+  .news-card-delete:hover { color: var(--negative); background: color-mix(in srgb, var(--negative) 10%, transparent); }
 </style>
 </head>
 <body>
@@ -415,6 +478,7 @@
             <button class="pill th" data-range="90D">90 วัน</button>
             <button class="pill th" data-range="ALL">ทั้งหมด</button>
           </div>
+          <button class="add-news-btn th" id="addNewsBtn" type="button" title="เพิ่มข่าวที่คุณพบเอง"><span id="addNewsBtnIcon"></span> เพิ่มข่าว</button>
         </div>
         <div class="feed-cat-row">
           <div class="pill-row feed-cat-pills" id="newsCatPills">
@@ -687,6 +751,46 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Manual add-news modal (เพิ่มข่าวเอง). Category <option>s are populated at
+     boot from the taxonomy keys via catLabel(), so the dropdown stays in sync
+     with the filter chips + card badges. -->
+<div class="modal-overlay" id="addNewsModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addNewsTitle">
+    <h3 class="th" id="addNewsTitle">เพิ่มข่าว</h3>
+    <p class="modal-sub th">บันทึกข่าวที่คุณพบเข้าสู่ feed — ปรากฏในหน้านี้และแดชบอร์ด</p>
+    <form id="addNewsForm">
+      <div class="modal-field">
+        <label class="th" for="addNewsTitleInput">หัวข้อข่าว</label>
+        <input id="addNewsTitleInput" name="title" type="text" maxlength="500" autocomplete="off" placeholder="เช่น ASW เปิดตัวโครงการใหม่..." />
+      </div>
+      <div class="modal-field">
+        <label class="th" for="addNewsUrl">ลิงก์ข่าว</label>
+        <input id="addNewsUrl" name="source_url" type="url" autocomplete="off" placeholder="https://..." />
+      </div>
+      <div class="modal-field">
+        <label class="th" for="addNewsCategory">หมวดหมู่ <span class="muted">(ไม่เลือก = แยกหมวดอัตโนมัติ)</span></label>
+        <select id="addNewsCategory" name="category">
+          <option value="">แยกหมวดอัตโนมัติ</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label class="th" for="addNewsSeverity">ระดับความสำคัญ</label>
+        <select id="addNewsSeverity" name="severity">
+          <option value="">—</option>
+          <option value="high">สูง</option>
+          <option value="medium">กลาง</option>
+          <option value="low">ต่ำ</option>
+        </select>
+      </div>
+      <div class="modal-err th" id="addNewsErr"></div>
+      <div class="modal-actions">
+        <button type="button" id="addNewsCancel" class="th">ยกเลิก</button>
+        <button type="submit" class="btn-primary th" id="addNewsSubmit">เพิ่มข่าว</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Data bootstrap: pulls from the Node backend at /api/daily and /api/metadata.
      Falls back to bundled SAMPLE_DATA when the backend is unreachable (e.g. opened
      directly via file://) so the demo still renders without a server. -->
@@ -758,6 +862,38 @@ window.ASW_API = {
         body: JSON.stringify({ note: note == null ? null : String(note) }),
       });
       if (!r.ok) throw 0;
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  // Manually add a news item (POST /api/news). category/severity optional —
+  // the backend auto-classifies category when omitted. Returns {ok, inserted}
+  // or {ok:true, duplicate:true} when the headline+link already exists.
+  async addNews({ title, source_url, category, severity }) {
+    try {
+      const body = { title, source_url };
+      if (category) body.category = category;
+      if (severity) body.severity = severity;
+      const r = await fetch('/api/news', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        return { ok: false, error: (j && j.error) || `HTTP ${r.status}` };
+      }
+      return await r.json();
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  },
+  // Delete a manually-added news item (DELETE /api/news/:id). The backend only
+  // allows rows with pipeline='manual', so pipeline news is never removable.
+  async deleteNews(id) {
+    try {
+      const r = await fetch(`/api/news/${id}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        return { ok: false, error: (j && j.error) || `HTTP ${r.status}` };
+      }
       return await r.json();
     } catch (e) { return { ok: false, error: 'offline' }; }
   },
@@ -1776,6 +1912,8 @@ function icon(name) {
     case 'alert':       return wrap('<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>');
     case 'x':           return wrap('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>');
     case 'chevron-down':return wrap('<polyline points="6 9 12 15 18 9"/>');
+    case 'plus':        return wrap('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>');
+    case 'trash':       return wrap('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>');
     default:            return '';
   }
 }
@@ -2355,6 +2493,7 @@ function buildMergedNewsItems() {
     display_priority: n.display_priority,
     impact_level: n.impact_level || null,    // migrate-v9 — HIGH/MEDIUM/LOW
     id: n.id,
+    pipeline: n.pipeline || null,            // 'manual' = user-added (badge + delete)
     user_note: n.user_note || null,
   }));
   // Valid-link filter: drop items with empty/null source_url. Required so
@@ -2461,15 +2600,23 @@ function renderUnifiedNewsItem(item) {
     : '';
   const idAttr = item.id != null ? ` data-id="${item.id}"` : '';
   const src = item.sourceLabel ? `<span class="news-card-src muted th">${escapeHtml(item.sourceLabel)}</span>` : '';
+  // Manual (user-added) items get a "เพิ่มเอง" badge + a delete button. The
+  // delete button only renders for manual rows — pipeline news is not deletable.
+  const isManual = item.pipeline === 'manual';
+  const manualBadge = isManual ? `<span class="news-manual-badge th">เพิ่มเอง</span>` : '';
+  const delBtn = (isManual && item.id != null)
+    ? `<button class="news-card-delete" type="button" data-delete-id="${item.id}" title="ลบข่าว" aria-label="ลบข่าว">${icon('trash')}</button>`
+    : '';
   // 2-column card: meta (date+weekday) | main (tag+headline+summary+note).
   return `<div class="news-card"${idAttr}>
+    ${delBtn}
     <div class="news-card-meta th">
       <div class="news-card-date">${escapeHtml(fmtThaiShort(item.date))}</div>
       <div class="news-card-day muted">${escapeHtml(fmtThaiWeekday(item.date))}</div>
     </div>
     <div class="news-card-main">
       <div class="news-card-tags">
-        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}
+        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
       </div>
       <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>
       ${summaryHtml}
@@ -2652,6 +2799,107 @@ async function refreshNewsFeed() {
   await loadNewsFeed();
   renderUnifiedNews();
   await loadNewsStatus();
+}
+
+/* ============== Manual add-news (เพิ่มข่าวเอง) ==============
+ *
+ * Modal open/close + form submit + delete-delegation. Mirrors the noteNews
+ * optimistic-UI pattern: mutate window.NEWS_DATA for instant feedback, then
+ * persist via ASW_API. Manual rows carry pipeline='manual' so the renderer
+ * shows the "เพิ่มเอง" badge + delete button; only manual rows are deletable
+ * (the backend DELETE guards on pipeline='manual').
+ */
+
+// Taxonomy-v2 keys in display order — drives the category <select> options so
+// the dropdown matches the filter chips + card badges (single source: catLabel).
+const MANUAL_NEWS_CATEGORIES = ['COMPANY','COMPETITOR','RATES','GOV_POLICY','POLITICS','INDUSTRY','MACRO'];
+
+// Populate the category <select> once at boot. Idempotent — guards on the
+// option already existing so re-calls (defensive) don't duplicate.
+function populateAddNewsCategories() {
+  const sel = $('addNewsCategory');
+  if (!sel || sel.dataset.populated === '1') return;
+  for (const cat of MANUAL_NEWS_CATEGORIES) {
+    const o = document.createElement('option');
+    o.value = cat;
+    o.textContent = catLabel(cat);
+    sel.appendChild(o);
+  }
+  sel.dataset.populated = '1';
+}
+
+function openAddNewsModal() {
+  populateAddNewsCategories();
+  const m = $('addNewsModal');
+  if (!m) return;
+  m.classList.add('show');
+  m.setAttribute('aria-hidden', 'false');
+  $('addNewsForm').reset();
+  const err = $('addNewsErr'); if (err) err.textContent = '';
+  const t = $('addNewsTitleInput'); if (t) setTimeout(() => t.focus(), 0);
+}
+
+function closeAddNewsModal() {
+  const m = $('addNewsModal');
+  if (!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden', 'true');
+}
+
+// Submit handler. Validates title + http(s) URL client-side, calls addNews,
+// then reloads the feed so the new card lands in its date group. Duplicate
+// (same title+link) is reported via a toast, not an error.
+async function submitAddNews(e) {
+  e.preventDefault();
+  const title = ($('addNewsTitleInput').value || '').trim();
+  const source_url = ($('addNewsUrl').value || '').trim();
+  const category = ($('addNewsCategory').value || '').trim() || null;
+  const severity = ($('addNewsSeverity').value || '').trim() || null;
+  const errEl = $('addNewsErr');
+
+  if (!title) { errEl.textContent = 'กรุณากรอกหัวข้อข่าว'; return; }
+  let url;
+  try { url = new URL(source_url); } catch { errEl.textContent = 'ลิงก์ข่าวไม่ถูกต้อง (ต้องเป็น http/https)'; return; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    errEl.textContent = 'ลิงก์ข่าวต้องเป็น http/https'; return;
+  }
+
+  const btn = $('addNewsSubmit');
+  const prev = btn.textContent;
+  btn.disabled = true; btn.textContent = 'กำลังเพิ่ม…';
+  try {
+    const r = await window.ASW_API.addNews({ title, source_url, category, severity });
+    if (!r || !r.ok) {
+      errEl.textContent = 'เพิ่มข่าวไม่สำเร็จ: ' + ((r && r.error) || 'unknown');
+      return;
+    }
+    if (r.duplicate) {
+      showToast('มีข่าวนี้อยู่แล้ว');
+    } else {
+      showToast('เพิ่มข่าวแล้ว');
+    }
+    closeAddNewsModal();
+    await loadNewsFeed();      // refetch so the new row (with id + priority) lands correctly
+    renderUnifiedNews();
+  } finally {
+    btn.disabled = false; btn.textContent = prev;
+  }
+}
+
+// Delete a manually-added row. Optimistic: remove from NEWS_DATA + re-render,
+// then persist. On failure, refetch to restore truth.
+async function handleDeleteNews(id) {
+  if (!id || !confirm('ลบข่าวนี้?')) return;
+  const prev = (window.NEWS_DATA || []).filter(n => String(n.id) !== String(id));
+  window.NEWS_DATA = prev;
+  renderUnifiedNews();
+  const r = await window.ASW_API.deleteNews(id);
+  if (!r || !r.ok) {
+    showToast('ลบข่าวไม่สำเร็จ: ' + ((r && r.error) || 'unknown'));
+    await loadNewsFeed(); renderUnifiedNews();   // restore
+    return;
+  }
+  showToast('ลบข่าวแล้ว');
 }
 
 /* ============== Report Builder Wizard ============== */
@@ -3127,6 +3375,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // The placeholders can't use ${icon(...)} because they're in HTML markup,
   // not JS template literals.
   const scI = $('newsSearchIcon');    if (scI) scI.innerHTML = icon('search');
+  const anI = $('addNewsBtnIcon');    if (anI) anI.innerHTML = icon('plus');
 
   // Sidebar
   document.querySelectorAll('.sidebar-item').forEach(b => {
@@ -3226,6 +3475,22 @@ document.addEventListener('DOMContentLoaded', () => {
       renderUnifiedNews();
     });
   });
+  // Manual add-news modal (เพิ่มข่าวเอง): button opens, cancel/overlay/Esc
+  // close, form submits. Category <option>s populate on first open.
+  const addNewsBtn = $('addNewsBtn');
+  if (addNewsBtn) addNewsBtn.addEventListener('click', openAddNewsModal);
+  const addNewsCancel = $('addNewsCancel');
+  if (addNewsCancel) addNewsCancel.addEventListener('click', closeAddNewsModal);
+  const addNewsForm = $('addNewsForm');
+  if (addNewsForm) addNewsForm.addEventListener('submit', submitAddNews);
+  const addNewsModal = $('addNewsModal');
+  if (addNewsModal) {
+    // Click the backdrop (not the card) closes the modal.
+    addNewsModal.addEventListener('click', (e) => { if (e.target === addNewsModal) closeAddNewsModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && addNewsModal.classList.contains('show')) closeAddNewsModal();
+    });
+  }
   // Migrate-v9: paint the 6 category chips with REMARK_BADGE colors so they
   // match the badges inside news cards (which render via the same
   // REMARK_BADGE color tokens). The 6 chip keys are the taxonomy-v2
@@ -3258,6 +3523,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dayGroups && dayGroups.dataset.daysBound !== '1') {
     dayGroups.dataset.daysBound = '1';
     dayGroups.addEventListener('click', (e) => {
+      // Manual-news delete button (only on pipeline='manual' cards).
+      const del = e.target.closest('[data-delete-id]');
+      if (del) { e.preventDefault(); e.stopPropagation(); handleDeleteNews(del.dataset.deleteId); return; }
       const toggle = e.target.closest('.news-day-toggle');
       if (!toggle) return;
       const key = toggle.dataset.date;

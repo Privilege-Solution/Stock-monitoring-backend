@@ -16,6 +16,15 @@ const db = require('./db');
 const { runFetch, runIntraday } = require('./lib/fetchers');
 const { expectedTradingDays, classify, isMarketOpen } = require('./lib/thai-trading-days');
 
+// Lazy ESM import of the shared news taxonomy (news-taxonomy.mjs is ESM;
+// server.js is CommonJS, so we use dynamic import() and cache it). Used by
+// POST /api/news to auto-classify the category of a manually-added headline.
+let _taxonomy = null;
+async function loadTaxonomy() {
+  if (!_taxonomy) _taxonomy = await import('./lib/news-taxonomy.mjs');
+  return _taxonomy;
+}
+
 const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
@@ -309,6 +318,84 @@ app.get('/api/news', async (req, res) => {
     res.json({ rows, count: rows.length });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_read_failed' });
+  }
+});
+
+// Manually add a news item (single-tenant — all clients see it). Reuses the same
+// news_feed table + dedup (title_hash) + severity-first sort as the pipelines, so
+// the row flows into the existing feed with no special-casing. pipeline='manual'
+// tags it for the "เพิ่มเอง" badge + the manual-only DELETE guard.
+//
+//   body: { title, source_url, category?, severity? }
+//   category omitted  → auto-classified from the headline (classifyCategory)
+//   severity omitted  → null (renders as low priority, no severity pill)
+app.post('/api/news', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) {
+      return res.status(400).json({ ok: false, error: 'title required', code: 'news_add_bad_title' });
+    }
+    if (title.length > 500) {
+      return res.status(400).json({ ok: false, error: 'title too long (max 500)', code: 'news_add_bad_title' });
+    }
+
+    const rawUrl = typeof body.source_url === 'string' ? body.source_url.trim() : '';
+    let parsed;
+    try { parsed = new URL(rawUrl); } catch {
+      return res.status(400).json({ ok: false, error: 'source_url must be a valid URL', code: 'news_add_bad_url' });
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).json({ ok: false, error: 'source_url must be http(s)', code: 'news_add_bad_url' });
+    }
+
+    // Category: explicit (validated against the taxonomy) or auto-classified.
+    const { classifyCategory, ALLOWED_CATEGORIES } = await loadTaxonomy();
+    let category = null;
+    if (body.category != null && body.category !== '') {
+      if (!ALLOWED_CATEGORIES.has(body.category)) {
+        return res.status(400).json({ ok: false, error: 'unknown category', code: 'news_add_bad_category' });
+      }
+      category = body.category;
+    }
+    if (!category) category = classifyCategory(title);
+
+    // Severity: optional, must be high|medium|low.
+    let severity = null;
+    if (body.severity != null && body.severity !== '') {
+      if (!['high', 'medium', 'low'].includes(body.severity)) {
+        return res.status(400).json({ ok: false, error: 'severity must be high|medium|low', code: 'news_add_bad_severity' });
+      }
+      severity = body.severity;
+    }
+
+    const { inserted } = await db.insertManualNews({ title, source_url: rawUrl, category, severity });
+    if (inserted === 0) {
+      // title_hash collision — same headline+link already in the feed.
+      return res.json({ ok: true, duplicate: true, inserted: 0 });
+    }
+    res.json({ ok: true, inserted: 1 });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_add_failed' });
+  }
+});
+
+// Delete a manually-added news item. db.deleteNewsItem() guards on
+// pipeline='manual', so pipeline-sourced rows can never be removed here even if
+// their id is passed. 404 when the row is absent or not deletable.
+app.delete('/api/news/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ ok: false, error: 'invalid id', code: 'news_delete_bad_id' });
+    }
+    const { deleted } = await db.deleteNewsItem(id);
+    if (deleted === 0) {
+      return res.status(404).json({ ok: false, error: 'not found or not deletable', code: 'not_deletable' });
+    }
+    res.json({ ok: true, deleted });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_delete_failed' });
   }
 });
 
