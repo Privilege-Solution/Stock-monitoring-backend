@@ -10,9 +10,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="dist/styles.css">
 <style>
   /* CSS variables only — consumed by both Tailwind utilities (var(--*)) and runtime JS getComputedStyle() */
@@ -183,18 +180,6 @@
         <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
         <span class="th">รีเฟรช</span>
       </button>
-      <div style="position:relative;">
-        <button id="exportBtn" class="btn btn-primary">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-3-3v6m-7 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="th">ส่งออก</span>
-          <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div id="exportMenu" style="position:absolute; right:0; top:calc(100% + 4px); background:var(--card); border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.08); display:none; min-width:180px; z-index:50;">
-          <button class="btn btn-ghost" data-export="excel" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📊 Export Excel (.xlsx)</button>
-          <button class="btn btn-ghost" data-export="pdf" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📄 Export PDF</button>
-          <button class="btn btn-ghost" data-export="copy" style="width:100%; justify-content:flex-start; border-radius:0; padding:8px 12px;">📋 Copy Summary Text</button>
-        </div>
-      </div>
     </div>
   </header>
 
@@ -219,22 +204,6 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V9a2 2 0 012-2h2a2 2 0 012 2v9a2 2 0 01-2 2h-2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <span class="sidebar-label th">ข่าวและปัจจัย</span>
-      </div>
-    </div>
-    <hr class="sidebar-divider" />
-    <div class="sidebar-group">
-      <div class="sidebar-group-title th">รายงาน</div>
-      <div class="sidebar-item" data-view="report">
-        <div class="sidebar-icon">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-3-3v6m-7 5h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <span class="sidebar-label th">สร้างรายงาน</span>
-      </div>
-      <div class="sidebar-item" data-view="history">
-        <div class="sidebar-icon">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3M3 12a9 9 0 109-9 9 9 0 00-9 9z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <span class="sidebar-label th">ประวัติ</span>
       </div>
     </div>
     <hr class="sidebar-divider" />
@@ -536,135 +505,6 @@
       <div class="card mt-16">
         <h3 class="th mb-8" style="font-size:12px;">⚙ Pipeline Status</h3>
         <div id="newsStatusRow" class="muted th" style="font-size:11px;">กำลังโหลด...</div>
-      </div>
-    </section>
-
-    <!-- ====================== Report Builder View ====================== -->
-    <section class="view" id="view-report">
-      <h2 class="view-title th">สร้างรายงาน</h2>
-      <div class="view-sub th">เลือก template, กำหนดช่วงเวลา, ดู preview แล้ว export เป็น Excel / PDF / ข้อความ</div>
-
-      <div class="wizard-steps" id="wizardSteps">
-        <div class="wizard-step active" data-step="1"><span class="num">1</span><span class="th">เลือก Template</span></div>
-        <div class="wizard-step" data-step="2"><span class="num">2</span><span class="th">กำหนด Parameters</span></div>
-        <div class="wizard-step" data-step="3"><span class="num">3</span><span class="th">Preview</span></div>
-        <div class="wizard-step" data-step="4"><span class="num">4</span><span class="th">Export</span></div>
-      </div>
-
-      <div class="card mb-12">
-        <!-- Step 1: Template -->
-        <div class="wstep active" id="wstep-1">
-          <h3 class="th mb-12" style="font-size:13px;">เลือก Template รายงาน</h3>
-          <div class="template-grid">
-            <div class="template-card selected" data-template="summary">
-              <h4 class="th">Summary (1 หน้า)</h4>
-              <p class="th">KPI cards + กราฟราคา + เหตุการณ์สำคัญ</p>
-            </div>
-            <div class="template-card" data-template="full">
-              <h4 class="th">Full Report (3–5 หน้า)</h4>
-              <p class="th">Summary + ตารางราคา + Timeline + เปรียบเทียบ Sector</p>
-            </div>
-            <div class="template-card" data-template="custom">
-              <h4 class="th">Custom</h4>
-              <p class="th">เลือก section ที่ต้องการเอง</p>
-            </div>
-          </div>
-          <div id="customSections" style="display:none;">
-            <h4 class="th mb-8" style="font-size:12px;">เลือก Section</h4>
-            <div class="grid-3">
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-cover" checked> Cover</label>
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-summary" checked> Executive Summary</label>
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-price" checked> Price Performance</label>
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-events" checked> Key Events</label>
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-sector" checked> Sector Context</label>
-              <label class="row" style="font-size:12px;"><input type="checkbox" id="sec-appendix" checked> Appendix (Data Table)</label>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 2: Parameters -->
-        <div class="wstep" id="wstep-2" style="display:none;">
-          <h3 class="th mb-12" style="font-size:13px;">กำหนด Parameters</h3>
-          <div class="form-row">
-            <div class="form-field">
-              <label class="th">วันเริ่มต้น</label>
-              <input type="date" id="rptStart" />
-            </div>
-            <div class="form-field">
-              <label class="th">วันสิ้นสุด</label>
-              <input type="date" id="rptEnd" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-field" style="flex:2;">
-              <label class="th">ชื่อรายงาน</label>
-              <input type="text" id="rptTitle" class="th" placeholder="ASW.BK รายงานราคาหุ้น" />
-            </div>
-            <div class="form-field">
-              <label class="th">ผู้จัดทำ</label>
-              <input type="text" id="rptPreparedBy" class="th" placeholder="ชื่อ-นามสกุล" />
-            </div>
-            <div class="form-field" style="max-width:140px;">
-              <label class="th">ภาษา</label>
-              <select id="rptLang">
-                <option value="th">ไทย</option>
-                <option value="en">English</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 3: Preview -->
-        <div class="wstep" id="wstep-3" style="display:none;">
-          <h3 class="th mb-12" style="font-size:13px;">Preview</h3>
-          <label class="th muted" style="font-size:11px; display:block; margin-bottom:4px;">สรุปผลบริหาร (แก้ไขได้ก่อนส่งออก)</label>
-          <textarea id="rptExecSummary"
-            style="width:100%; min-height:96px; font:13px/1.6 'Sarabun',sans-serif;
-                   padding:8px; border:1px solid var(--border); border-radius:6px;
-                   margin-bottom:12px; resize:vertical;"></textarea>
-          <div id="reportPreview" style="background:white; padding:20px; border:1px solid var(--border); border-radius:6px; min-height:300px;">
-            <div class="empty-state th">กด "ถัดไป" เพื่อสร้าง Preview</div>
-          </div>
-        </div>
-
-        <!-- Step 4: Export -->
-        <div class="wstep" id="wstep-4" style="display:none;">
-          <h3 class="th mb-12" style="font-size:13px;">Export</h3>
-          <div class="grid-3">
-            <div class="card" style="text-align:center;">
-              <h4 class="th">Excel (.xlsx)</h4>
-              <p class="th muted" style="font-size:11px;">ตารางข้อมูล + chart + events</p>
-              <button class="btn btn-primary mt-8" id="exportExcelBtn" style="margin-top:8px;">📊 Export</button>
-            </div>
-            <div class="card" style="text-align:center;">
-              <h4 class="th">PDF</h4>
-              <p class="th muted" style="font-size:11px;">รายงานแบบ formatted หลายหน้า</p>
-              <button class="btn btn-primary mt-8" id="exportPdfBtn" style="margin-top:8px;">📄 Export</button>
-            </div>
-            <div class="card" style="text-align:center;">
-              <h4 class="th">Copy Summary</h4>
-              <p class="th muted" style="font-size:11px;">ข้อความสรุปสำหรับส่ง Line/Email</p>
-              <button class="btn btn-primary mt-8" id="exportCopyBtn" style="margin-top:8px;">📋 Copy</button>
-            </div>
-          </div>
-          <div class="mt-12">
-            <button class="btn" id="exportLogBtn">บันทึกลงประวัติ</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="row" style="justify-content:flex-end; gap:8px;">
-        <button class="btn btn-ghost" id="wizardBack" style="display:none;">‹ ย้อนกลับ</button>
-        <button class="btn btn-primary" id="wizardNext">ถัดไป ›</button>
-      </div>
-    </section>
-
-    <!-- ====================== History View ====================== -->
-    <section class="view" id="view-history">
-      <h2 class="view-title th">ประวัติการส่งออกรายงาน</h2>
-      <div class="view-sub th">รายการรายงานที่สร้างและ export ใน session นี้</div>
-      <div class="card">
-        <div id="historyList"></div>
       </div>
     </section>
 
@@ -1004,103 +844,6 @@ window.ASW_API = {
 
 <script>
 'use strict';
-// Mirror of lib/exec-summary.js — deterministic rules engine for the editable
-// Executive Summary block in the Report Builder. Generated server-side via the
-// same module; this client copy exists so the textarea + preview can be
-// regenerated on demand without an extra round-trip.
-window.ASW_EXEC = (function () {
-  const TEXT = {
-    th: {
-      up:       (p) => `ราคาปิดบวก ${p.toFixed(2)}% จากก่อนหน้า`,
-      down:     (p) => `ราคาปิดลบ ${Math.abs(p).toFixed(2)}% จากก่อนหน้า`,
-      volume:   (x) => `ปริมาณซื้อขายพุ่ง ${x.toFixed(2)} เท่าของค่าเฉลี่ย 30 วัน`,
-      event:    (remark) => `เหตุการณ์ที่มีผลกระทบมากที่สุด: ${remark}`,
-      range52W: (pos) => `ราคาอยู่ที่ ${pos.toFixed(0)}% ของ 52W range`,
-      wins:     (n, type) => `เหตุการณ์หลักในช่วง: ${type} ×${n}`,
-      noEvents: () => 'ไม่พบเหตุการณ์ที่จัดประเภทได้ในช่วงนี้',
-      noData:   () => 'ไม่มีข้อมูลในช่วงที่เลือก',
-      eventLabels: { 'ดอกเบี้ย': 'ดอกเบี้ย', 'presale': 'Presale', 'งบ': 'ผลประกอบการ', 'โครงการ': 'โครงการ', 'การเมือง': 'การเมือง' },
-    },
-    en: {
-      up:       (p) => `Closed up ${p.toFixed(2)}% from prior session`,
-      down:     (p) => `Closed down ${Math.abs(p).toFixed(2)}% from prior session`,
-      volume:   (x) => `Volume surged ${x.toFixed(2)}× the 30-day average`,
-      event:    (remark) => `Biggest event impact: ${remark}`,
-      range52W: (pos) => `Price at ${pos.toFixed(0)}% of 52W range`,
-      wins:     (n, type) => `Key events in range: ${type} ×${n}`,
-      noEvents: () => 'No classifiable events in range',
-      noData:   () => 'No data in selected range',
-      eventLabels: { 'ดอกเบี้ย': 'Interest rate', 'presale': 'Presale', 'งบ': 'Earnings', 'โครงการ': 'Project', 'การเมือง': 'Political' },
-    },
-  };
-  function classifyEventType(remark) {
-    const r = String(remark || '');
-    if (/ดอกเบี้ย|กนง|ปรับขึ้นดอกเบี้ย/i.test(r)) return 'ดอกเบี้ย';
-    if (/presale/i.test(r)) return 'presale';
-    if (/งบ|ปันผล|รางวัล|จ่ายเงินปันผล/i.test(r)) return 'งบ';
-    if (/โครงการ|เปิดโครงการ|ยอดจอง|openday|site visit|oppday|jv|atmoz|talis|kave|embryo|honor/i.test(r)) return 'โครงการ';
-    if (/การเมือง|เลือกตั้ง|กกต|ทักษิณ|นายก|สภา|โหวต|เศรษฐา/i.test(r)) return 'การเมือง';
-    return null;
-  }
-  function generate(data, lang) {
-    lang = lang || 'th';
-    const t = TEXT[lang] || TEXT.th;
-    if (!data || !data.length) return [t.noData()];
-    const withPrice = data.filter(r => r.close != null);
-    if (!withPrice.length) return [t.noData()];
-    const last = withPrice[withPrice.length - 1];
-    const bullets = [];
-    if (last.change != null && Math.abs(last.change) >= 2) {
-      bullets.push(last.change > 0 ? t.up(last.change) : t.down(last.change));
-    }
-    const last30 = withPrice.slice(-31);
-    const avg30 = last30.length
-      ? last30.reduce((a, b) => a + (b.volume || 0), 0) / last30.length
-      : 0;
-    if (avg30 > 0 && last.volume > 2 * avg30) {
-      bullets.push(t.volume(last.volume / avg30));
-    }
-    const withRemark = withPrice.filter(r => hasRemark(r) && r.setIdx != null);
-    if (withRemark.length) {
-      const idxMap = new Map(withPrice.map((r, i) => [r.date, i]));
-      const ranked = withRemark.map(r => {
-        const i = idxMap.get(r.date);
-        const prev = i > 0 ? withPrice[i - 1] : null;
-        const setPct = prev?.setIdx && r.setIdx
-          ? ((r.setIdx - prev.setIdx) / prev.setIdx) * 100 : 0;
-        return { r, impact: Math.abs((r.change || 0) - setPct) };
-      }).sort((a, b) => b.impact - a.impact);
-      if (ranked[0]?.impact > 0) bullets.push(t.event(combinedRemark(ranked[0].r)));
-    }
-    const lookback = withPrice.slice(-252);
-    if (lookback.length) {
-      const lo = Math.min(...lookback.map(r => r.close));
-      const hi = Math.max(...lookback.map(r => r.close));
-      if (hi > lo) {
-        const pos = ((last.close - lo) / (hi - lo)) * 100;
-        bullets.push(t.range52W(pos));
-      }
-    }
-    const counts = {};
-    for (const r of withPrice.filter(r => hasRemark(r))) {
-      // Each of the 3 columns may classify into a different bucket — count
-      // each one independently.
-      eachRemark(r).forEach(it => {
-        const k = classifyEventType(it.text);
-        if (k) counts[k] = (counts[k] || 0) + 1;
-      });
-    }
-    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    if (top) bullets.push(t.wins(top[1], t.eventLabels[top[0]] || top[0]));
-    if (!bullets.length) bullets.push(t.noEvents());
-    return bullets.slice(0, 5);
-  }
-  return { generate, TEXT };
-})();
-</script>
-
-<script>
-'use strict';
 
 /* ====================================================================
  * ASW Monitor — Application Logic
@@ -1126,17 +869,6 @@ const STATE = {
   newsRange: '30D',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  (day-count filters; 30 วัน default)
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
-  wizardStep: 1,
-  report: {
-    template: 'summary',
-    title: '',
-    preparedBy: '',
-    lang: 'th',
-    start: '',
-    end: '',
-    sections: { cover: true, summary: true, price: true, events: true, sector: true, appendix: true },
-  },
-  exportLog: [],
 };
 
 let DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -3091,397 +2823,17 @@ async function handleMarkNews(id) {
   }
 }
 
-/* ============== Report Builder Wizard ============== */
-function initWizard() {
-  // Default dates: last 3 months
-  const withPrice = DATA.filter(r => r.close != null);
-  if (withPrice.length && !STATE.report.start) {
-    const last = withPrice[withPrice.length-1];
-    const startD = new Date(last.date + 'T00:00:00');
-    startD.setMonth(startD.getMonth() - 3);
-    STATE.report.start = startD.toISOString().slice(0,10);
-    STATE.report.end = last.date;
-    $('rptStart').value = STATE.report.start;
-    $('rptEnd').value = STATE.report.end;
-  }
-  STATE.report.title = $('rptTitle').value || ('ASW.BK รายงานราคาหุ้น ' + fmtThaiShort(STATE.report.start) + ' – ' + fmtThaiShort(STATE.report.end));
-}
-
-function gotoWizardStep(step) {
-  STATE.wizardStep = step;
-  document.querySelectorAll('.wizard-step').forEach(el => {
-    el.classList.toggle('active', parseInt(el.dataset.step) === step);
-  });
-  document.querySelectorAll('.wstep').forEach(el => el.style.display = 'none');
-  $('wstep-' + step).style.display = 'block';
-  $('wizardBack').style.display = step > 1 ? '' : 'none';
-  $('wizardNext').textContent = step < 4 ? 'ถัดไป ›' : 'เสร็จสิ้น';
-  if (step === 3) renderReportPreview();
-}
-
-function renderReportPreview() {
-  const data = filterByDateRange(DATA, STATE.report.start, STATE.report.end);
-  if (!data.length) {
-    $('reportPreview').innerHTML = '<div class="empty-state th">ไม่พบข้อมูลในช่วงที่เลือก</div>';
-    return;
-  }
-  const withPrice = data.filter(r => r.close != null);
-  const first = withPrice[0], last = withPrice[withPrice.length-1];
-  const ret = ((last.close - first.close) / first.close) * 100;
-  // Flat list of all remarks across all 3 columns in the report range.
-  const events = [];
-  data.forEach(r => eachRemark(r).forEach(it => events.push(it)));
-  events.sort((a,b) => a.date.localeCompare(b.date));
-  const lo = Math.min(...withPrice.map(r => r.close));
-  const hi = Math.max(...withPrice.map(r => r.close));
-  const t = STATE.report;
-  const lang = t.lang || 'th';
-  const isEn = lang === 'en';
-
-  // ---- Auto-generate exec summary bullets (deterministic rules) ----
-  // If the textarea is empty OR the language changed, regenerate.
-  // Otherwise honor the user's manual edits.
-  const ta = $('rptExecSummary');
-  const prevLang = ta?.dataset.lang;
-  const prevStart = ta?.dataset.rangeStart;
-  const prevEnd = ta?.dataset.rangeEnd;
-  const rangeChanged = prevStart !== t.start || prevEnd !== t.end;
-  const langChanged = prevLang !== lang;
-  const userEdited = ta?.dataset.userEdited === '1';
-  const bullets = window.ASW_EXEC ? window.ASW_EXEC.generate(withPrice, lang) : [];
-  const bulletsText = bullets.join('\n');
-  if (ta && (!userEdited || langChanged || rangeChanged)) {
-    ta.value = bulletsText;
-    ta.dataset.lang = lang;
-    ta.dataset.rangeStart = t.start;
-    ta.dataset.rangeEnd = t.end;
-    ta.dataset.userEdited = '0';
-  }
-
-  let sections = [];
-  if (t.template === 'summary') {
-    sections = ['cover', 'summary', 'price', 'events'];
-  } else if (t.template === 'full') {
-    sections = ['cover', 'summary', 'price', 'events', 'sector', 'appendix'];
-  } else {
-    sections = Object.keys(t.sections).filter(k => t.sections[k]);
-  }
-
-  // Bilingual section labels
-  const LBL = {
-    execSummary: isEn ? 'Executive Summary' : 'Executive Summary',
-    coverDefault: isEn ? 'ASW.BK Price Report' : 'ASW.BK รายงานราคาหุ้น',
-    coverBy: isEn ? 'Prepared by: ' : 'จัดทำโดย: ',
-    pricePerf: isEn ? 'Price Performance' : 'Price Performance',
-    firstPrice: isEn ? 'First price:' : 'ราคาแรก:',
-    lastPrice: isEn ? 'Last price:' : 'ราคาสุดท้าย:',
-    ret: isEn ? 'Return:' : 'ผลตอบแทน:',
-    keyEvents: isEn ? 'Key Events' : 'เหตุการณ์สำคัญ',
-    noEventsRange: isEn ? 'No events in range' : 'ไม่มีเหตุการณ์ในช่วงนี้',
-    sectorCtx: isEn ? 'Sector Context' : 'บริบทภาคอุตสาหกรรม',
-    propIdx: isEn ? 'PROP Index' : 'PROP Index',
-    setIdx: isEn ? 'SET Index' : 'SET Index',
-    aswPos: isEn ? 'ASW position vs Thai RE sector peers: see in-app snapshot table (top-10 peers, latest day)'
-              : 'ตำแหน่ง ASW เทียบกับกลุ่มอสังหาฯ ไทย: ดูตาราง snapshot ในแอป (10 peers ล่าสุด)',
-    appendix: isEn ? 'Appendix — Data Table (top 50)' : 'ภาคผนวก — ตารางข้อมูล (50 แถวล่าสุด)',
-  };
-
-  let html = '';
-  if (sections.includes('cover')) {
-    html += `
-      <div style="text-align:center; padding:20px; border-bottom:2px solid var(--primary); margin-bottom:20px;">
-        <div style="font-size:24px; font-weight:700; color:var(--primary);">${escapeHtml(t.title || LBL.coverDefault)}</div>
-        <div class="muted ${isEn ? '' : 'th'}" style="margin-top:8px;">${fmtThaiDate(first.date)} – ${fmtThaiDate(last.date)}</div>
-        <div class="muted ${isEn ? '' : 'th'}" style="margin-top:4px;">${LBL.coverBy}${escapeHtml(t.preparedBy || '—')}</div>
-      </div>`;
-  }
-
-  if (sections.includes('summary')) {
-    const bulletsHtml = bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('');
-    html += `
-      <h3 style="color:var(--primary); margin-top:16px;">${LBL.execSummary}</h3>
-      <ul class="${isEn ? '' : 'th'}" style="line-height:1.7;">
-        ${bulletsHtml}
-      </ul>`;
-  }
-
-  if (sections.includes('price')) {
-    html += `
-      <h3 style="color:var(--primary); margin-top:16px;">${LBL.pricePerf}</h3>
-      <div style="height:240px; margin:8px 0;"><canvas id="reportChart"></canvas></div>
-      <div class="grid-3 th" style="font-size:11px;">
-        <div><span class="muted">${LBL.firstPrice}</span> <strong>฿${fmtNum(first.close)}</strong></div>
-        <div><span class="muted">${LBL.lastPrice}</span> <strong>฿${fmtNum(last.close)}</strong></div>
-        <div><span class="muted">${LBL.ret}</span> <strong class="${ret > 0 ? 'text-pos' : 'text-neg'}">${fmtPct(ret)}</strong></div>
-      </div>`;
-  }
-
-  if (sections.includes('events')) {
-    html += `<h3 style="color:var(--primary); margin-top:16px;">${LBL.keyEvents} (${events.length})</h3>`;
-    if (!events.length) {
-      html += `<div class="muted ${isEn ? '' : 'th'}">${LBL.noEventsRange}</div>`;
-    } else {
-      html += '<div class="timeline">' + events.slice(0, 25).map(it => {
-        const c = classifyEvent(it);
-        return `<div class="timeline-item">
-          <div class="timeline-date th">${fmtThaiShort(it.date)} · ฿${fmtNum(it.close)}</div>
-          <div class="timeline-text th">${c ? `<span class="tag ${c.type}">${c.label}</span> ` : ''}${escapeHtml(it.text)}</div>
-        </div>`;
-      }).join('') + '</div>';
-    }
-  }
-
-  if (sections.includes('sector')) {
-    const validProp = data.filter(r => r.propIdx != null);
-    const validSet = data.filter(r => r.setIdx != null);
-    html += `
-      <h3 style="color:var(--primary); margin-top:16px;">${LBL.sectorCtx}</h3>
-      <div class="${isEn ? '' : 'th'}" style="font-size:12px; line-height:1.7;">
-        ${LBL.propIdx}: ${fmtPct(pctChange(validProp, 'propIdx'))} (${validProp[0]?.propIdx} → ${validProp[validProp.length-1]?.propIdx})<br>
-        ${LBL.setIdx}: ${fmtPct(pctChange(validSet, 'setIdx'))} (${validSet[0]?.setIdx} → ${validSet[validSet.length-1]?.setIdx})<br>
-        ${LBL.aswPos}
-      </div>`;
-  }
-
-  if (sections.includes('appendix')) {
-    html += `<h3 style="color:var(--primary); margin-top:16px;">${LBL.appendix}</h3>`;
-    html += `<div style="max-height:300px; overflow-y:auto;"><table class="data-table">
-      <thead><tr><th class="th">วันที่</th><th class="num th">ราคา</th><th class="num th">%Chg</th><th class="num th">ปริมาณ</th><th class="th">Remark</th></tr></thead>
-      <tbody>`;
-    data.slice(-50).reverse().forEach(r => {
-      const has = hasRemark(r);
-      html += `<tr class="${has ? 'has-remark' : ''}">
-        <td class="th">${fmtThaiShort(r.date)}</td>
-        <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
-        <td class="num ${r.change > 0 ? 'pos' : r.change < 0 ? 'neg' : ''}">${r.change != null ? fmtPct(r.change) : '—'}</td>
-        <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
-        <td class="th">${has ? (() => { const items = eachRemark(r); const it = items[0]; const cat = (it && REMARK_BADGE[it.category]) || REMARK_BADGE.other; return `<span class="tag ${cat.cls}">${cat.label}</span> ` + escapeHtml(combinedRemark(r)); })() : ''}</td>
-      </tr>`;
-    });
-    html += '</tbody></table></div>';
-  }
-
-  $('reportPreview').innerHTML = html;
-
-  // Render report chart if needed
-  if (sections.includes('price')) {
-    const ctx = $('reportChart').getContext('2d');
-    const pData = data.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
-    new Chart(ctx, {
-      type: 'line',
-      data: { datasets: [{
-        label: 'ASW', data: pData,
-        borderColor: getCSS('--primary'),
-        backgroundColor: 'rgba(59,139,212,0.08)',
-        borderWidth: 2, pointRadius: 0, tension: 0.18, fill: true,
-      }] },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
-            grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 10 } } },
-          y: { grid: { color: 'rgba(0,0,0,0.04)' },
-            ticks: { color: getCSS('--muted'), font: { size: 10 } } }
-        }
-      }
-    });
-  }
-}
-
-/* ============== Exports (Excel, PDF, Copy) ============== */
-function buildReportData() {
-  const data = filterByDateRange(DATA, STATE.report.start, STATE.report.end);
-  const withPrice = data.filter(r => r.close != null);
-  const first = withPrice[0], last = withPrice[withPrice.length-1];
-  const ret = first && last ? ((last.close - first.close) / first.close) * 100 : 0;
-  const events = [];
-  data.forEach(r => eachRemark(r).forEach(it => events.push(it)));
-  const t = STATE.report;
-  return { data, withPrice, first, last, ret, events, title: t.title || 'ASW.BK รายงาน', preparedBy: t.preparedBy || '—', lang: t.lang };
-}
-
-function exportToExcel() {
-  const r = buildReportData();
-  const wb = XLSX.utils.book_new();
-
-  // Sheet 1: Cover
-  const cover = [
-    ['ASW.BK รายงานราคาหุ้น'],
-    ['ชื่อรายงาน', r.title],
-    ['ผู้จัดทำ', r.preparedBy],
-    ['วันที่สร้าง', fmtThaiDate(new Date().toISOString().slice(0,10))],
-    ['ช่วงข้อมูล', fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date)],
-    ['Template', STATE.report.template],
-    ['ภาษา', r.lang],
-    [],
-    ['สรุป'],
-    ['ราคาปิดวันสุดท้าย', r.last?.close ?? '—'],
-    ['ผลตอบแทน (%)', r.ret?.toFixed(2) ?? '—'],
-    ['จำนวนวัน', r.data.length],
-    ['จำนวน Events', r.events.length],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cover), 'Cover');
-
-  // Sheet 2: Data
-  const dataSheet = [['วันที่', 'ราคาปิด', '%เปลี่ยนแปลง', 'ปริมาณ (พันหุ้น)', 'มูลค่า (ลบ.)', 'SET Index', 'PROP Index', 'Remark', 'Category']];
-  r.data.forEach(d => {
-    dataSheet.push([
-      d.date, d.close, d.change, d.volume, d.value,
-      d.setIdx, d.propIdx, d.remark || '',
-      classifyEvent({ text: d.remark, category: d.category })?.label || '',
-    ]);
-  });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dataSheet), 'Data');
-
-  // Sheet 3: Events only
-  if (r.events.length) {
-    const evSheet = [['วันที่', 'หมวด', 'ราคาปิด', '%เปลี่ยนแปลง', 'Remark']];
-    r.events.forEach(e => {
-      evSheet.push([e.date, classifyEvent(e)?.label || '', e.close, e.change, e.text]);
-    });
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evSheet), 'Events');
-  }
-
-  const fname = 'ASW_Report_' + (STATE.report.start || 'all') + '_' + (STATE.report.end || 'all') + '.xlsx';
-  XLSX.writeFile(wb, fname);
-  STATE.exportLog.unshift({ type: 'excel', filename: fname, at: new Date().toLocaleString('th-TH') });
-  showToast('ส่งออก Excel สำเร็จ: ' + fname);
-}
-
-async function exportToPdf() {
-  const r = buildReportData();
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('p', 'mm', 'a4');
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  let y = 20;
-
-  // Cover
-  pdf.setFontSize(20);
-  pdf.text(r.title, pageW / 2, y, { align: 'center' });
-  y += 10;
-  pdf.setFontSize(11);
-  pdf.text('Period: ' + fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date), pageW / 2, y, { align: 'center' });
-  y += 6;
-  pdf.text('Prepared by: ' + r.preparedBy, pageW / 2, y, { align: 'center' });
-  y += 6;
-  pdf.text('Generated: ' + new Date().toLocaleString('th-TH'), pageW / 2, y, { align: 'center' });
-  y += 14;
-
-  // Executive summary
-  pdf.setFontSize(14);
-  pdf.text('Executive Summary', 15, y); y += 8;
-  pdf.setFontSize(10);
-  const summaryLines = [
-    'Last close: ฿' + fmtNum(r.last?.close) + ' (' + fmtPct(r.ret) + ' from period start)',
-    '52W Range in period: ฿' + fmtNum(Math.min(...r.withPrice.map(x => x.close))) + ' – ฿' + fmtNum(Math.max(...r.withPrice.map(x => x.close))),
-    'Key events: ' + r.events.length,
-    'SET change: ' + fmtPct(pctChange(r.data.filter(x => x.setIdx != null), 'setIdx')),
-    'PROP change: ' + fmtPct(pctChange(r.data.filter(x => x.propIdx != null), 'propIdx')),
-  ];
-  summaryLines.forEach(line => { pdf.text('• ' + line, 15, y); y += 6; });
-  y += 4;
-
-  // Chart image (from preview)
-  try {
-    const preview = $('reportPreview');
-    if (preview) {
-      const canvas = await html2canvas(preview, { scale: 1.5, backgroundColor: '#FFFFFF' });
-      const img = canvas.toDataURL('image/png');
-      const imgW = pageW - 30;
-      const imgH = (canvas.height / canvas.width) * imgW;
-      if (y + imgH > pageH - 20) { pdf.addPage(); y = 20; }
-      pdf.addImage(img, 'PNG', 15, y, imgW, Math.min(imgH, pageH - y - 20));
-      y += Math.min(imgH, pageH - y - 20) + 10;
-    }
-  } catch (e) {
-    console.warn('Chart capture failed:', e);
-  }
-
-  // New page: events table
-  pdf.addPage(); y = 20;
-  pdf.setFontSize(14);
-  pdf.text('Key Events (' + r.events.length + ')', 15, y); y += 8;
-  pdf.setFontSize(9);
-  pdf.text('Date', 15, y); pdf.text('Cat', 40, y); pdf.text('Price', 60, y); pdf.text('%Chg', 80, y); pdf.text('Remark', 100, y); y += 5;
-  r.events.slice(0, 60).forEach(e => {
-    if (y > pageH - 20) { pdf.addPage(); y = 20; }
-    const c = classifyEvent(e);
-    pdf.text(fmtThaiShort(e.date), 15, y);
-    pdf.text(c?.label || '', 40, y);
-    pdf.text('฿' + fmtNum(e.close), 60, y);
-    pdf.text(fmtPct(e.change), 80, y);
-    const txt = String(e.text || '').slice(0, 60);
-    pdf.text(txt, 100, y);
-    y += 5;
-  });
-
-  const fname = 'ASW_Report_' + (STATE.report.start || 'all') + '_' + (STATE.report.end || 'all') + '.pdf';
-  pdf.save(fname);
-  STATE.exportLog.unshift({ type: 'pdf', filename: fname, at: new Date().toLocaleString('th-TH') });
-  showToast('ส่งออก PDF สำเร็จ: ' + fname);
-}
-
-async function copySummary() {
-  const r = buildReportData();
-  const lines = [
-    r.title,
-    fmtThaiDate(r.first?.date) + ' – ' + fmtThaiDate(r.last?.date),
-    'จัดทำโดย: ' + r.preparedBy,
-    '',
-    'ราคาปิดวันสุดท้าย: ฿' + fmtNum(r.last?.close) + ' (' + fmtPct(r.ret) + ')',
-    'SET: ' + fmtPct(pctChange(r.data.filter(x => x.setIdx != null), 'setIdx')),
-    'PROP: ' + fmtPct(pctChange(r.data.filter(x => x.propIdx != null), 'propIdx')),
-    'Events: ' + r.events.length + ' รายการ',
-    '',
-    'Key Events:',
-  ];
-  r.events.slice(0, 10).forEach(e => {
-    lines.push('• ' + fmtThaiShort(e.date) + ' ฿' + fmtNum(e.close) + ' ' + (e.change > 0 ? '+' : '') + fmtPct(e.change) + ' — ' + e.remark);
-  });
-  const text = lines.join('\n');
-  try {
-    await navigator.clipboard.writeText(text);
-    STATE.exportLog.unshift({ type: 'copy', filename: '(clipboard)', at: new Date().toLocaleString('th-TH') });
-    showToast('คัดลอก Summary ลง Clipboard แล้ว');
-  } catch (e) {
-    // Fallback
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    showToast('คัดลอก Summary ลง Clipboard แล้ว');
-  }
-}
-
-/* ============== Status Bar + History ============== */
+/* ============== Status Bar ============== */
 function updateStatusBar() {
   $('sbFile').textContent = CURRENT_FILE_NAME;
   if (DATA.length) {
     $('sbRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
     $('sbEvents').textContent = DATA.reduce((n, r) => n + eachRemark(r).length, 0);
   }
-  const viewNames = { dashboard: 'Dashboard', price: 'ราคาย้อนหลัง', news: 'ข่าวและปัจจัย', report: 'สร้างรายงาน', history: 'ประวัติ', settings: 'ตั้งค่า' };
+  const viewNames = { dashboard: 'Dashboard', price: 'ราคาย้อนหลัง', news: 'ข่าวและปัจจัย', settings: 'ตั้งค่า' };
   $('sbView').textContent = viewNames[STATE.view] || STATE.view;
 }
 
-function renderHistory() {
-  const list = $('historyList');
-  if (!STATE.exportLog.length) {
-    list.innerHTML = '<div class="empty-state th">ยังไม่มีรายการ — ลอง Export รายงานจากหน้า "สร้างรายงาน"</div>';
-    return;
-  }
-  list.innerHTML = '<table class="data-table"><thead><tr><th class="th">เวลา</th><th class="th">ประเภท</th><th class="th">ไฟล์</th></tr></thead><tbody>' +
-    STATE.exportLog.map(item =>
-      `<tr>
-        <td class="th">${item.at}</td>
-        <td><span class="tag ${item.type === 'excel' ? 'project' : item.type === 'pdf' ? 'corporate' : 'political'}">${item.type.toUpperCase()}</span></td>
-        <td class="th">${escapeHtml(item.filename)}</td>
-      </tr>`).join('') + '</tbody></table>';
-}
 
 /* ============== Settings file info ============== */
 function renderSettingsInfo() {
@@ -3508,8 +2860,6 @@ function setView(view) {
   if (view === 'dashboard') refreshDashboard();
   else if (view === 'price') refreshPrice();
   else if (view === 'news') refreshNews();
-  else if (view === 'report') { initWizard(); gotoWizardStep(STATE.wizardStep); }
-  else if (view === 'history') renderHistory();
   else if (view === 'settings') renderSettingsInfo();
   updateStatusBar();
 }
@@ -3752,17 +3102,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // News refresh is driven by the single top-level Refresh button now — see
   // refreshNewsFeed() and the #refreshBtn handler (no per-panel button).
-  // Report language toggle — re-render preview on change
-  const rptLang = $('rptLang');
-  if (rptLang) rptLang.addEventListener('change', () => {
-    STATE.report.lang = rptLang.value;
-    if (STATE.wizardStep === 3) renderReportPreview();
-  });
-  // Mark exec-summary textarea as user-edited when typed into
-  const rptExec = $('rptExecSummary');
-  if (rptExec) rptExec.addEventListener('input', () => {
-    rptExec.dataset.userEdited = '1';
-  });
   // Click news → focus dashboard chart (switch view if needed)
   document.body.addEventListener('click', (e) => {
     const item = e.target.closest('.news-item');
@@ -3775,72 +3114,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Wizard
-  document.querySelectorAll('.template-card').forEach(c => {
-    c.addEventListener('click', () => {
-      STATE.report.template = c.dataset.template;
-      document.querySelectorAll('.template-card').forEach(x => x.classList.toggle('selected', x === c));
-      $('customSections').style.display = c.dataset.template === 'custom' ? 'block' : 'none';
-    });
-  });
-  ['cover', 'summary', 'price', 'events', 'sector', 'appendix'].forEach(k => {
-    const el = $('sec-' + k);
-    if (el) el.addEventListener('change', () => { STATE.report.sections[k] = el.checked; });
-  });
-  $('wizardNext').addEventListener('click', () => {
-    if (STATE.wizardStep < 4) {
-      // Capture inputs on step 2
-      if (STATE.wizardStep === 2) {
-        STATE.report.title = $('rptTitle').value;
-        STATE.report.preparedBy = $('rptPreparedBy').value;
-        STATE.report.lang = $('rptLang').value;
-        STATE.report.start = $('rptStart').value;
-        STATE.report.end = $('rptEnd').value;
-      }
-      gotoWizardStep(STATE.wizardStep + 1);
-    } else {
-      setView('dashboard');
-    }
-  });
-  $('wizardBack').addEventListener('click', () => {
-    if (STATE.wizardStep > 1) gotoWizardStep(STATE.wizardStep - 1);
-  });
-  // Step click
-  document.querySelectorAll('.wizard-step').forEach(s => {
-    s.addEventListener('click', () => {
-      const step = parseInt(s.dataset.step);
-      if (step < STATE.wizardStep) gotoWizardStep(step);
-    });
-  });
-
-  // Export buttons
-  $('exportExcelBtn').addEventListener('click', exportToExcel);
-  $('exportPdfBtn').addEventListener('click', exportToPdf);
-  $('exportCopyBtn').addEventListener('click', copySummary);
-  $('exportLogBtn').addEventListener('click', () => {
-    if (STATE.exportLog.length) setView('history');
-    else showToast('ยังไม่มีรายการ — ลอง Export ก่อน');
-  });
-
-  // Top bar export menu
-  const exportMenu = $('exportMenu');
-  $('exportBtn').addEventListener('click', () => {
-    exportMenu.style.display = exportMenu.style.display === 'block' ? 'none' : 'block';
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#exportBtn') && !e.target.closest('#exportMenu')) {
-      exportMenu.style.display = 'none';
-    }
-  });
-  $('exportMenu').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-export]');
-    if (!t) return;
-    exportMenu.style.display = 'none';
-    const v = t.dataset.export;
-    if (v === 'excel') exportToExcel();
-    else if (v === 'pdf') exportToPdf();
-    else if (v === 'copy') copySummary();
-  });
 
   // Note: File upload removed — app uses bundled sample_data.js only (demo data).
 
@@ -3856,8 +3129,10 @@ document.addEventListener('DOMContentLoaded', () => {
     b.classList.toggle('active', b.dataset.overlay === STATE.overlay);
   });
 
-  // Initial render — read ?view= from URL for deep linking / screenshots
-  const initialView = new URLSearchParams(location.search).get('view') || 'dashboard';
+  // Initial render — read ?view= from URL for deep linking / screenshots.
+  // Report/History views were removed — clamp stale deep links to the dashboard.
+  let initialView = new URLSearchParams(location.search).get('view') || 'dashboard';
+  if (initialView === 'report' || initialView === 'history') initialView = 'dashboard';
   // Bootstrap: try to load data from backend; fall back to bundled SAMPLE_DATA.
   // Pipeline refactor (Gemini-search v3): also fetch /api/news (Pipeline B
   // headlines) and /api/morning-brief in parallel so the Dashboard
@@ -3906,24 +3181,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
       console.warn('bootstrap data load failed:', e);
     }
-    initWizard();
     setView(initialView);
     updateStatusBar();
-    // Deep link helpers: ?wstep=N&wlang=th|en  (used by verification scripts)
-    const _qp = new URLSearchParams(location.search);
-    const _wstep = parseInt(_qp.get('wstep') || '0', 10);
-    const _wlang = _qp.get('wlang');
-    if (_wstep >= 1 && _wstep <= 4) {
-      gotoWizardStep(_wstep);
-    }
-    if (_wlang && (initialView === 'report' || _wstep >= 1)) {
-      const sel = $('rptLang');
-      if (sel) {
-        sel.value = _wlang;
-        STATE.report.lang = _wlang;
-        if (STATE.wizardStep === 3) renderReportPreview();
-      }
-    }
     // Wire refresh + health controls
     const rb = $('refreshBtn');
     if (rb) rb.addEventListener('click', async () => {
