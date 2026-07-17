@@ -3220,7 +3220,15 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('อัปเดตข้อมูลไม่สำเร็จ');
           }
         })();
-        await Promise.all([dataP, refreshNewsFeed()]);
+        await Promise.all([
+          dataP,
+          refreshNewsFeed(),
+          // Kick off a background news crawl (rss-property + rss-extended +
+          // gemini-{company,sector,macro}) so the next refresh picks up
+          // anything new. Returns immediately; the next refreshBtn click (or
+          // the 60-s poll) will see the new rows.
+          fetch('/api/news/refresh-all', { method: 'POST' }).catch(() => {}),
+        ]);
         await refreshDailySummary();
       } finally {
         if (icon) icon.classList.remove('spin');

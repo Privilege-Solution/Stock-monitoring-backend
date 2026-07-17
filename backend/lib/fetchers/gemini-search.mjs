@@ -290,10 +290,138 @@ function severityFromImpactLevel(impactLevel) {
        : 'medium';
 }
 
-function parseAIResult(text, pipeline) {
+// Normalize the Grounding API's `groundingMetadata` into a smaller, typed
+// shape the rest of this module uses. Returns null when the candidate had no
+// grounding metadata (which happens for synthesis tasks that pass
+// { ground:false } — morning brief / daily summary — and for any grounded
+// call where the model chose not to cite anything).
+function extractGrounding(candidate) {
+  const gm = candidate?.groundingMetadata;
+  if (!gm) return null;
+  const chunks = (gm.groundingChunks || [])
+    .map(c => ({ uri: c.web?.uri || '', title: c.web?.title || '' }))
+    .filter(c => c.uri || c.title);
+  const supports = (gm.groundingSupports || [])
+    .map(s => ({
+      // Gemini sometimes omits startIndex when the support spans from the
+      // very beginning of the response — treat undefined as 0 so the range
+      // check in resolveGroundedUrl() still works.
+      start: s.segment?.startIndex ?? 0,
+      end:   s.segment?.endIndex ?? 0,
+      chunkIndices: s.groundingChunkIndices || [],
+      confidence: s.confidenceScores?.[0] || 0,
+    }))
+    .filter(s => s.chunkIndices.length && s.end > s.start);
+  return chunks.length ? { chunks, supports } : null;
+}
+
+// Hostname helpers used to validate Gemini's stated URL against the set of
+// grounded publishers. `www.` is stripped before comparison so that
+// "www.assetwise.co.th" matches the chunk title "assetwise.co.th".
+function hostnameOf(url) {
+  try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); }
+  catch { return ''; }
+}
+
+// Loose hostname equivalence: equal, or one is a parent domain of the other
+// (handles cases like "blog.example.com" vs "example.com").
+function hostnamesMatch(a, b) {
+  if (!a || !b) return false;
+  const x = a.toLowerCase().replace(/^www\./, '');
+  const y = b.toLowerCase().replace(/^www\./, '');
+  return x === y || x.endsWith('.' + y) || y.endsWith('.' + x);
+}
+
+// Heuristic: does this string look like a domain (so we can construct a URL
+// from it)? Gemini's web.title is usually a bare hostname but occasionally
+// leaks the publisher's display name ("Bangkok Post") — we can't build a
+// usable URL from those, so we skip them as a URL source.
+function looksLikeHostname(s) {
+  return typeof s === 'string' && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(s) && !/\s/.test(s);
+}
+
+// Given Gemini's stated URL and the grounding info, return the most reliable
+// URL for this item. Policy:
+//   1. If Gemini's URL hostname matches a grounded publisher, trust it —
+//      this is the deep article URL (best outcome).
+//   2. Otherwise find the chunk whose groundingSupport overlaps this item's
+//      text position; build a publisher URL from its title.
+//   3. If no support overlap, scan trusted hosts for a hostname match against
+//      the stated URL one more time (in case supports were incomplete).
+//   4. Last resort: return the stated URL unchanged. We'd rather keep a
+//      suspect URL than drop the item — the cron operator can hide bad rows.
+function resolveGroundedUrl(statedUrl, itemPos, grounding, trustedHosts) {
+  // Reject Gemini's own grounding-redirect URLs outright. They look like
+  // https://vertexaisearch.cloud.google.com/grounding-api-redirect/... and
+  // expire quickly (often 404 within days). They are an internal Google
+  // indirection, never a usable article URL. If Gemini stated one, treat it
+  // as if no URL was given and rely on the grounding fallback below — better
+  // to drop the item than store a guaranteed-to-404 link.
+  const isGoogleInternal = (u) => {
+    if (typeof u !== 'string') return false;
+    if (u.includes('vertexaisearch.cloud.google.com')) return true;
+    if (u.includes('grounding-api-redirect')) return true;
+    try {
+      const h = new URL(u).hostname;
+      return h === 'vertexaisearch.cloud.google.com' || h.endsWith('.google.com');
+    } catch { return false; }
+  };
+  const safeStatedUrl = isGoogleInternal(statedUrl) ? null : statedUrl;
+
+  // 1. Validate stated URL against trusted hosts
+  if (safeStatedUrl) {
+    const urlHost = hostnameOf(safeStatedUrl);
+    if (urlHost && trustedHosts.some(th => hostnamesMatch(urlHost, th))) {
+      return safeStatedUrl;
+    }
+  }
+
+  // 2. Find the grounding chunk that backs this item's HEADLINE text
+  const matchingSupports = grounding.supports
+    .filter(s => s.start < itemPos.end && s.end > itemPos.start)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  for (const sup of matchingSupports) {
+    for (const idx of sup.chunkIndices) {
+      const chunk = grounding.chunks[idx];
+      if (chunk?.title && looksLikeHostname(chunk.title)) {
+        const host = chunk.title.replace(/^www\./, '');
+        // Prefer the publisher's www subdomain for a stable homepage URL.
+        return `https://www.${host}/`;
+      }
+    }
+  }
+
+  // 3. & 4. No grounding match — keep the safe URL (or null if it was a
+  // rejected Google-internal redirect, so parseAIResult drops the item).
+  return safeStatedUrl;
+}
+
+function parseAIResult(text, pipeline, grounding) {
   if (!text || text.trim() === 'NONE') return [];
-  const blocks = text.split('---').filter(b => b.trim());
-  return blocks.map(block => {
+
+  // Trusted publisher hostnames extracted from grounding chunks. Gemini's
+  // web.title field is consistently the publisher's canonical hostname
+  // (e.g. "assetwise.co.th", "marketeeronline.co") — we use it both to
+  // validate URLs Gemini states in its text and as a fallback hostname
+  // when Gemini hallucinates or truncates a URL.
+  const trustedHosts = (grounding?.chunks || [])
+    .map(c => c.title)
+    .filter(Boolean);
+
+  // Split into blocks while tracking each block's character offsets in the
+  // original text. The offsets let us look up which grounding chunk backs
+  // each headline via groundingSupports (which maps text ranges to chunks).
+  const blocks = [];
+  let searchFrom = 0;
+  for (const part of text.split('---')) {
+    if (!part.trim()) continue;
+    const start = text.indexOf(part, searchFrom);
+    blocks.push({ text: part, start, end: start + part.length });
+    searchFrom = start + part.length;
+  }
+
+  return blocks.map(({ text: block, start, end }) => {
     const get = (key) => {
       const m = block.match(new RegExp(`${key}:\\s*(.+)`));
       return m ? m[1].trim() : null;
@@ -302,6 +430,13 @@ function parseAIResult(text, pipeline) {
     const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'MACRO';
     const rawImpactLevel = (get('IMPACT_LEVEL') || '').toUpperCase();
     const impactLevel = ALLOWED_IMPACT_LEVELS.has(rawImpactLevel) ? rawImpactLevel : 'MEDIUM';
+    const statedUrl = get('URL');
+    // Resolve the URL against grounding: keep Gemini's URL if its hostname
+    // matches a grounded publisher, otherwise replace with the publisher
+    // URL derived from the chunk that backs this headline.
+    const resolvedUrl = grounding
+      ? resolveGroundedUrl(statedUrl, { start, end }, grounding, trustedHosts)
+      : statedUrl;
     return {
       date: new Date().toISOString().slice(0, 10),
       pipeline,
@@ -312,7 +447,7 @@ function parseAIResult(text, pipeline) {
       severity:  severityFromImpactLevel(impactLevel),  // map impact_level → severity for downstream pin logic
       impact_level: impactLevel,                 // taxonomy-v2: HIGH / MEDIUM / LOW
       source:    get('SOURCE'),
-      url:       get('URL'),
+      url:       resolvedUrl,
       show_pin:  pipeline === 'company' ||
                  (pipeline === 'macro' && impactLevel === 'HIGH'),
     };
@@ -359,7 +494,13 @@ async function geminiSearch(prompt, { ground = true, maxTokens = 2048, timeoutMs
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const j = await res.json();
-  return j.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const candidate = j.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text || '';
+  // extractGrounding returns null when there's no metadata (synthesis tasks
+  // pass ground:false). The 3 search pipelines (company/sector/macro) pass
+  // the result straight to parseAIResult, which uses it to validate URLs.
+  const grounding = extractGrounding(candidate);
+  return { text, grounding };
 }
 
 // =============================================================================
@@ -451,8 +592,8 @@ function normalizeBullets(raw) {
 // land in news_feed so the dashboard news sidebar can link to sources.
 async function runCompany(sinceDate) {
   const td = todayThai();
-  const text = await geminiSearch(PROMPT_COMPANY(td));
-  const items = parseAIResult(text, 'company');
+  const { text, grounding } = await geminiSearch(PROMPT_COMPANY(td));
+  const items = parseAIResult(text, 'company', grounding);
   if (!items.length) {
     console.log(`[gemini-company] ${td} → no items`);
     return { ok: true, date: td, category: null, text: null, sourceTitles: [] };
@@ -481,8 +622,8 @@ async function runCompany(sinceDate) {
 // on its own).
 async function runSector(sinceDate) {
   const td = todayThai();
-  const text = await geminiSearch(PROMPT_SECTOR(td));
-  const items = parseAIResult(text, 'sector');
+  const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td));
+  const items = parseAIResult(text, 'sector', grounding);
   const { inserted } = await db.writeNewsItems(items.map(normalizeForNewsFeed));
   console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted}`);
   return { ok: true, fetched: items.length, inserted };
@@ -492,8 +633,8 @@ async function runSector(sinceDate) {
 // daily.remark so they show up as event pins (macro that moves the market).
 async function runMacro(sinceDate) {
   const td = todayThai();
-  const text = await geminiSearch(PROMPT_MACRO(td));
-  const items = parseAIResult(text, 'macro');
+  const { text, grounding } = await geminiSearch(PROMPT_MACRO(td));
+  const items = parseAIResult(text, 'macro', grounding);
   const { inserted } = await db.writeNewsItems(items.map(normalizeForNewsFeed));
 
   // The first severity=high item gets appended as a pin. We use
@@ -510,7 +651,7 @@ async function runMacro(sinceDate) {
 
 // (4) MORNING BRIEF — Monday-only weekly summary, lands in daily.{morning_*}.
 async function runMorningBrief(sinceDate) {
-  const text = await geminiSearch(PROMPT_BRIEF());
+  const { text } = await geminiSearch(PROMPT_BRIEF());
   if (!text || text.trim() === 'NONE') {
     console.log('[gemini-morning-brief] no content');
     return { ok: false, reason: 'empty' };
@@ -547,7 +688,7 @@ async function runDailySummary(sinceDate) {
   // full KEY_POINTS/TONE/REASON — the shared 2048 default cuts mid-bullet when
   // thinking runs long, truncating the digest and dropping tone/reason. 8192
   // covers thinking + answer; 90s is the matching upper bound on the wait.
-  const text = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), {
+  const { text } = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), {
     ground: false, maxTokens: 8192, timeoutMs: 90_000,
   });
   if (!text || text.trim() === 'NONE') {

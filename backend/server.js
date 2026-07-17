@@ -442,6 +442,26 @@ app.post('/api/news/rss-refresh', async (req, res) => {
   }
 });
 
+// One-click "refresh everything" — runs the same batch the morning/evening
+// crons run (rss-property + rss-extended + gemini-{company,sector,macro}).
+// Use this when you want fresh news without waiting for the next cron tick.
+// Skips the daily-summary chain (only the evening cron writes that) so the
+// response stays quick. Each source is logged independently in fetch_log.
+app.post('/api/news/refresh-all', async (req, res) => {
+  try {
+    // Run the batch in the background — respond immediately so the caller
+    // doesn't wait through 5 sequential fetches (can take 30-60s total).
+    // The frontend polls /api/news for new rows; the refresh button just
+    // kicks off the fetch.
+    runNewsBatch('manual').catch(e => {
+      console.error('[refresh-all] batch failed:', e.message || e);
+    });
+    res.json({ ok: true, message: 'refresh batch started in background' });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // User actions on a single news row.
 //
 //   POST /api/news/:id/note   body: {note: string|null}— empty/null clears
@@ -656,149 +676,93 @@ cron.schedule('35 3 * * *', async () => {
   if (_yahooDailyGuard()) await _runDailyYahoo();
 });
 
-// Gemini-search pipeline — 4 cron jobs, all gated on GEMINI_API_KEY.
+// =============================================================================
+// NEWS CRON — consolidated to 2 runs per day at the user's request.
 //
 // Schedule (ICT):
-//   17:30 daily      gemini-company       → 1 pin to daily.remark + headlines to news_feed
-//   17:50 daily      gemini-sector        → 0–3 sector headlines to news_feed
-//   17:55 daily      gemini-macro         → 0–2 macro headlines (severity=high → pin)
-//   08:00 Monday     gemini-morning-brief → weekly brief to daily.morning_*
+//   08:00 daily   morning pull  → rss-property + rss-extended + gemini-{company,sector,macro}
+//                                 + Monday-only gemini-morning-brief
+//   17:30 daily   evening pull → same set, + gemini-daily-summary chained at end
 //
-// gemini-company fires at SET close (17:30 ICT) — earliest moment after the
-// final bell when today's headlines are searchable. Sector/macro follow 20
-// and 25 min later so the three pipelines run in series without hitting
-// Gemini's per-minute quota. morning-brief runs Monday 08:00 ICT (01:00 UTC)
-// — 1h before market open so analysts have it ready.
-if (process.env.GEMINI_API_KEY) {
-  // 17:30 ICT — company pin (right at SET close)
-  cron.schedule('30 10 * * *', async () => {
-    console.log('[scheduler] gemini-company triggered');
-    const id = await db.logFetchStart();
-    try {
-      const result = await runFetch({ source: 'gemini-company' });
-      await db.logFetchFinish(id, result.ok ? 1 : 0, 'gemini-company', result.inserted || 0, 0, result.error || null);
-      console.log(`[scheduler] gemini-company ok date=${result.date} cat=${result.category || '∅'} text="${result.text || '∅'}"`);
-    } catch (e) {
-      await db.logFetchFinish(id, 0, 'gemini-company', 0, 0, String(e.message || e));
-      console.error('[scheduler] gemini-company failed:', e.message || e);
-    }
-  }, { timezone: 'Asia/Bangkok' });
+// Manual refresh still works anytime via:
+//   POST /api/news/refresh       { source: "gemini-sector" }
+//   POST /api/news/rss-refresh   { source: "rss-property" }
+//   POST /api/news/refresh-all   (runs everything below in one shot)
+// =============================================================================
 
-  // 17:50 ICT — sector news
-  cron.schedule('50 10 * * *', async () => {
-    console.log('[scheduler] gemini-sector triggered');
-    const id = await db.logFetchStart();
-    try {
-      const result = await runFetch({ source: 'gemini-sector' });
-      await db.logFetchFinish(id, 1, 'gemini-sector', result.inserted || 0, 0, null);
-      console.log(`[scheduler] gemini-sector ok fetched=${result.fetched} inserted=${result.inserted}`);
-    } catch (e) {
-      await db.logFetchFinish(id, 0, 'gemini-sector', 0, 0, String(e.message || e));
-      console.error('[scheduler] gemini-sector failed:', e.message || e);
-    }
-  }, { timezone: 'Asia/Bangkok' });
-
-  // 17:55 ICT — macro news + severity=high → pin
-  cron.schedule('55 10 * * *', async () => {
-    console.log('[scheduler] gemini-macro triggered');
-    const id = await db.logFetchStart();
-    try {
-      const result = await runFetch({ source: 'gemini-macro' });
-      await db.logFetchFinish(id, 1, 'gemini-macro', result.inserted || 0, 0, null);
-      console.log(`[scheduler] gemini-macro ok fetched=${result.fetched} inserted=${result.inserted} high=${result.high || 0}`);
-    } catch (e) {
-      await db.logFetchFinish(id, 0, 'gemini-macro', 0, 0, String(e.message || e));
-      console.error('[scheduler] gemini-macro failed:', e.message || e);
-    }
-  }, { timezone: 'Asia/Bangkok' });
-
-  // 08:00 ICT Monday — weekly morning brief
-  cron.schedule('0 1 * * 1', async () => {
-    console.log('[scheduler] gemini-morning-brief triggered');
-    const id = await db.logFetchStart();
-    try {
-      const result = await runFetch({ source: 'gemini-morning-brief' });
-      await db.logFetchFinish(id, result.ok ? 1 : 0, 'gemini-morning-brief', 1, 0, result.error || null);
-      console.log(`[scheduler] gemini-morning-brief ok date=${result.date} tone=${result.tone}`);
-    } catch (e) {
-      await db.logFetchFinish(id, 0, 'gemini-morning-brief', 0, 0, String(e.message || e));
-      console.error('[scheduler] gemini-morning-brief failed:', e.message || e);
-    }
-  }, { timezone: 'Asia/Bangkok' });
-} else {
-  console.log('[scheduler] GEMINI_API_KEY not set — all gemini-* cron disabled.');
-}
-
-// Google News RSS pull — every 30 min during market hours + 1 final pull at
-// 18:00 ICT. Cheap (8 parallel HTTPS GETs to Google, no key, no JS render).
-// Google News returns recent items only, so a high-frequency cron is safe
-// — the GUID-based title_hash keeps re-runs idempotent.
-cron.schedule('*/30 10-17 * * 1-5', async () => {
-  console.log('[scheduler] rss-property triggered (market hours)');
-  const id = await db.logFetchStart();
-  try {
-    const result = await runFetch({ source: 'rss-property', maxAgeDays: 2 });
-    await db.logFetchFinish(id, 1, 'rss-property', result.inserted || 0, 0, null);
-    console.log(`[scheduler] rss-property ok fetched=${result.fetched || 0} inserted=${result.inserted || 0}`);
-  } catch (e) {
-    await db.logFetchFinish(id, 0, 'rss-property', 0, 0, String(e.message || e));
-    console.error('[scheduler] rss-property failed:', e.message || e);
-  }
-}, { timezone: 'Asia/Bangkok' });
-
-// 18:00 ICT — post-close RSS pull. Casts a wider net (maxAge=7d) so the
-// evening feed covers anything we missed during the day.
-cron.schedule('0 11 * * 1-5', async () => {
-  console.log('[scheduler] rss-property triggered (post-close)');
-  const id = await db.logFetchStart();
-  try {
-    const result = await runFetch({ source: 'rss-property', maxAgeDays: 7 });
-    await db.logFetchFinish(id, 1, 'rss-property', result.inserted || 0, 0, null);
-    console.log(`[scheduler] rss-property ok fetched=${result.fetched || 0} inserted=${result.inserted || 0}`);
-  } catch (e) {
-    await db.logFetchFinish(id, 0, 'rss-property', 0, 0, String(e.message || e));
-    console.error('[scheduler] rss-property failed:', e.message || e);
-  }
-}, { timezone: 'Asia/Bangkok' });
-
-// Migrate-v8 — extended news (SET filings / broker / insider / Smart Alert /
-// USD/THB FX / debt rating). Daily at 18:30 ICT (UTC 11:30) — runs after
-// the rss-property post-close pull so it sees the same-day SET filings
-// without contention. maxAge=14d because insider-trading + broker reports
-// lose actionability fast and a 14-day trailing window ensures we don't
-// miss late retro-published entries from SET.
-// Cron expr is LOCAL (timezone:'Asia/Bangkok') → '30 18' = 18:30 ICT, after
-// the day's news pulls so the chained daily summary covers the full day.
-cron.schedule('30 18 * * *', async () => {
-  console.log('[scheduler] rss-extended triggered (daily 18:30 ICT)');
-  const id = await db.logFetchStart();
-  try {
-    const result = await runFetch({ source: 'rss-extended', maxAgeDays: 14 });
-    await db.logFetchFinish(id, 1, 'rss-extended', result.inserted || 0, 0, null);
-    console.log(`[scheduler] rss-extended ok fetched=${result.fetched || 0} inserted=${result.inserted || 0} byCat=${JSON.stringify(result.byCat || {})}`);
-  } catch (e) {
-    await db.logFetchFinish(id, 0, 'rss-extended', 0, 0, String(e.message || e));
-    console.error('[scheduler] rss-extended failed:', e.message || e);
-  }
-
-  // Daily digest — chained after the day's final news pull so it summarizes
-  // the full day's news_feed rows. rss-extended is the last pull (after the
-  // 17:30–17:55 Gemini pulls + market-hours/18:00 rss-property pulls), so this
-  // runs "after the pull" by construction. Gated on GEMINI_API_KEY and run in
-  // its OWN try/catch with its own fetch_log entry so a summary failure never
-  // marks rss-extended (or the day's news) as failed.
+// Shared batch runner — runs all news sources serially. Each source is in
+// its own try/catch with its own fetch_log entry so one failure doesn't
+// block the others. `phase` is 'morning' | 'evening' | 'manual' — only used
+// for log lines and the Monday morning-brief + evening daily-summary gates.
+async function runNewsBatch(phase) {
+  console.log(`[scheduler:${phase}] news batch start`);
+  const sources = [
+    { source: 'rss-property', maxAgeDays: 2 },
+    { source: 'rss-extended', maxAgeDays: 14 },
+  ];
   if (process.env.GEMINI_API_KEY) {
+    sources.push(
+      { source: 'gemini-company' },
+      { source: 'gemini-sector' },
+      { source: 'gemini-macro' },
+    );
+  }
+  // Monday morning adds the weekly brief at the front of the batch.
+  const isMonday = new Date(Date.now() + 7 * 3600 * 1000).getDay() === 1;
+  if (phase === 'morning' && isMonday && process.env.GEMINI_API_KEY) {
+    sources.unshift({ source: 'gemini-morning-brief' });
+  }
+
+  for (const cfg of sources) {
+    const id = await db.logFetchStart();
+    try {
+      const opts = cfg.maxAgeDays != null ? { maxAgeDays: cfg.maxAgeDays } : {};
+      const result = await runFetch({ source: cfg.source, ...opts });
+      await db.logFetchFinish(
+        id,
+        result.ok !== false ? 1 : 0,
+        cfg.source,
+        result.inserted || 0,
+        0,
+        result.error || null,
+      );
+      console.log(`[scheduler:${phase}] ${cfg.source} ok fetched=${result.fetched ?? '?'} inserted=${result.inserted ?? '?'}`);
+    } catch (e) {
+      await db.logFetchFinish(id, 0, cfg.source, 0, 0, String(e.message || e));
+      console.error(`[scheduler:${phase}] ${cfg.source} failed:`, e.message || e);
+    }
+  }
+
+  // Evening batch chains the daily digest after the day's final news pull so
+  // the summary sees the full day's news_feed rows. Gated on GEMINI_API_KEY
+  // and run in its own try/catch with its own fetch_log entry.
+  if (phase === 'evening' && process.env.GEMINI_API_KEY) {
     const sid = await db.logFetchStart();
     try {
       const s = await runFetch({ source: 'gemini-daily-summary' });
       await db.logFetchFinish(sid, s.ok ? 1 : 0, 'gemini-daily-summary', s.ok ? 1 : 0, 0, s.error || null);
-      console.log(`[scheduler] gemini-daily-summary ok date=${s.date || '∅'} tone=${s.tone || '∅'} items=${s.sourceCount != null ? s.sourceCount : '∅'}`);
+      console.log(`[scheduler:${phase}] gemini-daily-summary ok tone=${s.tone || '∅'} items=${s.sourceCount ?? '?'}`);
     } catch (e) {
       await db.logFetchFinish(sid, 0, 'gemini-daily-summary', 0, 0, String(e.message || e));
-      console.error('[scheduler] gemini-daily-summary failed:', e.message || e);
+      console.error(`[scheduler:${phase}] gemini-daily-summary failed:`, e.message || e);
     }
   }
+  console.log(`[scheduler:${phase}] news batch done`);
+}
+
+// 08:00 ICT daily (01:00 UTC) — pre-market morning pull.
+cron.schedule('0 1 * * *', async () => {
+  await runNewsBatch('morning');
 }, { timezone: 'Asia/Bangkok' });
+
+// 17:30 ICT daily (10:30 UTC) — right at SET close.
+cron.schedule('30 10 * * *', async () => {
+  await runNewsBatch('evening');
+}, { timezone: 'Asia/Bangkok' });
+
+if (!process.env.GEMINI_API_KEY) {
+  console.log('[scheduler] GEMINI_API_KEY not set — gemini-* sources disabled, RSS-only.');
+}
 
 // Global error handler — must come last (4-arg signature). On Railway we
 // saw 500s whenever the request had an Origin header (browser always sends

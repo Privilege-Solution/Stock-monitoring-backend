@@ -26,6 +26,7 @@
 
 import db from '../../db.js';
 import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName } from './news-rss-helpers.mjs';
 
 const QUERIES = [
   { q: 'อสังหาริมทรัพย์+ไทย',  category: 'sector_data',  pipeline: 'sector' },
@@ -171,9 +172,9 @@ function parseItem(itemXml, query) {
 
   const link = (itemXml.match(/<link\/?>([^<]+)/) || itemXml.match(/<link>([^<]+)<\/link>/) || [])[1] || '';
   const pubDate = (itemXml.match(/<pubDate>([^<]+)/) || [])[1] || '';
-  const sourceUrl = (itemXml.match(/<source[^>]*url="([^"]+)"/) || [])[1] || '';
-  const sourceName = cleanTitle((itemXml.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1] || '');
-  const guid = (itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/) || [])[1] || link;
+  const publisherUrl = extractPublisherUrl(link);
+  const sourceName = cleanTitle(extractSourceName(itemXml));
+  const guid = (itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/) || [])[1] || publisherUrl || link;
 
   const date = pubDate ? new Date(pubDate) : null;
   if (!date || isNaN(date.getTime())) return null;
@@ -200,7 +201,7 @@ function parseItem(itemXml, query) {
     // frontend filters on — previously this wrote the legacy query hint
     // (sector_data / interest_rate / peer_news …) which matched no chip.
     category: classifyCategory(headline, query.category),
-    source_url: link,                 // Google News redirect (valid link)
+    source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',
     title_hash: titleHash,
     pipeline: query.pipeline,
@@ -214,8 +215,7 @@ function parseItem(itemXml, query) {
 }
 
 async function fetchQuery(query, maxAgeDays) {
-  const url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(query.q) +
-    '&hl=th&gl=TH&ceid=TH:th';
+  const url = bingNewsRssUrl(query.q);
   try {
     const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(15_000) });
     if (!r.ok) {

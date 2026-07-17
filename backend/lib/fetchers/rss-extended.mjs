@@ -39,6 +39,7 @@ import db from '../../db.js';
 import {
   classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
 } from '../news-taxonomy.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName } from './news-rss-helpers.mjs';
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -148,9 +149,10 @@ function parseItem(itemXml, q) {
   if (!title) return null;
 
   const link = (itemXml.match(/<link\/?>([^<]+)/) || itemXml.match(/<link>([^<]+)<\/link>/) || [])[1] || '';
+  const publisherUrl = extractPublisherUrl(link);
   const pubDate = (itemXml.match(/<pubDate>([^<]+)/) || [])[1] || '';
-  const sourceName = cleanTitle((itemXml.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1] || '');
-  const guid = (itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/) || [])[1] || link;
+  const sourceName = cleanTitle(extractSourceName(itemXml));
+  const guid = (itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/) || [])[1] || publisherUrl || link;
 
   const d = pubDate ? new Date(pubDate) : null;
   if (!d || isNaN(d.getTime())) return null;
@@ -178,7 +180,7 @@ function parseItem(itemXml, q) {
     title,
     date: d.toISOString().slice(0, 10),
     category,                        // taxonomy-v2 key
-    source_url: link,
+    source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',
     title_hash: sha1(guid || link || title),
     pipeline: q.pipeline,
@@ -191,8 +193,7 @@ function parseItem(itemXml, q) {
 }
 
 async function fetchQuery(q, maxAgeDays) {
-  const url = 'https://news.google.com/rss/search?q=' + encodeURIComponent(q.q) +
-    '&hl=th&gl=TH&ceid=TH:th';
+  const url = bingNewsRssUrl(q.q);
   try {
     const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(15_000) });
     if (!r.ok) {
