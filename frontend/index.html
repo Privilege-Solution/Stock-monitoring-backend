@@ -213,7 +213,7 @@
         <div class="sidebar-icon">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-        <span class="sidebar-label th">ตั้งค่าแจ้งเตือน</span>
+        <span class="sidebar-label th">ตั้งค่า</span>
       </div>
     </div>
   </aside>
@@ -510,67 +510,28 @@
 
     <!-- ====================== Settings View ====================== -->
     <section class="view" id="view-settings">
-      <h2 class="view-title th">ตั้งค่าแจ้งเตือน</h2>
-      <div class="view-sub th">ข้อมูลตัวอย่าง + ตั้งค่าการแจ้งเตือน</div>
+      <h2 class="view-title th">ข้อมูลระบบ</h2>
+      <div class="view-sub th">ข้อมูลไฟล์และสุขภาพข้อมูล</div>
 
-      <div class="grid-2 mb-12">
-        <div class="card">
-          <h3 class="th mb-12" style="font-size:13px;">ข้อมูลตัวอย่าง</h3>
-          <div class="placeholder th" style="padding:20px;">
-            <div style="font-size:22px; margin-bottom:8px;">📊</div>
-            <div style="font-weight:600;">ASW-PRICE MOVEMENT</div>
-            <div class="muted" style="margin-top:4px;">Sample data · ข้อมูลตัวอย่างสำหรับ demo</div>
-          </div>
-          <div class="mt-12">
-            <div class="row-between" style="font-size:13px;">
-              <span class="th muted">ไฟล์:</span>
-              <span id="currentFileName" class="th" style="font-weight:500;">sample_data.js</span>
-            </div>
-            <div class="row-between mt-8" style="font-size:13px;">
-              <span class="th muted">ช่วงข้อมูล:</span>
-              <span id="currentFileRange" class="th" style="font-weight:500;">—</span>
-            </div>
-            <div class="row-between mt-8" style="font-size:13px;">
-              <span class="th muted">จำนวนแถว:</span>
-              <span id="currentFileEvents" class="th" style="font-weight:500;">—</span>
-            </div>
-          </div>
+      <div class="card mb-12">
+        <h3 class="th mb-12" style="font-size:13px;">ข้อมูลตัวอย่าง</h3>
+        <div class="placeholder th" style="padding:20px;">
+          <div style="font-size:22px; margin-bottom:8px;">📊</div>
+          <div style="font-weight:600;">ASW-PRICE MOVEMENT</div>
+          <div class="muted" style="margin-top:4px;">Sample data · ข้อมูลตัวอย่างสำหรับ demo</div>
         </div>
-
-        <div class="card">
-          <h3 class="th mb-12" style="font-size:13px;">ตั้งค่าการแจ้งเตือน</h3>
-          <div class="muted th mb-12" style="font-size:11px;">การแจ้งเตือนจะใช้งานได้ใน v2 (ปัจจุบันแสดงผลเท่านั้น)</div>
-
-          <div class="mb-12">
-            <h4 class="th mb-8" style="font-size:12px;">📈 Price Alert</h4>
-            <div class="form-row">
-              <div class="form-field">
-                <label class="th">แจ้งเมื่อ ≥</label>
-                <input type="number" step="0.05" value="9.00" class="th" />
-              </div>
-              <div class="form-field">
-                <label class="th">หรือ ≤</label>
-                <input type="number" step="0.05" value="8.00" class="th" />
-              </div>
-            </div>
+        <div class="mt-12">
+          <div class="row-between" style="font-size:13px;">
+            <span class="th muted">ไฟล์:</span>
+            <span id="currentFileName" class="th" style="font-weight:500;">sample_data.js</span>
           </div>
-
-          <div class="mb-12">
-            <h4 class="th mb-8" style="font-size:12px;">📊 Volume Alert</h4>
-            <div class="form-row">
-              <div class="form-field">
-                <label class="th">แจ้งเมื่อปริมาณ > 30d avg ×</label>
-                <input type="number" step="0.1" value="2" class="th" />
-              </div>
-            </div>
+          <div class="row-between mt-8" style="font-size:13px;">
+            <span class="th muted">ช่วงข้อมูล:</span>
+            <span id="currentFileRange" class="th" style="font-weight:500;">—</span>
           </div>
-
-          <div>
-            <h4 class="th mb-8" style="font-size:12px;">🔔 News Keyword Alert</h4>
-            <div class="form-field">
-              <label class="th">แจ้งเมื่อ Remark มีคำว่า</label>
-              <input type="text" class="th" placeholder="เช่น Presale, ดอกเบี้ย" />
-            </div>
+          <div class="row-between mt-8" style="font-size:13px;">
+            <span class="th muted">จำนวนแถว:</span>
+            <span id="currentFileEvents" class="th" style="font-weight:500;">—</span>
           </div>
         </div>
       </div>
