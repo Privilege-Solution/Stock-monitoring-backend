@@ -144,6 +144,7 @@ function requiredToken(title) {
     [/ASW|Assetwise|แอสเซทไวส์|AssetWise/i, 'ASW'],
     [/\bAP\b.*Thailand|แอ็น\s*ไทยแลนด์/i, 'AP'],
     [/\bLH\b|แลนด์แอนด์เฮ้าส์/i, 'LH'],
+    [/\bORN\b|นาวี่\s*แอสเซท/i, 'ORN'],
     [/SPALI|ศุภาลัย/i, 'SPALI'],
     [/SIRI|แสนสิริ/i, 'SIRI'],
     [/NOBLE|โนเบล/i, 'NOBLE'],
@@ -151,8 +152,24 @@ function requiredToken(title) {
     [/\bQH\b|ควอลิตี้เฮ้าส์/i, 'QH'],
     [/PRUK|พฤกษา/i, 'PRUK'],
     [/PROUD|พรู๊ด/i, 'PROUD'],
+    [/\bPS\b\s*Property|เพอร์เฟค|Perfect/i, 'PF'],
     [/SENA|เซนา/i, 'SENA'],
+    [/\bBTS\b|บีทีเอส/i, 'BTS'],
     [/ANAN|อนันดา/i, 'ANAN'],
+    [/\bLPN\b|แอล\.พี\.เอ็น|ลาดพร้าว\s*เน็ท/i, 'LPN'],
+    [/PROUD|พรู๊ด/i, 'PROUD'],
+    [/\bSPF\b|ศรีสวัสดิ์/i, 'SPF'],
+    [/\bAF\b|อาร์เอฟ/i, 'RF'],
+    [/\bDRE\b|ดิแอสเซท/i, 'DRE'],
+    [/\bRML\b|ราชมงคล\s*พร็อพเพอร์ตี้/i, 'RML'],
+    [/\bB\*M\b|แบม/i, 'BM'],
+    [/\bLALIN\b|ลลิล\s*พร็อพเพอร์ตี้/i, 'LALIN'],
+    [/\bMBK\b|เอ็มบีเค/i, 'MBK'],
+    [/\bS\b&P\b|ศุภกิจ\s*พร็อพเพอร์ตี้/i, 'SP'],
+    [/\bSTEC\b|สิงหะ\s*พร็อพเพอร์ตี้/i, 'STEC'],
+    [/\bCHAN\b|ชน/i, 'CHAN'],
+    [/\bRABBIT\b|แรบบิท/i, 'RABBIT'],
+    [/\bROJANA\b|โรจนะ/i, 'ROJANA'],
     [/TRIS|ทริส/i, 'TRIS'],
     [/ธปท|BOT\b/i, 'ธปท'],
     [/กนง/i, 'กนง'],
@@ -160,6 +177,27 @@ function requiredToken(title) {
   ];
   for (const [re, tok] of checks) if (re.test(title)) return tok;
   return '';
+}
+
+// Distinctive Latin/numeric keyword extractor — pulls English letters,
+// digits, % and $ out of a normalized title. Thai has no inter-word spaces
+// so token-overlap matching fails on Thai-heavy headlines, but Latin/numeric
+// tokens always have space boundaries. If two headlines share 3+ such
+// keywords AND the required company ticker, they're almost certainly the
+// same story even when the Thai phrasing differs.
+//
+// (We tried "shared numbers ≥ 2" before but it broke on cases like
+// "4.26 พันลบ" vs "4,261 ลบ" — the underlying fact is the same but the
+// rounded values differ. Latin keywords like ORN, Backlog, 20% are more
+// stable across publishers.)
+function distinctiveKeywords(s) {
+  const tokens = s.match(/[a-z][a-z0-9]*|\d+(?:[.,]\d+)*\s*[%$]?/gi) || [];
+  return tokens.filter(t => {
+    const bare = t.replace(/[.,%$]/g, '').toLowerCase();
+    return bare.length >= 2
+      && !['the', 'and', 'for', 'with', 'that', 'this', 'from',
+           '2569', '2568', '2567', '69', '68', '67', '66'].includes(bare);
+  });
 }
 
 // Try to find the real article URL for a headline whose Bing result only
@@ -187,7 +225,18 @@ export async function deepenHomepageUrl(headline, sourceLabel) {
     const rNorm = normalizeHeadline(r.title);
     // Required token must appear in result title (prevents FPT-instead-of-ASW).
     if (req && !rNorm.includes(req.toLowerCase())) continue;
-    if (headlineOverlap(origNorm, rNorm) >= 0.6 && isUsableArticleUrl(r.url) && !isHomepageUrl(r.url)) {
+    if (!isUsableArticleUrl(r.url) || isHomepageUrl(r.url)) continue;
+    // Match if EITHER:
+    //   (a) Token overlap ≥ 0.6 — works well for English / mixed headlines
+    //   (b) Required company token present AND ≥ 3 distinctive Latin/numeric
+    //       keywords shared — needed for Thai-heavy headlines where token
+    //       overlap is unreliable (Thai has no inter-word spaces so the
+    //       entire Thai phrase becomes one long "token"). Latin keywords
+    //       like ORN, Backlog, 20% are stable across publishers.
+    const overlap = headlineOverlap(origNorm, rNorm);
+    const origKw = new Set(distinctiveKeywords(origNorm));
+    const sharedKw = distinctiveKeywords(rNorm).filter(k => origKw.has(k.toLowerCase())).length;
+    if (overlap >= 0.6 || (req && sharedKw >= 3)) {
       return r.url;
     }
   }
