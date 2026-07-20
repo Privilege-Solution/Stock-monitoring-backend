@@ -677,23 +677,28 @@ cron.schedule('35 3 * * *', async () => {
 });
 
 // =============================================================================
-// NEWS CRON — consolidated to 2 runs per day at the user's request.
+// NEWS CRON — 5 runs per day, all in ICT (timezone option is set so the cron
+// expressions are interpreted as Asia/Bangkok regardless of the server's
+// system timezone).
 //
 // Schedule (ICT):
-//   08:00 daily   morning pull  → rss-property + rss-extended + gemini-{company,sector,macro}
-//                                 + Monday-only gemini-morning-brief
-//   17:30 daily   evening pull → same set, + gemini-daily-summary chained at end
+//   08:00 daily   morning   → full batch + Monday morning-brief
+//   12:30 daily   midday    → full batch (lunch-time market pull)
+//   15:00 daily   afternoon → full batch (late afternoon session)
+//   17:30 daily   evening   → full batch + daily-summary (right at SET close)
+//   21:00 daily   night     → full batch (evening wrap-up)
 //
 // Manual refresh still works anytime via:
 //   POST /api/news/refresh       { source: "gemini-sector" }
 //   POST /api/news/rss-refresh   { source: "rss-property" }
-//   POST /api/news/refresh-all   (runs everything below in one shot)
+//   POST /api/news/refresh-all   (runs the full batch in one shot)
 // =============================================================================
 
 // Shared batch runner — runs all news sources serially. Each source is in
 // its own try/catch with its own fetch_log entry so one failure doesn't
-// block the others. `phase` is 'morning' | 'evening' | 'manual' — only used
-// for log lines and the Monday morning-brief + evening daily-summary gates.
+// block the others. `phase` is 'morning' | 'midday' | 'afternoon' |
+// 'evening' | 'night' | 'manual' — used for log lines and the Monday
+// morning-brief + evening daily-summary gates.
 async function runNewsBatch(phase) {
   console.log(`[scheduler:${phase}] news batch start`);
   const sources = [
@@ -734,8 +739,9 @@ async function runNewsBatch(phase) {
   }
 
   // Evening batch chains the daily digest after the day's final news pull so
-  // the summary sees the full day's news_feed rows. Gated on GEMINI_API_KEY
-  // and run in its own try/catch with its own fetch_log entry.
+  // the summary sees the full day's news_feed rows. Only 'evening' phase
+  // triggers this — midday/morning/night runs skip it. Gated on
+  // GEMINI_API_KEY and run in its own try/catch with its own fetch_log entry.
   if (phase === 'evening' && process.env.GEMINI_API_KEY) {
     const sid = await db.logFetchStart();
     try {
@@ -750,14 +756,29 @@ async function runNewsBatch(phase) {
   console.log(`[scheduler:${phase}] news batch done`);
 }
 
-// 08:00 ICT daily (01:00 UTC) — pre-market morning pull.
-cron.schedule('0 1 * * *', async () => {
+// 08:00 ICT — pre-market morning pull (+ Monday morning-brief).
+cron.schedule('0 8 * * *', async () => {
   await runNewsBatch('morning');
 }, { timezone: 'Asia/Bangkok' });
 
-// 17:30 ICT daily (10:30 UTC) — right at SET close.
-cron.schedule('30 10 * * *', async () => {
+// 12:30 ICT — lunch-time pull (during market lunch break).
+cron.schedule('30 12 * * *', async () => {
+  await runNewsBatch('midday');
+}, { timezone: 'Asia/Bangkok' });
+
+// 15:00 ICT — late-afternoon pull (during afternoon trading session).
+cron.schedule('0 15 * * *', async () => {
+  await runNewsBatch('afternoon');
+}, { timezone: 'Asia/Bangkok' });
+
+// 17:30 ICT — right at SET close. Chains the daily summary.
+cron.schedule('30 17 * * *', async () => {
   await runNewsBatch('evening');
+}, { timezone: 'Asia/Bangkok' });
+
+// 21:00 ICT — evening wrap-up (catches late-breaking headlines).
+cron.schedule('0 21 * * *', async () => {
+  await runNewsBatch('night');
 }, { timezone: 'Asia/Bangkok' });
 
 if (!process.env.GEMINI_API_KEY) {
