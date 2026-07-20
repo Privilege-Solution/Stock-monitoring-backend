@@ -39,7 +39,7 @@ import db from '../../db.js';
 import {
   classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
 } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl } from './news-rss-helpers.mjs';
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -232,23 +232,40 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
   });
 
   const valid = unique.filter(it => it.source_url && it.source_url.length > 0);
-  if (!valid.length) return { ok: true, fetched: 0, inserted: 0 };
+
+  // Auto-deepen homepage URLs (Bing sometimes returns only the publisher's
+  // root URL when it indexes a publisher but doesn't have the article).
+  // Same logic as rss-property — see comment there for rationale.
+  const homepages = valid.filter(it => isHomepageUrl(it.source_url));
+  if (homepages.length) {
+    console.log(`[rss-extended] deepening ${homepages.length} homepage URLs...`);
+    await Promise.all(homepages.map(async (it) => {
+      const deep = await deepenHomepageUrl(it.title, it.source_label);
+      if (deep) it.source_url = deep;
+    }));
+  }
+  const dropped = valid.filter(it => isHomepageUrl(it.source_url));
+  const deepened = valid.filter(it => !isHomepageUrl(it.source_url));
+  if (dropped.length) {
+    console.log(`[rss-extended] dropped ${dropped.length} items (no deep URL found)`);
+  }
+  if (!deepened.length) return { ok: true, fetched: 0, inserted: 0 };
 
   // Display priority: ASW-direct broker/insider = top of feed.
   // No keyword-scoring table — categories are intrinsically ranked. We rely
   // on the existing display_priority formula in the unified feed (which
   // already understands broker vs. macro). For items WITHOUT a stored value
   // the frontend's priorityForItem() falls back to severity-based scoring.
-  const { inserted } = await db.writeNewsItems(valid);
+  const { inserted } = await db.writeNewsItems(deepened);
 
   // Per-category counts for the log line (operator at-a-glance). Uses the
   // NEW taxonomy keys so the log matches what the user sees in the UI.
   const byCat = {};
-  for (const it of valid) byCat[it.category] = (byCat[it.category] || 0) + 1;
+  for (const it of deepened) byCat[it.category] = (byCat[it.category] || 0) + 1;
   const byImpact = {};
-  for (const it of valid) byImpact[it.impact_level] = (byImpact[it.impact_level] || 0) + 1;
-  console.log(`[rss-extended] parsed=${all.length} unique=${unique.length} inserted=${inserted} byCat=${JSON.stringify(byCat)} byImpact=${JSON.stringify(byImpact)}`);
-  return { ok: true, fetched: valid.length, inserted, byCat, byImpact };
+  for (const it of deepened) byImpact[it.impact_level] = (byImpact[it.impact_level] || 0) + 1;
+  console.log(`[rss-extended] parsed=${all.length} unique=${unique.length} deepened=${deepened.length} dropped_homepage=${dropped.length} inserted=${inserted} byCat=${JSON.stringify(byCat)} byImpact=${JSON.stringify(byImpact)}`);
+  return { ok: true, fetched: deepened.length, inserted, byCat, byImpact };
 }
 
 export { run };

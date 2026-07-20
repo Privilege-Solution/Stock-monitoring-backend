@@ -109,3 +109,106 @@ export function normalizeHeadline(s) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+// Detect homepage-style URLs (no path after the host). These are a sign
+// that Bing indexed the publisher but didn't have the article's deep URL
+// — the fetcher should try to find the real article via a follow-up Bing
+// search before storing the homepage.
+export function isHomepageUrl(u) {
+  if (!u || typeof u !== 'string') return false;
+  if (!isUsableArticleUrl(u)) return false;
+  try {
+    const p = new URL(u).pathname;
+    return !p || p === '/' || p === '';
+  } catch { return false; }
+}
+
+// Distinctive-token overlap score between an original headline and a Bing
+// result title. Returns 0..1 — 1.0 means every original 4+ char token
+// appears in the result title. Used to decide if a Bing search result is
+// really the same story as our DB row.
+function headlineOverlap(origNorm, resultNorm) {
+  const origTokens = origNorm.split(' ').filter(w => w.length >= 4);
+  if (!origTokens.length) return 0;
+  const hits = origTokens.filter(t => resultNorm.includes(t)).length;
+  return hits / origTokens.length;
+}
+
+// Some headlines must carry a company/keyword token to count as a real
+// match (prevents matching an ASW headline against an unrelated article
+// that just happens to mention "หุ้น" or "อสังหาฯ"). Returns the token
+// we require the result title to contain, or '' if no specific token is
+// required (in which case overlap score alone decides).
+function requiredToken(title) {
+  const checks = [
+    [/ASW|Assetwise|แอสเซทไวส์|AssetWise/i, 'ASW'],
+    [/\bAP\b.*Thailand|แอ็น\s*ไทยแลนด์/i, 'AP'],
+    [/\bLH\b|แลนด์แอนด์เฮ้าส์/i, 'LH'],
+    [/SPALI|ศุภาลัย/i, 'SPALI'],
+    [/SIRI|แสนสิริ/i, 'SIRI'],
+    [/NOBLE|โนเบล/i, 'NOBLE'],
+    [/\bORI\b|ออริจิ้น/i, 'ORI'],
+    [/\bQH\b|ควอลิตี้เฮ้าส์/i, 'QH'],
+    [/PRUK|พฤกษา/i, 'PRUK'],
+    [/PROUD|พรู๊ด/i, 'PROUD'],
+    [/SENA|เซนา/i, 'SENA'],
+    [/ANAN|อนันดา/i, 'ANAN'],
+    [/TRIS|ทริส/i, 'TRIS'],
+    [/ธปท|BOT\b/i, 'ธปท'],
+    [/กนง/i, 'กนง'],
+    [/Fed|เฟด/i, 'Fed'],
+  ];
+  for (const [re, tok] of checks) if (re.test(title)) return tok;
+  return '';
+}
+
+// Try to find the real article URL for a headline whose Bing result only
+// had the publisher's homepage. Searches Bing News RSS with the headline
+// and returns the first result whose title strongly matches (≥60% token
+// overlap AND contains the required company token, if any).
+//
+// Returns: a deep article URL (string), or null if no good match. Caller
+// should DROP the item when this returns null — better to lose one news
+// row than store a homepage link that goes nowhere useful.
+export async function deepenHomepageUrl(headline, sourceLabel) {
+  if (!headline) return null;
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+  const origNorm = normalizeHeadline(headline);
+  const req = requiredToken(headline);
+
+  // Pass 1: search the raw headline.
+  let results = await bingNewsSearch(headline, UA);
+  // Pass 2: if empty, try headline + source_label (e.g. "...kaohoon").
+  if (!results.length && sourceLabel) {
+    results = await bingNewsSearch(`${headline} ${sourceLabel}`, UA);
+  }
+
+  for (const r of results) {
+    const rNorm = normalizeHeadline(r.title);
+    // Required token must appear in result title (prevents FPT-instead-of-ASW).
+    if (req && !rNorm.includes(req.toLowerCase())) continue;
+    if (headlineOverlap(origNorm, rNorm) >= 0.6 && isUsableArticleUrl(r.url) && !isHomepageUrl(r.url)) {
+      return r.url;
+    }
+  }
+  return null;
+}
+
+// Internal: hit Bing News RSS and decode each result into {title, url}.
+// Used by deepenHomepageUrl above.
+async function bingNewsSearch(query, ua) {
+  try {
+    const res = await fetch(
+      'https://www.bing.com/news/search?q=' + encodeURIComponent(query) + '&format=rss',
+      { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
+    );
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+    return items.map(it => {
+      const title = (it.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1]?.trim() || '';
+      const link = (it.match(/<link[^>]*>([\s\S]*?)<\/link>/) || [])[1]?.trim() || '';
+      return { title, url: extractPublisherUrl(link) };
+    }).filter(x => x.url);
+  } catch { return []; }
+}

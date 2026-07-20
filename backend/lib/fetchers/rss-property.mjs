@@ -26,7 +26,7 @@
 
 import db from '../../db.js';
 import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl } from './news-rss-helpers.mjs';
 
 const QUERIES = [
   { q: 'อสังหาริมทรัพย์+ไทย',  category: 'sector_data',  pipeline: 'sector' },
@@ -253,12 +253,29 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
   // Require a non-empty source_url — same valid-link rule as the unified feed
   // filter. Drops the rare <item> with a missing <link>.
   const valid = unique.filter(it => it.source_url && it.source_url.length > 0);
-  const dropped = unique.length - valid.length;
-  console.log(`[rss-property] parsed=${all.length} unique=${unique.length} with_url=${valid.length} dropped_no_url=${dropped}`);
 
-  if (!valid.length) return { ok: true, fetched: 0, inserted: 0 };
+  // Auto-deepen: when Bing returned only the publisher's homepage (no
+  // article path), search Bing again with the headline to find the real
+  // article URL. Drops items where no deep URL can be found — better to
+  // lose one row than store a homepage link the user can't read.
+  const homepages = valid.filter(it => isHomepageUrl(it.source_url));
+  if (homepages.length) {
+    console.log(`[rss-property] deepening ${homepages.length} homepage URLs...`);
+    await Promise.all(homepages.map(async (it) => {
+      const deep = await deepenHomepageUrl(it.title, it.source_label);
+      if (deep) it.source_url = deep;
+    }));
+  }
+  const dropped = valid.filter(it => isHomepageUrl(it.source_url));
+  const deepened = valid.filter(it => !isHomepageUrl(it.source_url));
+  if (dropped.length) {
+    console.log(`[rss-property] dropped ${dropped.length} items (no deep URL found)`);
+  }
+  console.log(`[rss-property] parsed=${all.length} unique=${unique.length} with_url=${deepened.length} dropped_no_url=${unique.length - valid.length} dropped_homepage=${dropped.length}`);
 
-  const { inserted } = await db.writeNewsItems(valid);
+  if (!deepened.length) return { ok: true, fetched: 0, inserted: 0 };
+
+  const { inserted } = await db.writeNewsItems(deepened);
   console.log(`[rss-property] inserted=${inserted}`);
   return { ok: true, fetched: valid.length, inserted };
 }
