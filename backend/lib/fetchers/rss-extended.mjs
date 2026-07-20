@@ -39,7 +39,7 @@ import db from '../../db.js';
 import {
   classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
 } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline } from './news-rss-helpers.mjs';
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -182,7 +182,10 @@ function parseItem(itemXml, q) {
     category,                        // taxonomy-v2 key
     source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',
-    title_hash: sha1(guid || link || title),
+    // Dedup by normalized headline (not guid/link) so different publishers
+    // covering the same story collapse into one row. See rss-property.mjs
+    // for the rationale.
+    title_hash: sha1(normalizeHeadline(title) || guid || link),
     pipeline: q.pipeline,
     impact: 'neutral',               // legacy sentiment column — RSS items don't score this
     severity: q.severity || 'medium',

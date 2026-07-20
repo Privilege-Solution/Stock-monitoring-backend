@@ -26,7 +26,7 @@
 
 import db from '../../db.js';
 import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline } from './news-rss-helpers.mjs';
 
 const QUERIES = [
   { q: 'อสังหาริมทรัพย์+ไทย',  category: 'sector_data',  pipeline: 'sector' },
@@ -179,11 +179,13 @@ function parseItem(itemXml, query) {
   const date = pubDate ? new Date(pubDate) : null;
   if (!date || isNaN(date.getTime())) return null;
 
-  // Use guid as the title_hash seed — Google News guids are stable per story
-  // and survive re-runs, so the same story re-fetched won't insert twice.
-  // Falls back to the link or title if guid is missing.
-  const hashSeed = guid || link || headline;
-  const titleHash = sha1(hashSeed);
+  // Use the NORMALIZED headline as the dedup key — not guid/link. Two
+  // publishers covering the same story (e.g. "TRIS upgrades ASW") will then
+  // hash to the same value, the DB unique index on title_hash will reject
+  // the second insert, and the feed shows one row per real-world story
+  // instead of N copies. Falls back to guid if the headline is empty
+  // (defensive — parseItem already null-filters empty titles upstream).
+  const titleHash = sha1(normalizeHeadline(headline) || guid || link);
 
   // Relevance scoring — DROP keywords (banks, energy, etc.) get 0 and are
   // filtered later. ASW direct = 50+, real estate = 25+, BoT rate = 20+,

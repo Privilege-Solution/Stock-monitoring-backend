@@ -21,6 +21,7 @@
 import { createHash } from 'crypto';
 import db from '../../db.js';
 import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
+import { normalizeHeadline } from './news-rss-helpers.mjs';
 
 const MODEL = 'gemini-2.5-flash';
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
@@ -527,7 +528,11 @@ function normalizeForNewsFeed(it) {
     category:     it.category,
     source_url:   rawUrl,
     source_label: it.source || 'Gemini',
-    title_hash:   sha1(`${it.headline}|${it.source || ''}|${rawUrl}`),
+    // Dedup by normalized headline so a Gemini item + an RSS item covering
+    // the same story collapse to one row (matches rss-property/rss-extended).
+    // Was sha1(`${headline}|${source}|${rawUrl}`) which let the same story
+    // slip in multiple times from different sources.
+    title_hash:   sha1(normalizeHeadline(it.headline) || `${it.headline}|${it.source || ''}|${rawUrl}`),
     pipeline:     it.pipeline,
     impact:       it.impact,
     severity:     it.severity,

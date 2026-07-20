@@ -90,3 +90,22 @@ export function extractSourceName(itemXml) {
   const google = (itemXml.match(/<source[^>]*>([\s\S]*?)<\/source>/) || [])[1];
   return google ? google.trim() : '';
 }
+
+// Normalize a headline for dedup. Strips Google News' trailing " - Source"
+// suffix, lowercases, collapses whitespace, removes punctuation that
+// publishers vary on (quotes, brackets, em-dashes). Keeps Thai characters
+// intact — Thai has no inter-word spaces so we can't tokenize, but the
+// normalization still collapses cosmetically-different variants of the
+// same headline ("TRIS Rating ASW BBB" vs "TRIS Rating ASW 'BBB'").
+//
+// Used as the seed for `title_hash` so duplicate coverage of the same story
+// by different publishers collapses to one row in news_feed (DB unique
+// index on title_hash).
+export function normalizeHeadline(s) {
+  return String(s || '')
+    .replace(/\s*-\s*[^-]+$/, '')              // trailing " - Source"
+    .toLowerCase()
+    .replace(/[()[\]{}"'`.,!?;:]/g, '')         // strip common punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
