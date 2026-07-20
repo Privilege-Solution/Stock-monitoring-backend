@@ -139,22 +139,55 @@ export async function fetchAll({ sinceDate } = {}) {
 // `windowMinutes` limits how far back to look (default 60 — enough to catch
 // the most recent partial during market hours without pulling hours of data).
 //
-// Returns null when there are no 1-min candles in the window (off-hours,
-// weekends, holidays, halt, etc.) — we deliberately do NOT fall back to
-// `meta.regularMarketPrice` because Yahoo's free-tier SET feed is
-// 15-min delayed and treats the regular-market closing-auction as
-// `previousClose`, so it drifts from the EOD close committed to `daily`
-// by the 17:35 cron. Caller should keep showing the last DB EOD close
-// in that case (this is what the KPI already does via fallbackPrice).
+// Returns null only when the market is genuinely closed (no candles AND
+// no fresh regularMarketPrice). Otherwise:
+//
+//   1. Prefers the latest 1-min candle (most accurate, real-time)
+//   2. Falls back to `meta.regularMarketPrice` when Yahoo's free tier
+//      returns the meta block but no candle array. Yahoo frequently gates
+//      intraday candles behind crumb/auth for free-tier callers, so the
+//      candle path often returns empty even during active market hours.
+//      The meta fallback is 15-min delayed (SET free-tier feed) but that's
+//      better than a blank KPI card.
+//
+// The returned `source` field ('candle' or 'meta-fallback') lets the
+// dashboard annotate the delay if desired.
 export async function fetchIntraday({ windowMinutes = 60 } = {}) {
   const period2 = Math.floor(Date.now() / 1000);
   const period1 = period2 - windowMinutes * 60;
-  const { rows } = await fetchRaw(SYMBOLS.asw, period1, period2, '1m');
-  if (!rows.length) return null;
-  const latest = rows.slice().sort((a, b) => b._ts - a._ts)[0];
-  return {
-    ts: latest._ts,
-    price: latest.close,
-    source: 'candle',
-  };
+  const { rows, meta } = await fetchRaw(SYMBOLS.asw, period1, period2, '1m');
+
+  // Path 1: real 1-min candle.
+  if (rows.length) {
+    const latest = rows.slice().sort((a, b) => b._ts - a._ts)[0];
+    return {
+      ts: latest._ts,
+      price: latest.close,
+      source: 'candle',
+    };
+  }
+
+  // Path 2: meta fallback. Yahoo's free tier frequently gates intraday
+  // candles behind crumb/auth, returning only the meta block. Accept the
+  // meta's regularMarketPrice as long as it's from TODAY (ICT) and the
+  // market is currently open — this covers the lunch break (12:30-14:30
+  // ICT) where the last trade may be 1-2 hours old but still relevant.
+  // Outside market hours (off-hours, weekend, holiday), Yahoo's
+  // regularMarketTime is yesterday's close, so the date check correctly
+  // rejects it.
+  const rmt = meta?.regularMarketTime;
+  const rmp = meta?.regularMarketPrice;
+  if (typeof rmt === 'number' && typeof rmp === 'number') {
+    const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const rmtDateICT = new Date(rmt * 1000 + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    if (rmtDateICT === todayICT) {
+      return {
+        ts: rmt,
+        price: rmp,
+        source: 'meta-fallback',
+      };
+    }
+  }
+
+  return null;
 }
