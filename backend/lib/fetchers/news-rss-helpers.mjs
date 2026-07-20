@@ -91,21 +91,24 @@ export function extractSourceName(itemXml) {
   return google ? google.trim() : '';
 }
 
-// Normalize a headline for dedup. Strips Google News' trailing " - Source"
-// suffix, lowercases, collapses whitespace, removes punctuation that
-// publishers vary on (quotes, brackets, em-dashes). Keeps Thai characters
-// intact — Thai has no inter-word spaces so we can't tokenize, but the
-// normalization still collapses cosmetically-different variants of the
-// same headline ("TRIS Rating ASW BBB" vs "TRIS Rating ASW 'BBB'").
+// Normalize a headline for dedup. Strips a trailing " - <Latin publisher>"
+// suffix (e.g. "ASW ปันผล - Marketeer Online" → "ASW ปันผล"), lowercases,
+// collapses whitespace, removes ASCII punctuation that publishers vary on.
+//
+// IMPORTANT: the suffix-strip regex only fires when the suffix contains NO
+// Thai characters (`\u0E00-\u0E7F` is the Thai Unicode block). An earlier
+// version used `\s*-\s*[^-]+$` which greedily stripped everything after the
+// last hyphen — that truncated headlines like "ASW - แนะนำซื้อ" to "ASW"
+// and corrupted both the stored title and the dedup hash.
 //
 // Used as the seed for `title_hash` so duplicate coverage of the same story
 // by different publishers collapses to one row in news_feed (DB unique
 // index on title_hash).
 export function normalizeHeadline(s) {
   return String(s || '')
-    .replace(/\s*-\s*[^-]+$/, '')              // trailing " - Source"
+    .replace(/\s+-\s+[^-\u0E00-\u0E7F]+$/, '')   // trailing " - <Latin publisher>"
     .toLowerCase()
-    .replace(/[()[\]{}"'`.,!?;:]/g, '')         // strip common punctuation
+    .replace(/[()[\]{}"'`.,!?;:]/g, '')            // strip common ASCII punctuation
     .replace(/\s+/g, ' ')
     .trim();
 }

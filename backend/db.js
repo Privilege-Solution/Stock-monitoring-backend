@@ -18,6 +18,23 @@ const { createHash } = require('node:crypto');
 // sha1 seed for title_hash — mirrors the fetchers (rss-property.mjs / gemini-search.mjs).
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
+// normalizeHeadline — MUST mirror the ESM version in news-rss-helpers.mjs so
+// manually-added rows compute the SAME hash as pipeline rows covering the
+// same story. Kept inline (not imported) because db.js is CommonJS and
+// mixing import styles would force the whole module to .mjs.
+//
+// IMPORTANT: only strip a trailing " - <Latin>" segment (publisher name like
+// "Marketeer Online"); never strip a suffix that contains Thai chars, which
+// is real headline content (e.g. "ASW - แนะนำซื้อ" must NOT become "ASW").
+function normalizeHeadline(s) {
+  return String(s || '')
+    .replace(/\s+-\s+[^-\u0E00-\u0E7F]+$/, '')   // trailing " - <Latin publisher>"
+    .toLowerCase()
+    .replace(/[()[\]{}"'`.,!?;:]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 let pool = null;
 
 function parsePgUrl(url) {
@@ -699,21 +716,25 @@ async function setNewsMark(id, marked) {
 // the frontend can show a "เพิ่มเอง" badge and the DELETE guard below can
 // restrict removal to user-added rows only.
 //
-// title_hash = sha1(title|url) — stable per headline+link, so re-adding the same
-// pair is a no-op (writeNewsItems returns inserted:0). date defaults to today ICT.
+// title_hash = sha1(normalizeHeadline(title)) — SAME formula as the RSS and
+// Gemini pipelines, so a manually-added row dedupes against pipeline rows
+// that pull the same headline from a different source. (Earlier this used
+// `sha1(title|url)` which let the same story slip in twice — once from the
+// user, once from a pipeline pull — because the hashes differed.)
 // `category` is resolved by the caller (user pick or classifyCategory); MACRO is
 // the defensive fallback so the NOT NULL column is never violated.
 async function insertManualNews({ title, source_url, category, severity, summary } = {}) {
   const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
   let hostname = 'เพิ่มเอง';
   try { hostname = new URL(source_url).hostname || hostname; } catch {}
+  const normTitle = normalizeHeadline(title) || `${String(title).trim()}|${source_url}`;
   const { inserted } = await writeNewsItems([{
     title,
     date: todayICT,
     category: category || 'MACRO',
     source_url,
     source_label: hostname,
-    title_hash: sha1(`${String(title).trim()}|${source_url}`),
+    title_hash: sha1(normTitle),
     pipeline: 'manual',
     impact: null,
     severity: severity || null,

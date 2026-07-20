@@ -416,7 +416,10 @@ app.post('/api/news/refresh', async (req, res) => {
   const id = await db.logFetchStart();
   try {
     const result = await runFetch({ source });
-    await db.logFetchFinish(id, 1, source, result.inserted || 0, 0, null);
+    // Use result.ok when present — Gemini pipelines can return {ok:false}
+    // without throwing (e.g. morning-brief reason:'empty'); logging ok=1 in
+    // that case hides the failure from /api/news/status.
+    await db.logFetchFinish(id, result.ok !== false ? 1 : 0, source, result.inserted || 0, 0, null);
     res.json({ ok: true, ...result });
   } catch (e) {
     await db.logFetchFinish(id, 0, source, 0, 0, String(e.message || e));
@@ -434,7 +437,7 @@ app.post('/api/news/rss-refresh', async (req, res) => {
   const id = await db.logFetchStart();
   try {
     const result = await runFetch({ source, maxAgeDays });
-    await db.logFetchFinish(id, 1, source, result.inserted || 0, 0, null);
+    await db.logFetchFinish(id, result.ok !== false ? 1 : 0, source, result.inserted || 0, 0, null);
     res.json({ ok: true, source, ...result });
   } catch (e) {
     await db.logFetchFinish(id, 0, source, 0, 0, String(e.message || e));

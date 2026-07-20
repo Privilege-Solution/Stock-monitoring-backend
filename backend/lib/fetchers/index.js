@@ -57,7 +57,12 @@ async function loadRssExtended() {
 // prices, default to a 7-day window before the latest stored date so a
 // missed daily cron self-heals next run. gemini-* sources use today instead
 // (Gemini re-searches "today" each call).
-async function runFetch({ source = 'yahoo', sinceDate } = {}) {
+// IMPORTANT: maxAgeDays must be forwarded to rss-property / rss-extended.
+// Earlier the signature was `{ source, sinceDate }` which silently dropped
+// maxAgeDays — the cron's `maxAgeDays: 2` was ignored and fetchers fell
+// back to their internal default (7 days). Manual refresh via
+// `/api/news/rss-refresh?maxAgeDays=N` was also broken the same way.
+async function runFetch({ source = 'yahoo', sinceDate, maxAgeDays } = {}) {
   if (source.startsWith('gemini-')) {
     const m = await loadGemini();
     return await m.run({ source, sinceDate });
@@ -65,12 +70,12 @@ async function runFetch({ source = 'yahoo', sinceDate } = {}) {
 
   if (source === 'rss-property') {
     const m = await loadRss();
-    return await m.run({ sinceDate });
+    return await m.run({ sinceDate, maxAgeDays });
   }
 
   if (source === 'rss-extended') {
     const m = await loadRssExtended();
-    return await m.run({ sinceDate });
+    return await m.run({ sinceDate, maxAgeDays });
   }
 
   if (!sinceDate) {

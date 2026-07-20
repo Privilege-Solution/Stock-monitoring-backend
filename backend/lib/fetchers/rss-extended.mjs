@@ -145,7 +145,9 @@ function cleanTitle(raw) {
 
 function parseItem(itemXml, q) {
   const titleRaw = (itemXml.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '';
-  const title = cleanTitle(titleRaw).replace(/\s*-\s*[^-]+$/, '').trim();
+  // Strip trailing " - <Latin publisher>" only — preserves hyphen-separated
+  // Thai content. See normalizeHeadline() for the same pattern.
+  const title = cleanTitle(titleRaw).replace(/\s+-\s+[^-\u0E00-\u0E7F]+$/, '').trim();
   if (!title) return null;
 
   const link = (itemXml.match(/<link\/?>([^<]+)/) || itemXml.match(/<link>([^<]+)<\/link>/) || [])[1] || '';

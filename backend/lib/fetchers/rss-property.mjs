@@ -167,7 +167,11 @@ function parseItem(itemXml, query) {
   const title = cleanTitle(titleRaw);
   // Google News appends " - SourceName" to the title — strip it so the
   // headline is just the headline.
-  const headline = title.replace(/\s*-\s*[^-]+$/, '').trim();
+  // Strip trailing " - <Latin publisher>" suffix (Google News / Bing
+  // sometimes append the source name to the title). Only fires when the
+  // suffix is Latin-only — preserves hyphen-separated Thai content like
+  // "ASW - แนะนำซื้อ". See normalizeHeadline() for the same pattern.
+  const headline = title.replace(/\s+-\s+[^-\u0E00-\u0E7F]+$/, '').trim();
   if (!headline) return null;
 
   const link = (itemXml.match(/<link\/?>([^<]+)/) || itemXml.match(/<link>([^<]+)<\/link>/) || [])[1] || '';
