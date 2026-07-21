@@ -2445,6 +2445,8 @@ async function loadNewsStatus() {
   const dotClass = (r) => r && r.ok ? 'ok' : (r ? 'error' : 'pending');
   row.innerHTML = `
     <div class="news-status-row">
+      <span><span class="dot ${dotClass(s.lastRuns['rss-property'])}"></span> <strong>rss-property</strong> · ${fmtRun(s.lastRuns['rss-property'])}</span>
+      <span><span class="dot ${dotClass(s.lastRuns['rss-extended'])}"></span> <strong>rss-extended</strong> · ${fmtRun(s.lastRuns['rss-extended'])}</span>
       <span><span class="dot ${dotClass(s.lastRuns.company)}"></span> <strong>company</strong> · ${fmtRun(s.lastRuns.company)}</span>
       <span><span class="dot ${dotClass(s.lastRuns.sector)}"></span> <strong>sector</strong> · ${fmtRun(s.lastRuns.sector)}</span>
       <span><span class="dot ${dotClass(s.lastRuns.macro)}"></span> <strong>macro</strong> · ${fmtRun(s.lastRuns.macro)}</span>

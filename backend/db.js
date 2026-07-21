@@ -778,9 +778,20 @@ async function deleteNewsItem(id) {
 // + medium severity), the bar the unified feed renders as a pin.
 async function readNewsStatus() {
   const p = getPool();
-  const sources = ['gemini-company', 'gemini-sector', 'gemini-macro', 'gemini-morning-brief', 'gemini-daily-summary'];
+  // Include RSS pipelines alongside Gemini ones — earlier this list missed
+  // rss-property and rss-extended, so the dashboard's Pipeline Status card
+  // only showed 5 of the 7 active sources.
+  const sources = [
+    'rss-property',
+    'rss-extended',
+    'gemini-company',
+    'gemini-sector',
+    'gemini-macro',
+    'gemini-morning-brief',
+    'gemini-daily-summary',
+  ];
   const lastRuns = {};
-  // 4 simple queries — fetch_log is small (append-only). Could be combined
+  // 7 simple queries — fetch_log is small (append-only). Could be combined
   // into one LATERAL but readability wins here.
   for (const source of sources) {
     const r = await p.query(
@@ -790,7 +801,16 @@ async function readNewsStatus() {
        ORDER BY id DESC LIMIT 1`,
       [source]
     );
-    const key = source.replace('gemini-', '').replace('-brief', ''); // company/sector/macro/brief
+    // Stable display keys: strip prefixes so the frontend doesn't have to
+    // know about internal naming. gemini-morning-brief → 'brief' (matches
+    // the frontend's existing lookup; previously the API returned 'morning'
+    // which caused the brief row to always render as 'never run').
+    let key = source
+      .replace(/^gemini-/, '')
+      .replace(/^rss-/, 'rss-')
+      .replace(/-brief$/, '');
+    if (source === 'gemini-morning-brief') key = 'brief';
+    if (source === 'gemini-daily-summary') key = 'daily-summary';
     lastRuns[key] = r.rows[0] || null;
   }
   const c = await p.query(`
