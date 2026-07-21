@@ -380,9 +380,10 @@ app.post('/api/news', async (req, res) => {
   }
 });
 
-// Delete a manually-added news item. db.deleteNewsItem() guards on
-// pipeline='manual', so pipeline-sourced rows can never be removed here even if
-// their id is passed. 404 when the row is absent or not deletable.
+// Delete a news item — manual OR pipeline. db.deleteNewsItem() used to
+// guard on pipeline='manual' but the operator sometimes wants to remove
+// a stale/wrong pipeline item too. The DELETE is unconditional now; the
+// frontend confirms before sending.
 app.delete('/api/news/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);

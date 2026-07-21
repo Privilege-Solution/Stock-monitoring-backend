@@ -2405,11 +2405,13 @@ function renderUnifiedNewsItem(item) {
     : '';
   const idAttr = item.id != null ? ` data-id="${item.id}"` : '';
   const src = item.sourceLabel ? `<span class="news-card-src muted th">${escapeHtml(item.sourceLabel)}</span>` : '';
-  // Manual (user-added) items get a "เพิ่มเอง" badge + a delete button. The
-  // delete button only renders for manual rows — pipeline news is not deletable.
+  // Manual (user-added) items get a "เพิ่มเอง" badge. The delete button
+  // now shows on every card — operator can remove a wrong/stale pipeline
+  // item too. The handler confirms before deleting and warns that the
+  // story may come back if the cron re-pulls the same headline.
   const isManual = item.pipeline === 'manual';
   const manualBadge = isManual ? `<span class="news-manual-badge th">เพิ่มเอง</span>` : '';
-  const delBtn = (isManual && item.id != null)
+  const delBtn = (item.id != null)
     ? `<button class="news-card-delete" type="button" data-delete-id="${item.id}" title="ลบข่าว" aria-label="ลบข่าว">${icon('trash')}</button>`
     : '';
   // 2-column card: meta (date+weekday) | main (tag+headline+summary+note).
@@ -2746,10 +2748,18 @@ async function submitAddNews(e) {
   }
 }
 
-// Delete a manually-added row. Optimistic: remove from NEWS_DATA + re-render,
-// then persist. On failure, refetch to restore truth.
+// Delete any news row (manual or pipeline). Optimistic: remove from
+// NEWS_DATA + re-render, then persist. On failure, refetch to restore.
+// Pipeline rows may come back on the next cron if the same headline gets
+// re-pulled — the confirm dialog warns the operator about this.
 async function handleDeleteNews(id) {
-  if (!id || !confirm('ลบข่าวนี้?')) return;
+  if (!id) return;
+  const item = (window.NEWS_DATA || []).find(n => String(n.id) === String(id));
+  const isManual = item && item.pipeline === 'manual';
+  const msg = isManual
+    ? 'ลบข่าวนี้?'
+    : 'ลบข่าวนี้?\n\n⚠ ข่าวที่ดึงจากระบบ (rss/gemini) อาจกลับมาอีกครั้งถ้า cron ดึง headline เดิมซ้ำ';
+  if (!confirm(msg)) return;
   const prev = (window.NEWS_DATA || []).filter(n => String(n.id) !== String(id));
   window.NEWS_DATA = prev;
   renderUnifiedNews();

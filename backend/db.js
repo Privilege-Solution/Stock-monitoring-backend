@@ -763,8 +763,21 @@ async function insertManualNews({ title, source_url, category, severity, summary
 async function deleteNewsItem(id) {
   const n = parseInt(id, 10);
   if (!Number.isFinite(n)) throw new Error('deleteNewsItem: id must be an integer');
+  // Allow deleting ANY news row — manual OR pipeline. The earlier
+  // `pipeline = 'manual'` guard was overly restrictive; the operator
+  // sometimes wants to remove a stale/wrong pipeline item too. The
+  // DELETE is logged via fetch_log's normal append pattern, and the
+  // row's `title_hash` will keep the next cron from re-inserting the
+  // exact same story (because ON CONFLICT DO NOTHING on title_hash
+  // already prevented dupes on the way IN, so a deleted hash stays
+  // absent until the story genuinely resurfaces).
+  //
+  // NOTE: this means a deleted pipeline story MAY come back if the same
+  // headline gets re-pulled with a different URL (different hash seed
+  // for manual rows that fell through normalizeHeadline). Frontend
+  // confirms before deleting to make this trade-off explicit.
   const r = await getPool().query(
-    `DELETE FROM news_feed WHERE id = $1 AND pipeline = 'manual'`,
+    `DELETE FROM news_feed WHERE id = $1`,
     [n]
   );
   return { deleted: r.rowCount };
