@@ -169,22 +169,28 @@ export async function fetchIntraday({ windowMinutes = 60 } = {}) {
 
   // Path 2: meta fallback. Yahoo's free tier frequently gates intraday
   // candles behind crumb/auth, returning only the meta block. Accept the
-  // meta's regularMarketPrice as long as it's from TODAY (ICT) and the
-  // market is currently open — this covers the lunch break (12:30-14:30
-  // ICT) where the last trade may be 1-2 hours old but still relevant.
-  // Outside market hours (off-hours, weekend, holiday), Yahoo's
-  // regularMarketTime is yesterday's close, so the date check correctly
-  // rejects it.
+  // meta's regularMarketPrice as long as the trade is from "recently":
+  //
+  //   - Within the last 24 hours: accept and flag whether it's from today
+  //     (Live) or yesterday (Pending — market may have just opened without
+  //     a trade tick yet). The frontend uses this flag to label the row.
+  //   - Older than 24h: reject (genuinely stale — weekend, holiday, halt).
+  //
+  // Previously we required regularMarketTime's ICT date to match today's
+  // ICT date, which was too strict — between 10:00 ICT market open and
+  // the first trade, Yahoo still reports yesterday's last trade and the
+  // dashboard KPI showed "—" instead of the price.
   const rmt = meta?.regularMarketTime;
   const rmp = meta?.regularMarketPrice;
   if (typeof rmt === 'number' && typeof rmp === 'number') {
-    const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-    const rmtDateICT = new Date(rmt * 1000 + 7 * 3600 * 1000).toISOString().slice(0, 10);
-    if (rmtDateICT === todayICT) {
+    const ageSec = period2 - rmt;
+    if (ageSec <= 24 * 3600) {
+      const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+      const rmtDateICT = new Date(rmt * 1000 + 7 * 3600 * 1000).toISOString().slice(0, 10);
       return {
         ts: rmt,
         price: rmp,
-        source: 'meta-fallback',
+        source: rmtDateICT === todayICT ? 'meta-fallback' : 'meta-pending',
       };
     }
   }

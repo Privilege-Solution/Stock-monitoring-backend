@@ -1202,7 +1202,7 @@ function pctChange(arr, key) {
 // Latest intraday tick from /api/intraday (kept in a module-level cache so
 // the 90-s pollIntraday() interval can refresh only the #kpiPrice card
 // without re-running renderKPIs for every other KPI).
-const LIVE_TICK = { price: null, prevClose: null, ts: null, marketOpen: false };
+const LIVE_TICK = { price: null, prevClose: null, ts: null, marketOpen: false, source: null };
 
 // Format ISO ms timestamp as HH:MM:SS in Asia/Bangkok.
 function fmtThaiTime(ms) {
@@ -1252,7 +1252,20 @@ function applyKpiPriceLive() {
     priceEl.classList.remove('dim');
     if (card) {
       const ageSec = Math.round((Date.now() - LIVE_TICK.ts) / 1000);
-      card.innerHTML = `<span class="kpi-live">Live · ${fmtThaiTime(LIVE_TICK.ts)} · ${ageSec}s ago</span>`;
+      // Three badge modes based on Yahoo data source:
+      //   candle        → real-time 1-min tick (gold standard)
+      //   meta-fallback → 15-min delayed Yahoo meta (today's trade)
+      //   meta-pending  → yesterday's last trade; market may have just opened
+      //                   without a tick yet. Still show the price but label
+      //                   it so the user knows it's not fresh.
+      const src = LIVE_TICK.source;
+      if (src === 'meta-pending') {
+        card.innerHTML = `<span class="kpi-live" style="color:var(--amber,#d97706)">Pending · ${fmtThaiTime(LIVE_TICK.ts)} · รอ trade วันนี้</span>`;
+      } else if (src === 'meta-fallback') {
+        card.innerHTML = `<span class="kpi-live" style="color:var(--amber,#d97706)">~15m · ${fmtThaiTime(LIVE_TICK.ts)}</span>`;
+      } else {
+        card.innerHTML = `<span class="kpi-live">Live · ${fmtThaiTime(LIVE_TICK.ts)} · ${ageSec}s ago</span>`;
+      }
     }
   } else {
     priceEl.classList.add('dim');
@@ -3263,6 +3276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         LIVE_TICK.prevClose = j.prevClose;
         LIVE_TICK.ts = j.ts;
         LIVE_TICK.marketOpen = !!j.marketOpen;
+        LIVE_TICK.source = j.source || null;
         LIVE_TICK.lastError = j.lastError || null;
       }
       // Always re-apply: even when market closes mid-poll, the KPI dims and
@@ -3272,9 +3286,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* silent — keep current */ }
   }
   // Stagger the first live poll (immediately) so users see the tick without
-  // waiting 90 s on first load; subsequent polls every 90 s.
+  // waiting on the interval; subsequent polls every 20 s for near-real-time
+  // feel during market hours. Was 90 s — too slow to feel "live".
+  // Backend cron still fetches Yahoo every 3 min, so 20 s polling doesn't
+  // add load; the client just re-reads the server's cached value.
   setTimeout(pollIntraday, 1500);
-  setInterval(pollIntraday, 90_000);
+  setInterval(pollIntraday, 20_000);
 });
 
 async function loadDataHealth() {

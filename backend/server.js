@@ -629,7 +629,7 @@ cron.schedule('*/3 * * * *', async () => {
       INTRADAY.price = t.price;
       INTRADAY.prevClose = t.prevClose;
       INTRADAY.ts = t.ts;
-      INTRADAY.source = 'yahoo';
+      INTRADAY.source = t.source || 'yahoo';
       INTRADAY.lastError = null;
       console.log(`[scheduler] intraday tick price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'} ts=${new Date(t.ts).toISOString()}`);
     }
@@ -814,4 +814,24 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`ASW Monitor backend on http://localhost:${PORT}`);
+  // Warm the intraday cache immediately on boot. Earlier we waited for
+  // the first cron tick (every 3 min) which meant /api/intraday returned
+  // null for up to 3 minutes after a restart — the dashboard KPI card
+  // showed "—" instead of the live price during that window. Fire-and-
+  // forget so a slow Yahoo response doesn't block app.listen's callback.
+  runIntraday().then(t => {
+    if (t && t.price != null) {
+      INTRADAY.price = t.price;
+      INTRADAY.prevClose = t.prevClose;
+      INTRADAY.ts = t.ts;
+      INTRADAY.source = t.source || 'yahoo';
+      INTRADAY.marketOpen = true;
+      INTRADAY.lastError = null;
+      console.log(`[startup] intraday warm price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'}`);
+    } else {
+      console.log('[startup] intraday warm returned no tick (market closed or no data)');
+    }
+  }).catch(e => {
+    console.warn('[startup] intraday warm failed:', e.message || e);
+  });
 });

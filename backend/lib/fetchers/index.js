@@ -135,6 +135,10 @@ async function runIntraday() {
     price: tick.price,
     ts: tick.ts * 1000, // unix ms for client convenience
     prevClose: settled ? settled.close : null,
+    // Forward the Yahoo source flag so the frontend can distinguish
+    // real-time ticks ('candle') from delayed meta ('meta-fallback') and
+    // yesterday's-price-during-just-opened ('meta-pending').
+    source: tick.source || null,
   };
 }
 
