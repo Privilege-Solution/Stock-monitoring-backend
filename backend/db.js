@@ -537,6 +537,18 @@ async function readNewsFeedForDate(date) {
   return r.rows;
 }
 
+// Latest ICT date that has at least one non-hidden news_feed row. Used by
+// runDailySummary to fall back when today has no news yet (quiet morning,
+// weekend, holiday) — instead of returning "failed", the summary digests
+// the most recent day with content. Returns null when the feed is empty.
+async function readLatestNewsDate() {
+  const p = getPool();
+  const r = await p.query(
+    `SELECT date FROM news_feed WHERE hidden = FALSE ORDER BY date DESC LIMIT 1`
+  );
+  return r.rows[0]?.date || null;
+}
+
 // ── peer_prices ────────────────────────────────────────────────────────────
 
 // peers is an array of arrays: peers[i] is the price series for the i-th ticker.
@@ -853,6 +865,7 @@ module.exports = {
   readDailySummary,     // v10 — per-day AI digest reader
   readAllDailySummaries,// v10 — every digest, for chart pins + Remark column
   readNewsFeedForDate,  // v10 — news rows for one date (summary input)
+  readLatestNewsDate,   // v11 — latest date with news (daily-summary fallback)
   setDailyRemark,       // user note writer on daily.price table popover
   // peer_prices
   writePeers,

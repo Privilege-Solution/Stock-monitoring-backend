@@ -682,11 +682,31 @@ async function runMorningBrief(sinceDate) {
 //     writeNewsItems / UPDATE news_feed. Accepts an optional date (ICT ISO)
 //     so the manual refresh route can regenerate a specific day.
 async function runDailySummary(sinceDate) {
-  const date = sinceDate || todayISO();
-  const items = await db.readNewsFeedForDate(date);
+  // Look at today first; if there's nothing yet (quiet morning, weekend,
+  // holiday), fall back to the most recent day that has news. This makes
+  // the dashboard show the last available summary instead of "failed"
+  // whenever today's cron hasn't pulled anything new yet. Returns
+  // { ok: true, reason: 'no-news', date } when there's genuinely nothing
+  // in the feed at all — that's not a failure, just an empty state.
+  let date = sinceDate || todayISO();
+  let items = await db.readNewsFeedForDate(date);
+
+  if ((!items || !items.length) && !sinceDate) {
+    // Auto-fallback: query the latest day that actually has rows.
+    const latest = await db.readLatestNewsDate();
+    if (latest && latest !== date) {
+      console.log(`[gemini-daily-summary] ${date} → no news, falling back to ${latest}`);
+      date = latest;
+      items = await db.readNewsFeedForDate(date);
+    }
+  }
+
   if (!items || !items.length) {
+    // Genuine empty state (no news in the last week). Log as ok=true with
+    // reason:'no-news' so the dashboard doesn't render a "failed" status —
+    // the absence of news isn't a pipeline failure.
     console.log(`[gemini-daily-summary] ${date} → no news, skipping`);
-    return { ok: false, reason: 'no-news', date };
+    return { ok: true, reason: 'no-news', date, sourceCount: 0 };
   }
 
   // Give the model room to think through the HEADLINE rules and still emit the
