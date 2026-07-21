@@ -29,14 +29,42 @@ import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs'
 import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl } from './news-rss-helpers.mjs';
 
 const QUERIES = [
+  // ── ASW direct ──────────────────────────────────────────────────────────
+  { q: 'แอสเซทไวส์+ASW',       category: 'peer_news', pipeline: 'sector' },
+  { q: 'Assetwise ข่าว',       category: 'peer_news', pipeline: 'sector' },
+
+  // ── Per-competitor tickers ──────────────────────────────────────────────
+  // One query per major peer so each competitor surfaces its own news
+  // stream (instead of relying on the broad "อสังหาริมทรัพย์ ไทย" query
+  // which mostly returns ASW + generic sector pieces).
+  { q: 'AP Thailand แอ็น ไทยแลนด์', category: 'peer_news', pipeline: 'sector' },
+  { q: 'LH แลนด์แอนด์เฮ้าส์',     category: 'peer_news', pipeline: 'sector' },
+  { q: 'SPALI ศุภาลัย ข่าว',       category: 'peer_news', pipeline: 'sector' },
+  { q: 'SIRI แสนสิริ ข่าว',        category: 'peer_news', pipeline: 'sector' },
+  { q: 'NOBLE โนเบล ไทย',         category: 'peer_news', pipeline: 'sector' },
+  { q: 'ORI ออริจิ้น โพรเพอร์ตี้',   category: 'peer_news', pipeline: 'sector' },
+  { q: 'QH ควอลิตี้เฮ้าส์ ข่าว',    category: 'peer_news', pipeline: 'sector' },
+  { q: 'PRUK พฤกษา ข่าว',          category: 'peer_news', pipeline: 'sector' },
+  { q: 'PROUD พรู๊ด รีล เอสเตท',  category: 'peer_news', pipeline: 'sector' },
+  { q: 'ANAN อนันดา ดีเวลลอปเมนต์', category: 'peer_news', pipeline: 'sector' },
+
+  // ── Sector-wide + macro ────────────────────────────────────────────────
   { q: 'อสังหาริมทรัพย์+ไทย',  category: 'sector_data',  pipeline: 'sector' },
   { q: 'ครม.+อสังหาริมทรัพย์', category: 'sector_policy', pipeline: 'sector' },
   { q: 'ครม.+ที่อยู่อาศัย',     category: 'sector_policy', pipeline: 'sector' },
   { q: 'ธนาคารแห่งประเทศไทย+ดอกเบี้ย', category: 'interest_rate', pipeline: 'macro' },
   { q: 'กนง.+ดอกเบี้ย',         category: 'interest_rate', pipeline: 'macro' },
   { q: 'เศรษฐกิจไทย+GDP+เงินเฟ้อ', category: 'economic_data', pipeline: 'macro' },
-  { q: 'แอสเซทไวส์+ASW',       category: 'peer_news', pipeline: 'sector' },
   { q: 'บ้าน+คอนโด+กรุงเทพ',    category: 'sector_data',  pipeline: 'sector' },
+
+  // ── Sector metrics / industry data ─────────────────────────────────────
+  { q: 'REIC ดัชนี อสังหา',     category: 'sector_data',  pipeline: 'sector' },
+  { q: 'presale โอน คอนโด ไทย',  category: 'sector_data',  pipeline: 'sector' },
+  { q: 'ค่าโอน จดจำนอง 0.01%',   category: 'sector_policy', pipeline: 'sector' },
+  { q: 'LTV สินเชื่อบ้าน 2569',  category: 'sector_policy', pipeline: 'sector' },
+  { q: 'ต่างชาติ ซื้อ คอนโด ไทย', category: 'sector_data',  pipeline: 'sector' },
+  { q: 'ดอกเบี้ย ธปท. 2569',     category: 'interest_rate', pipeline: 'macro' },
+  { q: 'ค่าเงินบาท USD',         category: 'macro_fx',     pipeline: 'macro' },
 ];
 
 const { createHash } = await import('node:crypto');
@@ -56,28 +84,62 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 // =============================================================================
 
 // Hard-drop: banks, consumer finance, energy, telco, food, retail, gold/crypto.
-const DROP_KEYWORDS = [
+// Split into two lists because they need different match strategies:
+//   - DROP_WORDS_LATIN: short English tickers / fragments that MUST be matched
+//     on word boundaries — substring matching would catch unrelated words
+//     ('OR' inside 'reform', 'NT' inside 'government', 'TU' inside 'status',
+//     'TOP' inside 'stop'). Earlier the substring scan silently dropped many
+//     legitimate ASW headlines containing these substrings.
+//   - DROP_WORDS_THAI: full Thai words where word boundaries aren't a concern
+//     (Thai doesn't use spaces) — substring matching is correct.
+const DROP_WORDS_LATIN = [
   // Thai banks (full names + abbreviations + 4-letter SET tickers)
   'BAY', 'KBank', 'KBANK', 'SCB', 'KTB', 'TTB', 'TISCO', 'KKP',
-  'กสิกรไทย', 'กรุงศรี', 'กรุงไทย', 'ไทยพาณิชย์', 'ทหารไทยธนชาต',
-  // Consumer finance / credit cards / personal loans
-  'KTC', 'AEONTS', 'Krungsri', 'cardX', 'บัตรเครดิต', 'สินเชื่อส่วนบุคคล', 'สินเชื่อรายย่อย',
+  'KTC', 'AEONTS', 'Krungsri', 'cardX',
   // Energy + petrochem
-  'PTT', 'PTTEP', 'TOP', 'BANPU', 'BCP', 'IRPC', 'ESSO', 'SPRC', 'GPSC', 'OR',
+  'PTT', 'PTTEP', 'TOP', 'BANPU', 'BCP', 'IRPC', 'ESSO', 'SPRC', 'GPSC',
+  // Telecom
+  'AIS', 'DTAC', 'TRUE', 'INTUCH', 'JAS', 'NT',
+  // Food + agribusiness
+  'CPF', 'CPALL', 'OISHI', 'TU', 'MINT', 'STA',
+  // Retail + commerce
+  'HMPRO', 'MAKRO', 'CRC', 'RS', 'COM7', 'BJC', 'GLOBAL',
+  // Health / hospital
+  'BDMS', 'BH', 'CHG',
+  // Materials / industrial
+  'SCC', 'TOA',
+  // Other unrelated
+  'Bitcoin', 'Crypto',
+];
+const DROP_WORDS_THAI = [
+  // Thai bank names (no abbreviations — those are in LATIN list)
+  'กสิกรไทย', 'กรุงศรี', 'กรุงไทย', 'ไทยพาณิชย์', 'ทหารไทยธนชาต',
+  // Consumer finance
+  'บัตรเครดิต', 'สินเชื่อส่วนบุคคล', 'สินเชื่อรายย่อย',
+  // Energy
   'น้ำมัน', 'ปิโตรเคมี', 'โรงกลั่น', 'ก๊าซธรรมชาติ', 'LNG',
   // Telecom
-  'AIS', 'DTAC', 'TRUE', 'INTUCH', 'JAS', 'NT', 'โทรคมนาคม',
-  // Food + agribusiness
-  'CPF', 'CPALL', 'OISHI', 'TU', 'MINT', 'STA', 'อาหารแช่แข็ง', 'อาหารสัตว์',
-  // Retail + commerce
-  'HMPRO', 'MAKRO', 'CRC', 'RS', 'COM7', 'BJC', 'GLOBAL', 'ค้าปลีก', 'ห้างสรรพสินค้า',
-  // Health / hospital
-  'BDMS', 'BH', 'CHG', 'โรงพยาบาล',
-  // Materials / industrial
-  'SCC', 'TOA', 'น้ำตาล', 'เหล็ก', 'ปูนซิเมนต์',
+  'โทรคมนาคม',
+  // Food
+  'อาหารแช่แข็ง', 'อาหารสัตว์',
+  // Retail
+  'ค้าปลีก', 'ห้างสรรพสินค้า',
+  // Health
+  'โรงพยาบาล',
+  // Materials
+  'น้ำตาล', 'เหล็ก', 'ปูนซิเมนต์',
   // Other unrelated
-  'ทองคำ', 'Bitcoin', 'Crypto', 'คริปโต', 'กองทุนรวม', 'ประกันภัย',
+  'ทองคำ', 'คริปโต', 'กองทุนรวม', 'ประกันภัย',
 ];
+
+// Single-letter tickers OR / ORI / etc. need word-boundary match too —
+// 'OR' was the worst offender (matches 'for', 'report', 'reform', etc).
+// `\b` in JS regex works on ASCII word chars; safer here than the
+// t.includes() substring scan we used to do.
+const DROP_LATIN_RE = new RegExp(
+  '\\b(' + DROP_WORDS_LATIN.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  'i'
+);
 
 // High-relevance keywords — adds to the score. "ASW" matches all three
 // ASW-related forms and is the only ticker-name with 50+ bonus points.
@@ -135,8 +197,11 @@ const HIGH_KEYWORDS = [
 // generic sector headline sits at 60-70.
 function scoreItem(title) {
   const t = title.toLowerCase();
-  // Hard drop first — any DROP keyword kills it.
-  for (const kw of DROP_KEYWORDS) {
+  // Hard drop first — any DROP keyword kills it. Latin tickers use a
+  // word-boundary regex so they don't match unrelated English fragments
+  // (the source of bug #1: 'OR' matched inside 'report', 'reform', etc).
+  if (DROP_LATIN_RE.test(title)) return 0;
+  for (const kw of DROP_WORDS_THAI) {
     if (t.includes(kw.toLowerCase())) return 0;
   }
   // Sum up HIGH keyword boosts.

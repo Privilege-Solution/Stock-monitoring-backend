@@ -705,7 +705,13 @@ cron.schedule('35 3 * * *', async () => {
 async function runNewsBatch(phase) {
   console.log(`[scheduler:${phase}] news batch start`);
   const sources = [
-    { source: 'rss-property', maxAgeDays: 2 },
+    // maxAge=7d for rss-property — Bing returns items up to ~14 days old,
+    // so the previous maxAge=2d (set when the cron ran every 30 min during
+    // market hours) was filtering out almost everything. With 5 runs/day
+    // the dedup index catches repeats; a 7-day window lets each run pick
+    // up recent items even if they were published overnight or on a slow
+    // news day. Target ~10 new items per day across rss-property + extended.
+    { source: 'rss-property', maxAgeDays: 7 },
     { source: 'rss-extended', maxAgeDays: 14 },
   ];
   if (process.env.GEMINI_API_KEY) {
