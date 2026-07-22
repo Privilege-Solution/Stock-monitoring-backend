@@ -475,9 +475,9 @@
           <div class="pill-row" id="newsRangePills">
             <button class="pill th" data-range="7D">7 วัน</button>
             <button class="pill th" data-range="10D">10 วัน</button>
-            <button class="pill th active" data-range="30D">30 วัน</button>
+            <button class="pill th" data-range="30D">30 วัน</button>
             <button class="pill th" data-range="90D">90 วัน</button>
-            <button class="pill th" data-range="ALL">ทั้งหมด</button>
+            <button class="pill th active" data-range="ALL">ทั้งหมด</button>
           </div>
           <button class="add-news-btn th" id="addNewsBtn" type="button" title="เพิ่มข่าวที่คุณพบเอง"><span id="addNewsBtnIcon"></span> เพิ่มข่าว</button>
         </div>
@@ -827,7 +827,7 @@ const STATE = {
   focusedDate: null,
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
-  newsRange: '30D',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  (day-count filters; 30 วัน default)
+  newsRange: 'ALL',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  — ALL shows full history since IPO
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
 };
