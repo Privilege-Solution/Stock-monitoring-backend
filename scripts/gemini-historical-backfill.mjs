@@ -51,18 +51,28 @@ const YEARS = [
   { year: 2026, label: 'BE 2569, current year' },
 ];
 
-const PROMPT = (year, label) => `Find 5 most important news articles about Assetwise PCL (ASW.BK, Thai real estate developer) from ${year} (${label}).
+const PROMPT = (year, label) => `Find 5 most important news articles about Assetwise PCL (ASW.BK, Thai real estate developer) OR the Thai real estate sector from ${year} (${label}).
+
+Include news about: ASW directly, competitors (AP, LH, SPALI, SIRI, NOBLE, ORI, ANAN, LPN, QH), interest rate decisions (กนง./BOT), government housing policy (LTV, transfer fees), real estate industry trends, and macro factors (GDP, FX, inflation) that affected the sector.
 
 For each, provide:
 ---
 HEADLINE: [exact headline in Thai or English, as published]
 DATE: [approximate date in YYYY-MM-DD format if known, or YYYY-MM if only month known]
 SOURCE: [publisher name]
+CATEGORY: [one of: COMPANY | COMPETITOR | RATES | GOV_POLICY | POLITICS | INDUSTRY | MACRO]
 ---
 
-Focus on: earnings/financial results, dividends, new project launches, debt/bond issuance, major corporate actions, credit rating changes.
+CATEGORY definitions (pick the one matching the MAIN topic of the news):
+- COMPANY     : mentions ASW / AssetWise / แอสเซทไวส์ directly (regardless of sub-topic)
+- COMPETITOR  : about a competitor developer (AP, LH, SPALI, SIRI, NOBLE, ORI, ANAN, LPN, QH) — NOT ASW
+- RATES       : BOT/กนง. rate decision, policy rate announcement — main topic IS interest rates
+- GOV_POLICY  : housing-specific government measures — LTV, transfer fee cuts, foreign ownership rules
+- POLITICS    : general political news that may affect economy/policy (not housing-specific)
+- INDUSTRY   : real estate market trends, supply/demand, REIC data — not about one specific company
+- MACRO      : GDP, CPI, FX, trade — general macro, not real-estate-specific
 
-If fewer than 5 articles exist, list what you can find. If none exist, reply NONE.`;
+If fewer than 5 important articles exist, list what you can find. If none, reply NONE.`;
 
 // Follow the vertexaisearch redirect to get the real publisher URL.
 // Returns null on failure (caller falls back to constructing from chunk title).
@@ -92,8 +102,13 @@ function parseItems(text) {
     const headline = get('HEADLINE');
     const date = get('DATE');
     const source = get('SOURCE');
+    // Category — normalize to uppercase + validate against allowed set.
+    // Falls back to COMPANY for ASW-direct items (the default case).
+    const rawCat = (get('CATEGORY') || '').toUpperCase().trim();
+    const ALLOWED = new Set(['COMPANY', 'COMPETITOR', 'RATES', 'GOV_POLICY', 'POLITICS', 'INDUSTRY', 'MACRO']);
+    const category = ALLOWED.has(rawCat) ? rawCat : 'COMPANY';
     if (!headline) return null;
-    return { headline, date, source };
+    return { headline, date, source, category };
   }).filter(Boolean);
 }
 
@@ -186,18 +201,18 @@ async function main() {
       toInsert.push({
         title: item.headline,
         date,
-        category: 'COMPANY',
+        category: item.category,          // Gemini-classified category
         source_url: url || '',
         source_label: item.source || 'Gemini Historical',
         title_hash: hash,
         pipeline: 'gemini-historical',
         impact: null,
-        severity: 'medium',
+        severity: item.category === 'COMPANY' ? 'high' : 'medium',
         show_pin: false,
         summary: null,
       });
       totalInserted++;
-      console.log(`  ✓ ${date}  "${item.headline.slice(0, 60)}"  → ${url.slice(0, 60) || '(no url)'}`);
+      console.log(`  ✓ ${date}  [${item.category.padEnd(11)}]  "${item.headline.slice(0, 55)}"  → ${url.slice(0, 55) || '(no url)'}`);
     }
     console.log('');
   }
