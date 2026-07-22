@@ -2314,9 +2314,12 @@ function buildMergedNewsItems() {
     pipeline: n.pipeline || null,            // 'manual' = user-added (badge + delete)
     user_note: n.user_note || null,
   }));
-  // Valid-link filter: drop items with empty/null source_url. Required so
-  // the feed never shows a non-clickable headline.
-  return b.filter(it => it.text && it.url && it.url.length > 0);
+  // Text filter only — items without URLs are still shown (historical
+  // backfill items from Gemini often have no URL because Google Search
+  // grounding didn't return one). The renderer checks `it.url` before
+  // adding the click handler, so non-URL items render as plain text
+  // instead of broken links.
+  return b.filter(it => it.text);
 }
 
 // Migrate-v8: paint the .active state on category chips based on
@@ -2438,7 +2441,10 @@ function renderUnifiedNewsItem(item) {
       <div class="news-card-tags">
         <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
       </div>
-      <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>
+      ${item.url
+        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>`
+        : `<span class="news-card-title th" style="cursor:default">${escapeHtml(item.text)}</span>`
+      }
       ${summaryHtml}
       ${noteHtml}
     </div>
