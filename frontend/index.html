@@ -2058,7 +2058,10 @@ function buildPriceChart() {
     xMaxIso = xMaxDate.toISOString();
   }
 
-  const annotations = STATE.priceShowEvents ? buildPinAnnotations(filtered) : {};
+  // Use the SAME pin source as the Dashboard chart — news_feed items
+  // that the user marked (chart_marked=TRUE), NOT the legacy digest
+  // remark pins. This keeps both charts in sync.
+  const annotations = STATE.priceShowEvents ? buildMarkAnnotations(filtered) : {};
   // IPO vertical line — only when the IPO date is inside the visible range
   // (All), so it doesn't clutter short windows (1W/1M/3M/1Y).
   if (filtered.length && filtered[0].date <= IPO_DATE && IPO_DATE <= filtered[filtered.length - 1].date) {
