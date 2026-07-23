@@ -2369,19 +2369,28 @@ function renderUnifiedNews() {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(it);
   });
+  // Build a quick lookup of daily summaries by date so we can inject the
+  // AI digest card inside each date group.
+  const summaryMap = {};
+  if (window.ALL_SUMMARIES) {
+    for (const s of window.ALL_SUMMARIES) summaryMap[s.date] = s;
+  }
   // Render one <header toggle> + <body> block per date into the container.
   const container = $('newsDayGroups');
   if (container) {
     container.innerHTML = items.length
       ? [...groups.entries()].map(([date, list]) => {
           const collapsed = !!STATE.newsCollapsed[date];
+          const summary = summaryMap[date];
+          const summaryHtml = summary ? renderInlineSummary(summary) : '';
           return `<section class="news-day">
             <button class="news-day-toggle th" type="button" data-date="${escapeHtml(date)}" aria-expanded="${!collapsed}">
               <span class="news-day-chevron">${icon('chevron-down')}</span>
               <span class="news-day-date">${escapeHtml(fmtThaiDate(date))}</span>
-              <span class="news-day-count">${list.length} ข่าว</span>
+              <span class="news-day-count">${list.length} ข่าว${summary ? ' · 🤖 มีสรุป' : ''}</span>
             </button>
             <div class="news-day-body" data-date="${escapeHtml(date)}"${collapsed ? ' hidden' : ''}>
+              ${summaryHtml}
               ${list.map(renderUnifiedNewsItem).join('')}
             </div>
           </section>`;
@@ -2391,6 +2400,27 @@ function renderUnifiedNews() {
   // Empty state when search/range/category filtered everything out.
   const empty = $('unifiedEmpty');
   if (empty) empty.hidden = items.length > 0;
+}
+
+// Render a compact AI daily-summary card that sits inside a date group,
+// above the individual news items. Shows the Gemini-generated headline,
+// tone badge, and bullet-point digest. Clicking the headline expands/collapses
+// the digest.
+function renderInlineSummary(s) {
+  const tone = (s.tone || 'neutral').toLowerCase();
+  const toneLabel = ({ bullish: '📈 บวก', bearish: '📉 ลบ', neutral: '➖ เป็นกลาง' })[tone] || tone;
+  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const bullets = String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
+  const reason = s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">💭 ${escapeHtml(s.reason)}</div>` : '';
+  return `<div class="news-day-summary" style="background:#f8f8f6;border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ${toneColor};">
+    <div class="row-between" style="margin-bottom:6px;">
+      <span class="th muted" style="font-size:11px;font-weight:600;">🤖 สรุปข่าวประจำวัน</span>
+      <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:12px;padding:3px 8px;border-radius:4px;">${escapeHtml(toneLabel)}</span>
+    </div>
+    <div class="th" style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:6px;">${escapeHtml(s.headline || '')}</div>
+    ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:#555;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+    ${reason}
+  </div>`;
 }
 
 function renderUnifiedNewsItem(item) {
@@ -2895,6 +2925,21 @@ function refreshNews() {
   try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
   try { renderDailySummary(); } catch (e) { console.warn('refreshNews: renderDailySummary failed:', e.message); }
   loadNewsStatus();
+  // Load ALL daily summaries (for inline display inside each date group).
+  // Fire-and-forget — renderUnifiedNews() will pick up window.ALL_SUMMARIES
+  // on the next render call (after data arrives).
+  loadAllSummaries();
+}
+
+// Fetch all daily summaries and re-render so they appear inline.
+async function loadAllSummaries() {
+  try {
+    const r = await fetch('/api/daily-summaries');
+    if (!r.ok) return;
+    const j = await r.json();
+    window.ALL_SUMMARIES = j.items || j || [];
+    renderUnifiedNews(); // re-render with summaries injected
+  } catch (e) { /* silent */ }
 }
 
 /* ============== File upload ============== */
