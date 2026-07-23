@@ -1646,9 +1646,12 @@ function renderDashNewsCard(item) {
                   : item.change >  0     ? 'text-pos'
                   : item.change <  0     ? 'text-neg'
                   :                        'muted';
-  return `<div class="news-item-uniform${focused}"${dataAttrs}>
+  const marked = item.chart_marked;
+  const pinIcon = isFeed ? `<span class="ni-pin ${marked ? 'on' : ''}" style="cursor:pointer;font-size:14px;color:${marked ? badge.color : '#ccc'};" title="${marked ? 'ถอน pin' : 'ปัก pin บนกราฟ'}">${marked ? '●' : '○'}</span>` : '';
+  return `<div class="news-item-uniform${focused}"${dataAttrs} style="${marked ? 'background:' + badge.color + '0d;' : ''}">
     <div class="ni-date th">${fmtThaiShort(item.date)}</div>
     <div class="ni-title-row">
+      ${pinIcon}
       <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
       <span class="ni-title th">${escapeHtml(item.text)}</span>
     </div>
@@ -1673,6 +1676,8 @@ function renderDashNews(filtered) {
 
   // Stream (B): news_feed items from /api/news (loaded into NEWS_DATA
   // by loadNewsFeed(); lazily fetched when Dashboard or Feed tab opens).
+  // Include items without URLs too — the user wants all news visible in
+  // the sidebar, not just linkable ones.
   const feedItems = (window.NEWS_DATA || []).map(n => ({
     source: 'feed',
     date: (n.date || '').slice(0, 10),
@@ -1680,8 +1685,9 @@ function renderDashNews(filtered) {
     text: n.title || '',
     url: n.source_url,
     id: n.id,
-    impact_level: n.impact_level || null,    // migrate-v9 — optional HIGH/MEDIUM/LOW
-  })).filter(it => it.text && (it.source === 'remark' || (it.url && it.url.length > 0)));
+    chart_marked: !!n.chart_marked,
+    impact_level: n.impact_level || null,
+  })).filter(it => it.text);
 
   const merged = [...remarkItems, ...feedItems];
 
@@ -1706,16 +1712,29 @@ function renderDashNews(filtered) {
   // label + summary + user_note live in the News & Factors view, NOT here.
   list.innerHTML = visible.map(renderDashNewsCard).join('');
 
-  // Click handler — one delegated handler for both streams.
-  //   * data-source="remark" → focus chart on that date.
-  //   * data-source="feed"   → open the source_url in a new tab.
-  // (Pin-on-chart is now a single button at the ข่าวล่าสุด header → picker,
-  //  not a per-card button, so the sidebar stays scannable.)
+  // Click handler — clicking a feed item toggles its chart pin (instead of
+  // opening the URL). This keeps the sidebar synced with the chart pins.
+  // Clicking a remark item still focuses the chart on that date.
   list.querySelectorAll('.news-item-uniform').forEach(el => {
-    el.addEventListener('click', () => {
-      if (el.dataset.source === 'feed') {
+    el.addEventListener('click', async () => {
+      if (el.dataset.source === 'feed' && el.dataset.id) {
+        // Toggle chart_marked via API
+        const id = parseInt(el.dataset.id, 10);
         const item = (window.NEWS_DATA || []).find(n => String(n.id) === el.dataset.id);
-        if (item && item.source_url) window.open(item.source_url, '_blank', 'noopener,noreferrer');
+        const newMarked = item ? !item.chart_marked : true;
+        try {
+          const r = await fetch(`/api/news/${id}/mark`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ marked: newMarked }),
+          });
+          if (r.ok) {
+            if (item) item.chart_marked = newMarked;
+            // Re-render chart + sidebar
+            buildDashChart(filterByRange(DATA, STATE.range));
+            renderDashNews(filterByRange(DATA, STATE.range));
+          }
+        } catch {}
         return;
       }
       STATE.focusedDate = el.dataset.date;
