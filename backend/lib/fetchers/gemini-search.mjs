@@ -439,7 +439,7 @@ function parseAIResult(text, pipeline, grounding) {
       ? resolveGroundedUrl(statedUrl, { start, end }, grounding, trustedHosts)
       : statedUrl;
     return {
-      date: new Date().toISOString().slice(0, 10),
+      date: todayISO(),                             // ICT date (UTC+7) — was UTC, causing off-by-one for evening items
       pipeline,
       category,                                  // taxonomy-v2: COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO
       headline:  get('HEADLINE'),
@@ -670,7 +670,7 @@ async function runMorningBrief(sinceDate) {
   const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
   const reason = reasonMatch ? reasonMatch[1].trim() : '';
 
-  const date = new Date().toISOString().slice(0, 10);
+  const date = todayISO();                          // ICT date — was UTC
   await db.updateMorningBrief(date, { lastWeek, thisWeek, tone, reason });
   console.log(`[gemini-morning-brief] ${date} tone=${tone} reason="${reason}"`);
   return { ok: true, date, tone, lastWeek, thisWeek, reason };

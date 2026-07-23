@@ -180,7 +180,8 @@ function parseItem(itemXml, q) {
 
   return {
     title,
-    date: d.toISOString().slice(0, 10),
+    // Convert pubDate to ICT (UTC+7) — see rss-property.mjs for rationale.
+    date: new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10),
     category,                        // taxonomy-v2 key
     source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',

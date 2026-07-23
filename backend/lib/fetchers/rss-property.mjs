@@ -266,7 +266,9 @@ function parseItem(itemXml, query) {
 
   return {
     title: headline,
-    date: date.toISOString().slice(0, 10),
+    // Convert pubDate to ICT (UTC+7) before slicing — without this, items
+    // published between 00:00-07:00 ICT get the PREVIOUS day's UTC date.
+    date: new Date(date.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10),
     // Classify through the shared taxonomy so rss-property rows emit the same
     // 7 keys (COMPANY/COMPETITOR/RATES/GOV_POLICY/POLITICS/INDUSTRY/MACRO) the
     // frontend filters on — previously this wrote the legacy query hint
