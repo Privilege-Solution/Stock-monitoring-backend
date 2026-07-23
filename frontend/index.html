@@ -462,6 +462,14 @@
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
       <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
 
+      <!-- Date picker — jump to any date instantly -->
+      <div class="card mb-16" style="display:flex;align-items:center;gap:12px;padding:10px 14px;">
+        <span class="th" style="font-size:13px;font-weight:600;white-space:nowrap;">📅 เลือกวันที่</span>
+        <input type="date" id="newsDatePicker" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
+        <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 12px;">ล้างวันที่</button>
+        <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
+      </div>
+
       <!-- Daily AI summaries — separate panel, collapsible per day -->
       <div id="dailySummaryCard"></div>
 
@@ -831,6 +839,7 @@ const STATE = {
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
   newsRange: 'ALL',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  — ALL shows full history since IPO
+  newsDatePicker: null,  // YYYY-MM-DD when user picks a specific date via the calendar input
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
 };
@@ -2339,8 +2348,13 @@ function syncNewsCatPills() {
 
 function renderUnifiedNews() {
   let items = buildMergedNewsItems();
-  // Range filter (uses STATE.newsRange — matches toolbar pills).
-  items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
+  // Date picker filter — when a specific date is selected, show ONLY that day.
+  if (STATE.newsDatePicker) {
+    items = items.filter(it => it.date === STATE.newsDatePicker);
+  } else {
+    // Range filter (uses STATE.newsRange — matches toolbar pills).
+    items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
+  }
   // Search filter (text contains, case-insensitive, both streams).
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
@@ -2590,9 +2604,16 @@ async function loadAllDigests() {
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
-  const all = window.ALL_SUMMARIES || [];
+  let all = window.ALL_SUMMARIES || [];
+  // When a date is picked, show only that day's summary
+  if (STATE.newsDatePicker) {
+    all = all.filter(s => s.date === STATE.newsDatePicker);
+  }
   if (!all.length) {
-    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" —</div>';
+    const msg = STATE.newsDatePicker
+      ? '— ไม่มีสรุปข่าวสำหรับวันที่เลือก —'
+      : '— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" —';
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">' + escapeHtml(msg) + '</div>';
     return;
   }
   // Render ALL summaries as a collapsible list. Each day is a <details>
@@ -2925,10 +2946,24 @@ function refreshNews() {
   try { renderUnifiedNews(); } catch (e) { console.warn('refreshNews: renderUnifiedNews failed:', e.message); }
   try { renderDailySummary(); } catch (e) { console.warn('refreshNews: renderDailySummary failed:', e.message); }
   loadNewsStatus();
-  // Load ALL daily summaries (for inline display inside each date group).
-  // Fire-and-forget — renderUnifiedNews() will pick up window.ALL_SUMMARIES
-  // on the next render call (after data arrives).
   loadAllSummaries();
+  updateDateInfo();
+}
+
+// Update the info text next to the date picker ("X สรุป, Y ข่าว")
+function updateDateInfo() {
+  const info = $('newsDateInfo');
+  if (!info) return;
+  if (STATE.newsDatePicker) {
+    const d = STATE.newsDatePicker;
+    const summaries = (window.ALL_SUMMARIES || []).filter(s => s.date === d);
+    const news = (window.NEWS_DATA || []).filter(n => (n.date || '').slice(0, 10) === d);
+    info.textContent = (summaries.length ? '🤖 ' + summaries.length + ' สรุป · ' : 'ไม่มีสรุป · ') + '📰 ' + news.length + ' ข่าว';
+  } else {
+    const summaries = (window.ALL_SUMMARIES || []).length;
+    const news = (window.NEWS_DATA || []).length;
+    info.textContent = 'ทั้งหมด: 🤖 ' + summaries + ' สรุป · 📰 ' + news + ' ข่าว';
+  }
 }
 
 // Fetch all daily summaries and re-render so they appear in the panel.
@@ -2942,6 +2977,7 @@ async function loadAllSummaries() {
     // were empty on first render; now that data arrived, paint them.
     renderDailySummary();
     renderUnifiedNews();
+    updateDateInfo();
   } catch (e) { /* silent */ }
 }
 
@@ -3051,10 +3087,45 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#newsRangePills .pill').forEach(b => {
     b.addEventListener('click', () => {
       STATE.newsRange = b.dataset.range;
+      STATE.newsDatePicker = null;  // clear date picker when a range pill is clicked
+      const dp = $('newsDatePicker'); if (dp) dp.value = '';
       document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x === b));
       renderUnifiedNews();
+      renderDailySummary();
+      updateDateInfo();
     });
   });
+
+  // Date picker — jump to a specific date. Filters BOTH the summary panel
+  // and the news feed to only that day. Overrides range pills.
+  const dp = $('newsDatePicker');
+  if (dp) {
+    // Set min/max based on available data range
+    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
+    if (dates.length) { dp.min = dates[0]; dp.max = dates[dates.length - 1]; }
+    dp.addEventListener('change', () => {
+      STATE.newsDatePicker = dp.value || null;
+      // Deactivate range pills when a date is picked
+      if (dp.value) {
+        document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
+      }
+      renderUnifiedNews();
+      renderDailySummary();
+      updateDateInfo();
+    });
+  }
+  const dpClear = $('newsDateClear');
+  if (dpClear) {
+    dpClear.addEventListener('click', () => {
+      STATE.newsDatePicker = null;
+      if (dp) dp.value = '';
+      // Restore ALL range pill
+      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x.dataset.range === STATE.newsRange));
+      renderUnifiedNews();
+      renderDailySummary();
+      updateDateInfo();
+    });
+  }
   // Manual add-news modal (เพิ่มข่าวเอง): button opens, cancel/overlay/Esc
   // close, form submits. Category <option>s populate on first open.
   const addNewsBtn = $('addNewsBtn');
