@@ -1427,16 +1427,29 @@ function buildMarkAnnotations(filtered) {
     return best;
   };
 
-  let i = 0;
+  // Group marked items by target date so we create ONE pin per date
+  // (not one pin per item — overlapping pins are unreadable). If there
+  // are multiple items on the same date, the pin is slightly larger
+  // and uses the highest-priority category's colour.
+  const byTargetDay = new Map();
   for (const n of marked) {
     const d = (n.date || '').slice(0, 10);
     if (!d) continue;
     const ms = new Date(d + 'T00:00:00').getTime();
-    if (!(ms >= firstMs && ms <= lastMs)) continue;   // outside the visible range
+    if (!(ms >= firstMs && ms <= lastMs)) continue;
     const day = byDate.has(d) ? d : nearestDay(ms);
+    if (!byTargetDay.has(day)) byTargetDay.set(day, []);
+    byTargetDay.get(day).push(n);
+  }
+
+  const CAT_PRIORITY = { COMPANY: 0, COMPETITOR: 1, RATES: 2, GOV_POLICY: 3, INDUSTRY: 4, MACRO: 5, POLITICS: 6 };
+  let i = 0;
+  for (const [day, items] of byTargetDay) {
     const row = byDate.get(day);
     if (!row || row.close == null) continue;
-    const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+    // Pick the highest-priority category for the pin colour
+    items.sort((a, b) => (CAT_PRIORITY[a.category] ?? 9) - (CAT_PRIORITY[b.category] ?? 9));
+    const badge = REMARK_BADGE[items[0].category] || REMARK_BADGE.MACRO;
     ann['usrMark_' + (i++)] = {
       type: 'point',
       xValue: day + 'T00:00:00',
@@ -1444,7 +1457,7 @@ function buildMarkAnnotations(filtered) {
       backgroundColor: badge.color,
       borderColor: '#ffffff',
       borderWidth: 2,
-      radius: 6,
+      radius: items.length > 1 ? 8 : 6,  // slightly bigger when multiple items
     };
   }
   return ann;
