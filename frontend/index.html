@@ -462,54 +462,47 @@
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
       <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
 
-      <!-- Date picker — jump to any date instantly -->
-      <div class="card mb-16" style="display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap;">
-        <span class="th" style="font-size:13px;font-weight:600;white-space:nowrap;">เลือกวันที่</span>
-        <input type="date" id="newsDateFrom" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
-        <span class="th muted" style="font-size:12px;">ถึง</span>
-        <input type="date" id="newsDateTo" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
-        <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 12px;">วันนี้</button>
-        <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
+      <!-- Unified toolbar: date range + search + filters all in one card -->
+      <div class="card mb-16" style="padding:12px 14px;">
+        <!-- Row 1: Date range -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <span class="th" style="font-size:12px;font-weight:600;color:#888780;white-space:nowrap;">วันที่</span>
+          <input type="date" id="newsDateFrom" class="input th" style="font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid #e0e0e0;width:140px;" />
+          <span class="th muted" style="font-size:11px;">—</span>
+          <input type="date" id="newsDateTo" class="input th" style="font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid #e0e0e0;width:140px;" />
+          <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 10px;">วันนี้</button>
+          <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
+        </div>
+        <!-- Divider -->
+        <div style="border-top:1px solid #f0f0f0;margin:0 -14px 10px;"></div>
+        <!-- Row 2: Search + range pills + add button -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <input type="text" id="newsSearch" class="input th" style="font-size:13px;padding:5px 10px;border-radius:6px;border:1px solid #e0e0e0;flex:1;min-width:160px;" placeholder="ค้นหาข่าว..." />
+          <div class="pill-row" id="newsRangePills" style="display:flex;gap:4px;">
+            <button class="pill th" data-range="7D" style="font-size:12px;padding:4px 10px;">7d</button>
+            <button class="pill th" data-range="30D" style="font-size:12px;padding:4px 10px;">30d</button>
+            <button class="pill th" data-range="90D" style="font-size:12px;padding:4px 10px;">90d</button>
+            <button class="pill th active" data-range="ALL" style="font-size:12px;padding:4px 10px;">ทั้งหมด</button>
+          </div>
+          <button class="btn btn-ghost th" id="addNewsBtn" type="button" style="font-size:12px;padding:4px 10px;">+ เพิ่มข่าว</button>
+        </div>
+        <!-- Row 3: Category chips -->
+        <div class="pill-row" id="newsCatPills" style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="pill th active" data-cat="__all" style="font-size:12px;padding:4px 10px;">ทั้งหมด</button>
+          <button class="pill th" data-cat="COMPANY" style="font-size:12px;padding:4px 10px;">บริษัท</button>
+          <button class="pill th" data-cat="COMPETITOR" style="font-size:12px;padding:4px 10px;">คู่แข่ง</button>
+          <button class="pill th" data-cat="RATES" style="font-size:12px;padding:4px 10px;">ดอกเบี้ย</button>
+          <button class="pill th" data-cat="GOV_POLICY" style="font-size:12px;padding:4px 10px;">นโยบายรัฐ</button>
+          <button class="pill th" data-cat="INDUSTRY" style="font-size:12px;padding:4px 10px;">อุตสาหกรรม</button>
+          <button class="pill th" data-cat="MACRO" style="font-size:12px;padding:4px 10px;">มหภาค</button>
+          <button class="pill th" data-cat="POLITICS" style="font-size:12px;padding:4px 10px;">การเมือง</button>
+        </div>
       </div>
 
-      <!-- Daily AI summaries — separate panel, collapsible per day -->
+      <!-- Daily AI summaries -->
       <div id="dailySummaryCard"></div>
 
-      <!-- News feed — items only, no summaries mixed in -->
-      <h3 class="th" style="font-size:13px;margin:16px 0 8px;color:#888780;">ข่าว</h3>
-
-      <!-- Feed toolbar: search + day-count range pills + refresh -->
-      <div class="card mb-16">
-        <div class="feed-toolbar">
-          <label class="news-search-wrap">
-            <span id="newsSearchIcon" class="news-search-icon" aria-hidden="true"></span>
-            <input type="text" id="newsSearch" class="input th news-search-input" placeholder="ค้นหาข่าว remark และ feed" />
-          </label>
-          <div class="pill-row" id="newsRangePills">
-            <button class="pill th" data-range="7D">7 วัน</button>
-            <button class="pill th" data-range="10D">10 วัน</button>
-            <button class="pill th" data-range="30D">30 วัน</button>
-            <button class="pill th" data-range="90D">90 วัน</button>
-            <button class="pill th active" data-range="ALL">ทั้งหมด</button>
-          </div>
-          <button class="add-news-btn th" id="addNewsBtn" type="button" title="เพิ่มข่าวที่คุณพบเอง"><span id="addNewsBtnIcon"></span> เพิ่มข่าว</button>
-        </div>
-        <div class="feed-cat-row">
-          <div class="pill-row feed-cat-pills" id="newsCatPills">
-            <button class="pill th active" data-cat="__all">ทั้งหมด</button>
-            <button class="pill th" data-cat="COMPANY">บริษัท</button>
-            <button class="pill th" data-cat="COMPETITOR">คู่แข่ง</button>
-            <button class="pill th" data-cat="RATES">อัตราดอกเบี้ย</button>
-            <button class="pill th" data-cat="GOV_POLICY">นโยบายรัฐ</button>
-            <button class="pill th" data-cat="POLITICS">การเมือง</button>
-            <button class="pill th" data-cat="INDUSTRY">อุตสาหกรรมอสังหาฯ</button>
-            <button class="pill th" data-cat="MACRO">มหภาค</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Date-grouped feed: rendered by renderUnifiedNews() into groups of
-           <header toggle> + <body of cards>, newest date first. -->
+      <!-- News feed -->
       <div id="newsDayGroups" class="news-day-groups"></div>
 
       <div id="unifiedEmpty" class="empty-state th" hidden>— ไม่พบข่าวที่ตรงกับเงื่อนไขที่เลือก —</div>
