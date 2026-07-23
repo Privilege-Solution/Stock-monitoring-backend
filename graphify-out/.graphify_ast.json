@@ -1,0 +1,6233 @@
+{
+  "nodes": [
+    {
+      "id": "backend_db",
+      "label": "db.js",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_pool",
+      "label": "{ Pool }",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_createhash",
+      "label": "{ createHash }",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_sha1",
+      "label": "sha1()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L19",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_parsepgurl",
+      "label": "parsePgUrl()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_resolvesslconfig",
+      "label": "resolveSslConfig()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L43",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_getpool",
+      "label": "getPool()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L58",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_opendb",
+      "label": "openDb()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L81",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_closedb",
+      "label": "closeDb()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L88",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_ensureschema",
+      "label": "ensureSchema()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L98",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_remark_bucket_helpers",
+      "label": "REMARK_BUCKET_HELPERS",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L207",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_writerows",
+      "label": "writeRows()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L209",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_normalizeremarks",
+      "label": "normalizeRemarks()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L275",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readallrows",
+      "label": "readAllRows()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L290",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_metadata",
+      "label": "metadata()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L318",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_logfetchstart",
+      "label": "logFetchStart()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L338",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_logfetchfinish",
+      "label": "logFetchFinish()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L346",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_getstoreddates",
+      "label": "getStoredDates()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L356",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_updateremarks",
+      "label": "updateRemarks()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L369",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_updatesingleremark",
+      "label": "updateSingleRemark()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L378",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_appendremarkpin",
+      "label": "appendRemarkPin()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L396",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_setdailyremark",
+      "label": "setDailyRemark()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L410",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_updatemorningbrief",
+      "label": "updateMorningBrief()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L428",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readmorningbrief",
+      "label": "readMorningBrief()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L443",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_upsertdailysummary",
+      "label": "upsertDailySummary()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L463",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readdailysummary",
+      "label": "readDailySummary()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L483",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readalldailysummaries",
+      "label": "readAllDailySummaries()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L499",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readnewsfeedfordate",
+      "label": "readNewsFeedForDate()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L510",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_writepeers",
+      "label": "writePeers()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L526",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readlatestpeers",
+      "label": "readLatestPeers()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L564",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_priorityforitem",
+      "label": "priorityForItem()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L584",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_writenewsitems",
+      "label": "writeNewsItems()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L602",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readnewsfeed",
+      "label": "readNewsFeed()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L649",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_setnewsnote",
+      "label": "setNewsNote()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L671",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_setnewsmark",
+      "label": "setNewsMark()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L686",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_insertmanualnews",
+      "label": "insertManualNews()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L706",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_deletenewsitem",
+      "label": "deleteNewsItem()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L730",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_db_readnewsstatus",
+      "label": "readNewsStatus()",
+      "file_type": "code",
+      "source_file": "backend/db.js",
+      "source_location": "L758",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary",
+      "label": "exec-summary.js",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_text",
+      "label": "TEXT",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_classifyeventtype",
+      "label": "classifyEventType()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L44",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_rowremarks",
+      "label": "rowRemarks()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L57",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_rowhasremark",
+      "label": "rowHasRemark()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L67",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_joinedremark",
+      "label": "joinedRemark()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L70",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_maptype",
+      "label": "mapType()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L74",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_exec_summary_generate",
+      "label": "generate()",
+      "file_type": "code",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L83",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "label": "gemini-search.parse.test.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search",
+      "label": "gemini-search.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_sha1",
+      "label": "sha1()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L28",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_todaythai",
+      "label": "todayThai()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L32",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_todayiso",
+      "label": "todayISO()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L40",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_category_options",
+      "label": "CATEGORY_OPTIONS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L57",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_prompt_company",
+      "label": "PROMPT_COMPANY()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L59",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_prompt_sector",
+      "label": "PROMPT_SECTOR()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L98",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_prompt_macro",
+      "label": "PROMPT_MACRO()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L152",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_prompt_brief",
+      "label": "PROMPT_BRIEF()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L206",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_prompt_daily_summary",
+      "label": "PROMPT_DAILY_SUMMARY()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L228",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_allowed_impact_levels",
+      "label": "ALLOWED_IMPACT_LEVELS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L281",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_severityfromimpactlevel",
+      "label": "severityFromImpactLevel()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L287",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_parseairesult",
+      "label": "parseAIResult()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L293",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_geminisearch",
+      "label": "geminiSearch()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L344",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "label": "normalizeForNewsFeed()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L375",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_extractsection",
+      "label": "extractSection()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L403",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_parsetone",
+      "label": "parseTone()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L416",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_normalizebullets",
+      "label": "normalizeBullets()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L435",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_runcompany",
+      "label": "runCompany()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L452",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_runsector",
+      "label": "runSector()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L482",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_runmacro",
+      "label": "runMacro()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L493",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "label": "runMorningBrief()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L512",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "label": "runDailySummary()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L538",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_gemini_search_run",
+      "label": "run()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L592",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index",
+      "label": "index.js",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_db",
+      "label": "db",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_fetchall_mockfetch",
+      "label": "{ fetchAll: mockFetch }",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_computepropbasket_joinbydate_peer_tickers_peer_names",
+      "label": "{ computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES }",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_loadyahoo",
+      "label": "loadYahoo()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_loadgemini",
+      "label": "loadGemini()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_loadrss",
+      "label": "loadRss()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L24",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_loadrssextended",
+      "label": "loadRssExtended()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_runfetch",
+      "label": "runFetch()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L60",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_index_runintraday",
+      "label": "runIntraday()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L112",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_mock",
+      "label": "mock.js",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_mock_peer_tickers",
+      "label": "{ PEER_TICKERS }",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_mock_hash01",
+      "label": "hash01()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_mock_makeseries",
+      "label": "makeSeries()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_mock_fetchall",
+      "label": "fetchAll()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L39",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended",
+      "label": "rss-extended.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_sha1",
+      "label": "sha1()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L43",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_queries",
+      "label": "QUERIES",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L56",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_broker_tokens",
+      "label": "BROKER_TOKENS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L98",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_filing_tokens",
+      "label": "FILING_TOKENS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L109",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_headlinementionsbroker",
+      "label": "headlineMentionsBroker()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L123",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_headlinementionsfiling",
+      "label": "headlineMentionsFiling()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L129",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_cleantitle",
+      "label": "cleanTitle()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L135",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_parseitem",
+      "label": "parseItem()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L145",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_fetchquery",
+      "label": "fetchQuery()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L193",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_extended_run",
+      "label": "run()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L215",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property",
+      "label": "rss-property.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_queries",
+      "label": "QUERIES",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L30",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_sha1",
+      "label": "sha1()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L42",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_drop_keywords",
+      "label": "DROP_KEYWORDS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L58",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_high_keywords",
+      "label": "HIGH_KEYWORDS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L83",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_scoreitem",
+      "label": "scoreItem()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L135",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_cleantitle",
+      "label": "cleanTitle()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L152",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_parseitem",
+      "label": "parseItem()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L164",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_fetchquery",
+      "label": "fetchQuery()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L216",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_rss_property_run",
+      "label": "run()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L238",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo",
+      "label": "yahoo.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_require",
+      "label": "require",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_peer_tickers",
+      "label": "{ PEER_TICKERS }",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_symbols",
+      "label": "SYMBOLS",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_withretry",
+      "label": "withRetry()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L21",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_fetchraw",
+      "label": "fetchRaw()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L47",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_fetchone",
+      "label": "fetchOne()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L95",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_fetchall",
+      "label": "fetchAll()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L100",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_fetchers_yahoo_fetchintraday",
+      "label": "fetchIntraday()",
+      "file_type": "code",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L149",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy",
+      "label": "news-taxonomy.mjs",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_taxonomy_categories",
+      "label": "TAXONOMY_CATEGORIES",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L20",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_allowed_categories",
+      "label": "ALLOWED_CATEGORIES",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_asw_tokens",
+      "label": "ASW_TOKENS",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L26",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_competitor_tokens",
+      "label": "COMPETITOR_TOKENS",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_headlinementionsasw",
+      "label": "headlineMentionsAsw()",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L51",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_headlinementionscompetitor",
+      "label": "headlineMentionsCompetitor()",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L57",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_classifycategory",
+      "label": "classifyCategory()",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L64",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "label": "impactLevelFromSeverity()",
+      "file_type": "code",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L100",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_prop_basket",
+      "label": "prop-basket.js",
+      "file_type": "code",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_prop_basket_peer_tickers",
+      "label": "PEER_TICKERS",
+      "file_type": "code",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L25",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_prop_basket_peer_names",
+      "label": "PEER_NAMES",
+      "file_type": "code",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L34",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_prop_basket_computepropbasket",
+      "label": "computePropBasket()",
+      "file_type": "code",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L57",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_prop_basket_joinbydate",
+      "label": "joinByDate()",
+      "file_type": "code",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L113",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_remark_bucket",
+      "label": "remark-bucket.js",
+      "file_type": "code",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_remark_bucket_rules",
+      "label": "RULES",
+      "file_type": "code",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L18",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_remark_bucket_classifybucket",
+      "label": "classifyBucket()",
+      "file_type": "code",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L36",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_remark_bucket_classifysingle",
+      "label": "classifySingle()",
+      "file_type": "code",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L51",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days",
+      "label": "thai-trading-days.js",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_holidays",
+      "label": "HOLIDAYS",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_isweekend",
+      "label": "isWeekend()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_isholiday",
+      "label": "isHoliday()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L22",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_istradingday",
+      "label": "isTradingDay()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L26",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_expectedtradingdays",
+      "label": "expectedTradingDays()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L30",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_classify",
+      "label": "classify()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L40",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_ismarketopen",
+      "label": "isMarketOpen()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L48",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_lib_thai_trading_days_diffdays",
+      "label": "diffDays()",
+      "file_type": "code",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L61",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v10",
+      "label": "migrate-v10.js",
+      "file_type": "code",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v10_pool",
+      "label": "{ Pool }",
+      "file_type": "code",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L41",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v10_parsepgurl",
+      "label": "parsePgUrl()",
+      "file_type": "code",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L50",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v10_competitor_re",
+      "label": "COMPETITOR_RE",
+      "file_type": "code",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L66",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v10_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L73",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v9",
+      "label": "migrate-v9.js",
+      "file_type": "code",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v9_pool",
+      "label": "{ Pool }",
+      "file_type": "code",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L54",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v9_parsepgurl",
+      "label": "parsePgUrl()",
+      "file_type": "code",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L63",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_migrate_v9_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L76",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server",
+      "label": "server.js",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_fs",
+      "label": "fs",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_path",
+      "label": "path",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_express",
+      "label": "express",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_cors",
+      "label": "cors",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_cron",
+      "label": "cron",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L13",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_db",
+      "label": "db",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_runfetch_runintraday",
+      "label": "{ runFetch, runIntraday }",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_expectedtradingdays_classify_ismarketopen",
+      "label": "{ expectedTradingDays, classify, isMarketOpen }",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_loadtaxonomy",
+      "label": "loadTaxonomy()",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_app",
+      "label": "app",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L29",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_frontend_dir",
+      "label": "FRONTEND_DIR",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_repo_root",
+      "label": "REPO_ROOT",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L36",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_intraday",
+      "label": "INTRADAY",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L46",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_seedfromsampledata",
+      "label": "seedFromSampleData()",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L63",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_yahoodailyguard",
+      "label": "_yahooDailyGuard()",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L630",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_rundailyyahoo",
+      "label": "_runDailyYahoo()",
+      "file_type": "code",
+      "source_file": "backend/server.js",
+      "source_location": "L639",
+      "_origin": "ast"
+    },
+    {
+      "id": "backend_server_rationale_591",
+      "label": "IMPORTANT: this no longer writes to `daily.close`. We only update the",
+      "file_type": "rationale",
+      "source_file": "backend/server.js",
+      "source_location": "L591",
+      "_origin": "ast"
+    },
+    {
+      "id": "frontend_postcss_config",
+      "label": "postcss.config.js",
+      "file_type": "code",
+      "source_file": "frontend/postcss.config.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "frontend_tailwind_config",
+      "label": "tailwind.config.js",
+      "file_type": "code",
+      "source_file": "frontend/tailwind.config.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "package",
+      "label": "package.json",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_name",
+      "label": "name",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L2",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_private",
+      "label": "private",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_version",
+      "label": "version",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_engines",
+      "label": "engines",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_engines_node",
+      "label": "node",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_scripts",
+      "label": "scripts",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_scripts_build_css",
+      "label": "build:css",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_scripts_watch_css",
+      "label": "watch:css",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_scripts_start",
+      "label": "start",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_scripts_dev",
+      "label": "dev",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies",
+      "label": "dependencies",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies_cors",
+      "label": "cors",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "cors",
+      "label": "cors",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies_dotenv",
+      "label": "dotenv",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "dotenv",
+      "label": "dotenv",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies_express",
+      "label": "express",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "express",
+      "label": "express",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies_node_cron",
+      "label": "node-cron",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "_origin": "ast"
+    },
+    {
+      "id": "node_cron",
+      "label": "node-cron",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_dependencies_pg",
+      "label": "pg",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "_origin": "ast"
+    },
+    {
+      "id": "pg",
+      "label": "pg",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_devdependencies",
+      "label": "devDependencies",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L21",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_devdependencies_autoprefixer",
+      "label": "autoprefixer",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L22",
+      "_origin": "ast"
+    },
+    {
+      "id": "autoprefixer",
+      "label": "autoprefixer",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L22",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_devdependencies_postcss",
+      "label": "postcss",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "postcss",
+      "label": "postcss",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "package_devdependencies_tailwindcss",
+      "label": "tailwindcss",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L24",
+      "_origin": "ast"
+    },
+    {
+      "id": "tailwindcss",
+      "label": "tailwindcss",
+      "file_type": "concept",
+      "source_file": "package.json",
+      "source_location": "L24",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway",
+      "label": "railway.json",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_schema",
+      "label": "$schema",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L2",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_build",
+      "label": "build",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_build_builder",
+      "label": "builder",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_build_dockerfilepath",
+      "label": "dockerfilePath",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L5",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy",
+      "label": "deploy",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy_startcommand",
+      "label": "startCommand",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy_healthcheckpath",
+      "label": "healthcheckPath",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy_healthchecktimeout",
+      "label": "healthcheckTimeout",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy_restartpolicytype",
+      "label": "restartPolicyType",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "railway_deploy_restartpolicymaxretries",
+      "label": "restartPolicyMaxRetries",
+      "file_type": "code",
+      "source_file": "railway.json",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "sample_data",
+      "label": "sample_data.js",
+      "file_type": "code",
+      "source_file": "sample_data.js",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "scripts_export_supabase",
+      "label": "export-supabase.sh",
+      "file_type": "code",
+      "source_file": "scripts/export-supabase.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast"
+    },
+    {
+      "id": "scripts_export_supabase_sh__entry",
+      "label": "export-supabase.sh script",
+      "file_type": "code",
+      "source_file": "scripts/export-supabase.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast"
+    },
+    {
+      "id": "scripts_import_railway",
+      "label": "import-railway.sh",
+      "file_type": "code",
+      "source_file": "scripts/import-railway.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast"
+    },
+    {
+      "id": "scripts_import_railway_sh__entry",
+      "label": "import-railway.sh script",
+      "file_type": "code",
+      "source_file": "scripts/import-railway.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "backend_db",
+      "target": "ref_pg",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_pool",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "ref_node_crypto",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_createhash",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_sha1",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_parsepgurl",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_resolvesslconfig",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_getpool",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L58",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_opendb",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L81",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_closedb",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L88",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_ensureschema",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L98",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_lib_remark_bucket",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L207",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_remark_bucket_helpers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L207",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writerows",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L209",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_normalizeremarks",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L275",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readallrows",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L290",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_metadata",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L318",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_logfetchstart",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L338",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_logfetchfinish",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L346",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_getstoreddates",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L356",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updateremarks",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L369",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updatesingleremark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L378",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_appendremarkpin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L396",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setdailyremark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L410",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updatemorningbrief",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L428",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readmorningbrief",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L443",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_upsertdailysummary",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L463",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readdailysummary",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L483",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readalldailysummaries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L499",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsfeedfordate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L510",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writepeers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L526",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readlatestpeers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L564",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_priorityforitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L584",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writenewsitems",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L602",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsfeed",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L649",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setnewsnote",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L671",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setnewsmark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L686",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_insertmanualnews",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L706",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_deletenewsitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L730",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsstatus",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L758",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_getpool",
+      "target": "backend_db_parsepgurl",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L63",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_getpool",
+      "target": "backend_db_resolvesslconfig",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_opendb",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L85",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_ensureschema",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L99",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_writerows",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L211",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_writerows",
+      "target": "backend_db_normalizeremarks",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L235",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readallrows",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L291",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_metadata",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L319",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_logfetchstart",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L339",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_logfetchfinish",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L347",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_getstoreddates",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L357",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_updateremarks",
+      "target": "backend_db_updatesingleremark",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L372",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_updatesingleremark",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L379",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_appendremarkpin",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L397",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_setdailyremark",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L415",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_updatemorningbrief",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L429",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readmorningbrief",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L444",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_upsertdailysummary",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L466",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readdailysummary",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L484",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readalldailysummaries",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L500",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readnewsfeedfordate",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L511",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_writepeers",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L527",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readlatestpeers",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L565",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_writenewsitems",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L604",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_writenewsitems",
+      "target": "backend_db_priorityforitem",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L629",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readnewsfeed",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L650",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_setnewsnote",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L676",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_setnewsmark",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L690",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_insertmanualnews",
+      "target": "backend_db_writenewsitems",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L710",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_insertmanualnews",
+      "target": "backend_db_sha1",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L716",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_deletenewsitem",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L733",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_readnewsstatus",
+      "target": "backend_db_getpool",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/db.js",
+      "source_location": "L759",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_opendb",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L796",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_ensureschema",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L797",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_closedb",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L798",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writerows",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L800",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readallrows",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L801",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_metadata",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L802",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_logfetchstart",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L803",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_logfetchfinish",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L804",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_getstoreddates",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L805",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updateremarks",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L806",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updatesingleremark",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L807",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_appendremarkpin",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L808",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_updatemorningbrief",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L809",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readmorningbrief",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L810",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_upsertdailysummary",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L811",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readdailysummary",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L812",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readalldailysummaries",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L813",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsfeedfordate",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L814",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setdailyremark",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L815",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writepeers",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L817",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readlatestpeers",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L818",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_priorityforitem",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L820",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_writenewsitems",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L821",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsfeed",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L822",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_readnewsstatus",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L823",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setnewsnote",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L824",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_setnewsmark",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L825",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_insertmanualnews",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L826",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db",
+      "target": "backend_db_deletenewsitem",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/db.js",
+      "source_location": "L827",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_text",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_classifyeventtype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_rowremarks",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_rowhasremark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L67",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_joinedremark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L70",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_maptype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_generate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L83",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_rowhasremark",
+      "target": "backend_lib_exec_summary_rowremarks",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L68",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_joinedremark",
+      "target": "backend_lib_exec_summary_rowremarks",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L71",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_generate",
+      "target": "backend_lib_exec_summary_rowhasremark",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L106",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_generate",
+      "target": "backend_lib_exec_summary_joinedremark",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L116",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_generate",
+      "target": "backend_lib_exec_summary_rowremarks",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L134",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_generate",
+      "target": "backend_lib_exec_summary_classifyeventtype",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L135",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary_generate",
+      "target": "backend_lib_exec_summary_maptype",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L140",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_generate",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_rowremarks",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_rowhasremark",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_joinedremark",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_exec_summary",
+      "target": "backend_lib_exec_summary_classifyeventtype",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/exec-summary.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "ref_node_test",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "ref_node_assert_strict",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "backend_lib_fetchers_gemini_search",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "backend_lib_fetchers_gemini_search_parsetone",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "backend_lib_fetchers_gemini_search_normalizebullets",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_tests_gemini_search_parse_test",
+      "target": "backend_lib_fetchers_gemini_search_extractsection",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/__tests__/gemini-search.parse.test.mjs",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "ref_crypto",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_db",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_news_taxonomy",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_news_taxonomy_taxonomy_categories",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_news_taxonomy_allowed_categories",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_sha1",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_todaythai",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L32",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_todayiso",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_category_options",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_prompt_company",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L59",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_prompt_sector",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_prompt_macro",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L152",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_prompt_brief",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L206",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_prompt_daily_summary",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L228",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_allowed_impact_levels",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L281",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_severityfromimpactlevel",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L287",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_parseairesult",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L293",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L344",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L375",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_extractsection",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L403",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_parsetone",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L416",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_normalizebullets",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L435",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_runcompany",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L452",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_runsector",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L482",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_runmacro",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L493",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L512",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L538",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_run",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L592",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_parseairesult",
+      "target": "backend_lib_fetchers_gemini_search_severityfromimpactlevel",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L312",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "target": "backend_lib_fetchers_gemini_search_sha1",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L389",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_todaythai",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L453",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L454",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_prompt_company",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L454",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_parseairesult",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L455",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_todayiso",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L464",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runcompany",
+      "target": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L468",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runsector",
+      "target": "backend_lib_fetchers_gemini_search_todaythai",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L483",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runsector",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L484",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runsector",
+      "target": "backend_lib_fetchers_gemini_search_prompt_sector",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L484",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runsector",
+      "target": "backend_lib_fetchers_gemini_search_parseairesult",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L485",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runsector",
+      "target": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L486",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_todaythai",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L494",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L495",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_prompt_macro",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L495",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_parseairesult",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L496",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_normalizefornewsfeed",
+      "relation": "indirect_call",
+      "context": "argument",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L497",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmacro",
+      "target": "backend_lib_fetchers_gemini_search_todayiso",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L504",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L513",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "target": "backend_lib_fetchers_gemini_search_prompt_brief",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L513",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "target": "backend_lib_fetchers_gemini_search_extractsection",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L520",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "target": "backend_lib_fetchers_gemini_search_parsetone",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L524",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_todayiso",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L539",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_geminisearch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L550",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_prompt_daily_summary",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L550",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_normalizebullets",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L559",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_extractsection",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L559",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "target": "backend_lib_fetchers_gemini_search_parsetone",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L574",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_run",
+      "target": "backend_lib_fetchers_gemini_search_runcompany",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L597",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_run",
+      "target": "backend_lib_fetchers_gemini_search_runsector",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L598",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_run",
+      "target": "backend_lib_fetchers_gemini_search_runmacro",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L599",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_run",
+      "target": "backend_lib_fetchers_gemini_search_runmorningbrief",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L600",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_run",
+      "target": "backend_lib_fetchers_gemini_search_rundailysummary",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L601",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search",
+      "target": "backend_lib_fetchers_gemini_search_run",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L608",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_db",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_db",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_mock",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_mock_fetchall",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_fetchall_mockfetch",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_prop_basket",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_prop_basket_computepropbasket",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_prop_basket_joinbydate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_prop_basket_peer_tickers",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_prop_basket_peer_names",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_computepropbasket_joinbydate_peer_tickers_peer_names",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_loadyahoo",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_loadgemini",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_loadrss",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_loadrssextended",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_runfetch",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_runintraday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L112",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_loadyahoo",
+      "target": "backend_lib_fetchers_yahoo",
+      "relation": "imports_from",
+      "context": "import",
+      "deferred": true,
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_loadgemini",
+      "target": "backend_lib_fetchers_gemini_search",
+      "relation": "imports_from",
+      "context": "import",
+      "deferred": true,
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_loadrss",
+      "target": "backend_lib_fetchers_rss_property",
+      "relation": "imports_from",
+      "context": "import",
+      "deferred": true,
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_loadrssextended",
+      "target": "backend_lib_fetchers_rss_extended",
+      "relation": "imports_from",
+      "context": "import",
+      "deferred": true,
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_fetchers_index_loadgemini",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L62",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_fetchers_index_loadrss",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L67",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_fetchers_index_loadrssextended",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L72",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_fetchers_index_loadyahoo",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L89",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runintraday",
+      "target": "backend_lib_fetchers_index_loadyahoo",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L113",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_runfetch",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L136",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index",
+      "target": "backend_lib_fetchers_index_runintraday",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L136",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_prop_basket",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_prop_basket_peer_tickers",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_fetchers_mock_peer_tickers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_fetchers_mock_hash01",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_fetchers_mock_makeseries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_fetchers_mock_fetchall",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock_makeseries",
+      "target": "backend_lib_fetchers_mock_hash01",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock_fetchall",
+      "target": "backend_lib_fetchers_mock_makeseries",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock_fetchall",
+      "target": "backend_lib_fetchers_mock_hash01",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_mock",
+      "target": "backend_lib_fetchers_mock_fetchall",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/mock.js",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "ref_node_crypto",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_db",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_news_taxonomy",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_news_taxonomy_classifycategory",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_news_taxonomy_headlinementionsasw",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_sha1",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_queries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L56",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_broker_tokens",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L98",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_filing_tokens",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L109",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_headlinementionsbroker",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L123",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_headlinementionsfiling",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L129",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_cleantitle",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L135",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_parseitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L145",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_fetchquery",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L193",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_run",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L215",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_fetchers_rss_extended_cleantitle",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L147",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_fetchers_rss_extended_headlinementionsbroker",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L169",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_fetchers_rss_extended_sha1",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L183",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_fetchquery",
+      "target": "backend_lib_fetchers_rss_extended_parseitem",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L206",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_run",
+      "target": "backend_lib_fetchers_rss_extended_fetchquery",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L219",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended",
+      "target": "backend_lib_fetchers_rss_extended_run",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L251",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_db",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_news_taxonomy",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_news_taxonomy_classifycategory",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_queries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_sha1",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L42",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_drop_keywords",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L58",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_high_keywords",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L83",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_scoreitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L135",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_cleantitle",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L152",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_parseitem",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_fetchquery",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L216",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_run",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L238",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_parseitem",
+      "target": "backend_lib_fetchers_rss_property_cleantitle",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L166",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_parseitem",
+      "target": "backend_lib_fetchers_rss_property_sha1",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L185",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_parseitem",
+      "target": "backend_lib_fetchers_rss_property_scoreitem",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L191",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_fetchquery",
+      "target": "backend_lib_fetchers_rss_property_parseitem",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L229",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_run",
+      "target": "backend_lib_fetchers_rss_property_fetchquery",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L240",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property",
+      "target": "backend_lib_fetchers_rss_property_run",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L265",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "ref_module",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_require",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_prop_basket",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_prop_basket_peer_tickers",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_peer_tickers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_symbols",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_withretry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_fetchraw",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_fetchone",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_fetchall",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L100",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo",
+      "target": "backend_lib_fetchers_yahoo_fetchintraday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L149",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo_fetchone",
+      "target": "backend_lib_fetchers_yahoo_fetchraw",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L96",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo_fetchall",
+      "target": "backend_lib_fetchers_yahoo_withretry",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo_fetchall",
+      "target": "backend_lib_fetchers_yahoo_fetchone",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L111",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_yahoo_fetchintraday",
+      "target": "backend_lib_fetchers_yahoo_fetchraw",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/yahoo.mjs",
+      "source_location": "L152",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_taxonomy_categories",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_allowed_categories",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_asw_tokens",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_competitor_tokens",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_headlinementionsasw",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_headlinementionscompetitor",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_classifycategory",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy",
+      "target": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L100",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy_classifycategory",
+      "target": "backend_lib_news_taxonomy_headlinementionsasw",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy_classifycategory",
+      "target": "backend_lib_news_taxonomy_headlinementionscompetitor",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L84",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_peer_tickers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L25",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_peer_names",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L34",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_computepropbasket",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_joinbydate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L113",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_computepropbasket",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L142",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_prop_basket",
+      "target": "backend_lib_prop_basket_joinbydate",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/prop-basket.js",
+      "source_location": "L142",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_remark_bucket",
+      "target": "backend_lib_remark_bucket_rules",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_remark_bucket",
+      "target": "backend_lib_remark_bucket_classifybucket",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_remark_bucket",
+      "target": "backend_lib_remark_bucket_classifysingle",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L51",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_remark_bucket",
+      "target": "backend_lib_remark_bucket_classifybucket",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_remark_bucket",
+      "target": "backend_lib_remark_bucket_classifysingle",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/remark-bucket.js",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_holidays",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_isweekend",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_isholiday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_istradingday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_expectedtradingdays",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_classify",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_ismarketopen",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L48",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_diffdays",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L61",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_istradingday",
+      "target": "backend_lib_thai_trading_days_isweekend",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_istradingday",
+      "target": "backend_lib_thai_trading_days_isholiday",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_classify",
+      "target": "backend_lib_thai_trading_days_isweekend",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_classify",
+      "target": "backend_lib_thai_trading_days_isholiday",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L42",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_isweekend",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L69",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_isholiday",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L70",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_istradingday",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L71",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_expectedtradingdays",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L72",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_classify",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L73",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_diffdays",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days",
+      "target": "backend_lib_thai_trading_days_ismarketopen",
+      "relation": "indirect_call",
+      "context": "collection",
+      "confidence": "INFERRED",
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L75",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10",
+      "target": "ref_pg",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10",
+      "target": "backend_migrate_v10_pool",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L41",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10",
+      "target": "backend_migrate_v10_parsepgurl",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L50",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10",
+      "target": "backend_migrate_v10_competitor_re",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10",
+      "target": "backend_migrate_v10_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L73",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v10_main",
+      "target": "backend_migrate_v10_parsepgurl",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v10.js",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v9",
+      "target": "ref_pg",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v9",
+      "target": "backend_migrate_v9_pool",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v9",
+      "target": "backend_migrate_v9_parsepgurl",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L63",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v9",
+      "target": "backend_migrate_v9_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L76",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_migrate_v9_main",
+      "target": "backend_migrate_v9_parsepgurl",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/migrate-v9.js",
+      "source_location": "L77",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "ref_fs",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_fs",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "ref_path",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_path",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "ref_express",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_express",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "ref_cors",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_cors",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "ref_node_cron",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_cron",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_db",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_db",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_fetchers_index",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_fetchers_index_runfetch",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_fetchers_index_runintraday",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_runfetch_runintraday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_thai_trading_days",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_thai_trading_days_expectedtradingdays",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_thai_trading_days_classify",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_lib_thai_trading_days_ismarketopen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_expectedtradingdays_classify_ismarketopen",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_loadtaxonomy",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_app",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_frontend_dir",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_repo_root",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_intraday",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L46",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_seedfromsampledata",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L63",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_yahoodailyguard",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L630",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server",
+      "target": "backend_server_rundailyyahoo",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L639",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server_loadtaxonomy",
+      "target": "backend_lib_news_taxonomy",
+      "relation": "imports_from",
+      "context": "import",
+      "deferred": true,
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server_rationale_591",
+      "target": "backend_server",
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/server.js",
+      "source_location": "L591",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_name",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_private",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_version",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_engines",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_engines",
+      "target": "package_engines_node",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_scripts",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_scripts",
+      "target": "package_scripts_build_css",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_scripts",
+      "target": "package_scripts_watch_css",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_scripts",
+      "target": "package_scripts_start",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_scripts",
+      "target": "package_scripts_dev",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_dependencies",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies",
+      "target": "package_dependencies_cors",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies_cors",
+      "target": "cors",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies",
+      "target": "package_dependencies_dotenv",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies_dotenv",
+      "target": "dotenv",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L16",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies",
+      "target": "package_dependencies_express",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies_express",
+      "target": "express",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L17",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies",
+      "target": "package_dependencies_node_cron",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies_node_cron",
+      "target": "node_cron",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L18",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies",
+      "target": "package_dependencies_pg",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_dependencies_pg",
+      "target": "pg",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package",
+      "target": "package_devdependencies",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_autoprefixer",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies_autoprefixer",
+      "target": "autoprefixer",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L22",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_postcss",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies_postcss",
+      "target": "postcss",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L23",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies",
+      "target": "package_devdependencies_tailwindcss",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "package_devdependencies_tailwindcss",
+      "target": "tailwindcss",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L24",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast"
+    },
+    {
+      "source": "railway",
+      "target": "railway_schema",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway",
+      "target": "railway_build",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_build",
+      "target": "railway_build_builder",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_build",
+      "target": "railway_build_dockerfilepath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway",
+      "target": "railway_deploy",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_deploy",
+      "target": "railway_deploy_startcommand",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_deploy",
+      "target": "railway_deploy_healthcheckpath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_deploy",
+      "target": "railway_deploy_healthchecktimeout",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_deploy",
+      "target": "railway_deploy_restartpolicytype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "railway_deploy",
+      "target": "railway_deploy_restartpolicymaxretries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "railway.json",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "scripts_export_supabase",
+      "target": "scripts_export_supabase_sh__entry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/export-supabase.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "scripts_import_railway",
+      "target": "scripts_import_railway_sh__entry",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/import-railway.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_news_taxonomy_headlinementionsasw",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L167",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_news_taxonomy_classifycategory",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L174",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_parseitem",
+      "target": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_parseitem",
+      "target": "backend_lib_news_taxonomy_classifycategory",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L202",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_property_parseitem",
+      "target": "backend_lib_news_taxonomy_impactlevelfromseverity",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "backend/lib/fetchers/rss-property.mjs",
+      "source_location": "L212",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_prop_basket_computepropbasket",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L92",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_index_runfetch",
+      "target": "backend_lib_prop_basket_joinbydate",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/index.js",
+      "source_location": "L93",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_server_rundailyyahoo",
+      "target": "backend_lib_fetchers_index_runfetch",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/server.js",
+      "source_location": "L643",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_db_normalizeremarks",
+      "target": "backend_db_remark_bucket_helpers",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/db.js",
+      "source_location": "L277",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_parseairesult",
+      "target": "backend_lib_news_taxonomy_allowed_categories",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L302",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_gemini_search_parseairesult",
+      "target": "backend_lib_fetchers_gemini_search_allowed_impact_levels",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/gemini-search.mjs",
+      "source_location": "L304",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_headlinementionsbroker",
+      "target": "backend_lib_fetchers_rss_extended_broker_tokens",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L126",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_fetchers_rss_extended_headlinementionsfiling",
+      "target": "backend_lib_fetchers_rss_extended_filing_tokens",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/fetchers/rss-extended.mjs",
+      "source_location": "L132",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy_headlinementionsasw",
+      "target": "backend_lib_news_taxonomy_asw_tokens",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_news_taxonomy_headlinementionscompetitor",
+      "target": "backend_lib_news_taxonomy_competitor_tokens",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/news-taxonomy.mjs",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_isholiday",
+      "target": "backend_lib_thai_trading_days_holidays",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "backend_lib_thai_trading_days_ismarketopen",
+      "target": "backend_lib_thai_trading_days_holidays",
+      "relation": "references",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "backend/lib/thai-trading-days.js",
+      "source_location": "L54",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

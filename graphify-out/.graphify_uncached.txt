@@ -1,0 +1,14 @@
+/Users/minjai/Stock-monitoring-backend/.claude/CLAUDE.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/SKILL.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/add-watch.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/exports.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/extraction-spec.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/github-and-merge.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/hooks.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/query.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/transcribe.md
+/Users/minjai/Stock-monitoring-backend/.claude/skills/graphify/references/update.md
+/Users/minjai/Stock-monitoring-backend/CLAUDE.md
+/Users/minjai/Stock-monitoring-backend/README.md
+/Users/minjai/Stock-monitoring-backend/frontend/index.html
+/Users/minjai/Stock-monitoring-backend/preview-daily-summary.html

@@ -5,5 +5,8 @@
       "Read(//private/tmp/**)",
       "Bash(npm install *)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": []
   }
 }

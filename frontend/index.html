@@ -2931,14 +2931,17 @@ function refreshNews() {
   loadAllSummaries();
 }
 
-// Fetch all daily summaries and re-render so they appear inline.
+// Fetch all daily summaries and re-render so they appear in the panel.
 async function loadAllSummaries() {
   try {
     const r = await fetch('/api/daily-summaries');
     if (!r.ok) return;
     const j = await r.json();
     window.ALL_SUMMARIES = j.items || j || [];
-    renderUnifiedNews(); // re-render with summaries injected
+    // Re-render BOTH the summary panel and the news feed — summaries
+    // were empty on first render; now that data arrived, paint them.
+    renderDailySummary();
+    renderUnifiedNews();
   } catch (e) { /* silent */ }
 }
 
