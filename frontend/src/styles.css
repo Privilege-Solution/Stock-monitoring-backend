@@ -126,7 +126,7 @@
     @apply mt-1.5;
   }
   .kpi-value {
-    @apply text-2xl font-semibold leading-tight;
+    @apply text-2xl font-bold leading-tight;
   }
   .kpi-unit {
     @apply text-[14px] text-muted ml-0.5;
