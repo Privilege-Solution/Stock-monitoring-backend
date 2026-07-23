@@ -462,8 +462,11 @@
       <h2 class="view-title th">ข่าวและปัจจัย</h2>
       <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
 
-      <!-- Daily AI digest (one per ICT date, generated after the day's pulls) -->
+      <!-- Daily AI summaries — separate panel, collapsible per day -->
       <div id="dailySummaryCard"></div>
+
+      <!-- News feed — items only, no summaries mixed in -->
+      <h3 class="th" style="font-size:13px;margin:16px 0 8px;color:#888780;">📰 ข่าวทั้งหมด</h3>
 
       <!-- Feed toolbar: search + day-count range pills + refresh -->
       <div class="card mb-16">
@@ -2369,28 +2372,20 @@ function renderUnifiedNews() {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(it);
   });
-  // Build a quick lookup of daily summaries by date so we can inject the
-  // AI digest card inside each date group.
-  const summaryMap = {};
-  if (window.ALL_SUMMARIES) {
-    for (const s of window.ALL_SUMMARIES) summaryMap[s.date] = s;
-  }
   // Render one <header toggle> + <body> block per date into the container.
+  // Summaries are NOT injected here — they live in a separate panel above.
   const container = $('newsDayGroups');
   if (container) {
     container.innerHTML = items.length
       ? [...groups.entries()].map(([date, list]) => {
           const collapsed = !!STATE.newsCollapsed[date];
-          const summary = summaryMap[date];
-          const summaryHtml = summary ? renderInlineSummary(summary) : '';
           return `<section class="news-day">
             <button class="news-day-toggle th" type="button" data-date="${escapeHtml(date)}" aria-expanded="${!collapsed}">
               <span class="news-day-chevron">${icon('chevron-down')}</span>
               <span class="news-day-date">${escapeHtml(fmtThaiDate(date))}</span>
-              <span class="news-day-count">${list.length} ข่าว${summary ? ' · 🤖 มีสรุป' : ''}</span>
+              <span class="news-day-count">${list.length} ข่าว</span>
             </button>
             <div class="news-day-body" data-date="${escapeHtml(date)}"${collapsed ? ' hidden' : ''}>
-              ${summaryHtml}
               ${list.map(renderUnifiedNewsItem).join('')}
             </div>
           </section>`;
@@ -2595,36 +2590,41 @@ async function loadAllDigests() {
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
-  const s = window.DAILY_SUMMARY || {};
-  if (!s || !s.date || !s.digest) {
-    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" ด้านบน —</div>';
+  const all = window.ALL_SUMMARIES || [];
+  if (!all.length) {
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" —</div>';
     return;
   }
-  const bullets = String(s.digest).split('\n').map(x => x.trim()).filter(Boolean);
-  const tone = (s.tone || 'neutral').toLowerCase();
-  const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
-  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
-  const dt = new Date(s.date + 'T00:00:00');
-  const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-  const updated = s.generated_at
-    ? ' · อัปเดต ' + new Date(s.generated_at).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) + ' น.'
-    : '';
+  // Render ALL summaries as a collapsible list. Each day is a <details>
+  // element — click to expand/collapse the digest. Newest first (the API
+  // already sorts this way but we sort defensively).
+  const sorted = [...all].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   el.innerHTML = `
-    <div class="card mb-16">
-      <div class="row-between mb-12">
-        <div>
-          <span class="muted th" style="font-size:11px;">🤖 สรุปข่าวประจำวัน</span>
-          <h3 class="th" style="font-size:15px;margin:4px 0 0 0;">${escapeHtml(dateStr)}</h3>
-        </div>
-        <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:13px;padding:6px 12px;">${escapeHtml(toneLabel)}</span>
-      </div>
-      ${bullets.length
-        ? `<ul class="th" style="margin:0 0 8px 0;padding-left:20px;line-height:1.7;">
-            ${bullets.map(b => `<li>${escapeHtml(b.replace(/^-\s*/, ''))}</li>`).join('')}
-          </ul>`
-        : ''}
-      ${s.reason ? `<div class="muted th" style="font-size:12px;font-style:italic;">${escapeHtml(s.reason)}</div>` : ''}
-      <div class="muted th" style="font-size:11px;margin-top:8px;">สรุปจากข่าว ${s.source_count != null ? s.source_count : '?'} รายการของวันนี้${escapeHtml(updated)}</div>
+    <div class="mb-16">
+      <h3 class="th" style="font-size:13px;margin:0 0 8px;color:#888780;">🤖 สรุปข่าวประจำวัน (${sorted.length} วัน)</h3>
+      ${sorted.map(s => {
+        const tone = (s.tone || 'neutral').toLowerCase();
+        const toneLabel = ({ bullish: '📈 บวก', bearish: '📉 ลบ', neutral: '➖ เป็นกลาง' })[tone] || tone;
+        const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+        const dt = new Date(s.date + 'T00:00:00');
+        const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+        const bullets = String(s.digest || '').split('\\n').map(x => x.trim().replace(/^[-•]\\s*/, '')).filter(Boolean);
+        const isLatest = s.date === sorted[0].date;
+        return `<details class="summary-day-card" ${isLatest ? 'open' : ''} style="background:#fff;border-radius:8px;margin-bottom:8px;border-left:3px solid ${toneColor};padding:0;">
+          <summary style="padding:10px 14px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+            <span class="th" style="font-size:13px;font-weight:600;">${escapeHtml(dateStr)}</span>
+            <span style="display:flex;gap:8px;align-items:center;">
+              <span class="th muted" style="font-size:11px;">${s.source_count != null ? s.source_count + ' ข่าว' : ''}</span>
+              <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:11px;padding:2px 8px;border-radius:4px;">${escapeHtml(toneLabel)}</span>
+            </span>
+          </summary>
+          <div style="padding:0 14px 12px;">
+            ${s.headline ? `<div class="th" style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:8px;">${escapeHtml(s.headline)}</div>` : ''}
+            ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.7;padding-left:18px;margin:4px 0;color:#555;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+            ${s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">💭 ${escapeHtml(s.reason)}</div>` : ''}
+          </div>
+        </details>`;
+      }).join('')}
     </div>
   `;
 }
