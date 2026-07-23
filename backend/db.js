@@ -735,8 +735,8 @@ async function setNewsMark(id, marked) {
 // user, once from a pipeline pull — because the hashes differed.)
 // `category` is resolved by the caller (user pick or classifyCategory); MACRO is
 // the defensive fallback so the NOT NULL column is never violated.
-async function insertManualNews({ title, source_url, category, severity, summary } = {}) {
-  const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+async function insertManualNews({ title, source_url, category, severity, summary, date } = {}) {
+  const todayICT = date || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
   let hostname = 'เพิ่มเอง';
   try { hostname = new URL(source_url).hostname || hostname; } catch {}
   const normTitle = normalizeHeadline(title) || `${String(title).trim()}|${source_url}`;

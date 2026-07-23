@@ -369,7 +369,16 @@ app.post('/api/news', async (req, res) => {
       severity = body.severity;
     }
 
-    const { inserted } = await db.insertManualNews({ title, source_url: rawUrl, category, severity });
+    // Date: optional YYYY-MM-DD override. Defaults to today ICT in the DB layer.
+    let customDate = null;
+    if (body.date != null && body.date !== '') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+        return res.status(400).json({ ok: false, error: 'date must be YYYY-MM-DD', code: 'news_add_bad_date' });
+      }
+      customDate = body.date;
+    }
+
+    const { inserted } = await db.insertManualNews({ title, source_url: rawUrl, category, severity, date: customDate });
     if (inserted === 0) {
       // title_hash collision — same headline+link already in the feed.
       return res.json({ ok: true, duplicate: true, inserted: 0 });

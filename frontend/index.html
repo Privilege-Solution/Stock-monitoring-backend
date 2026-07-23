@@ -607,6 +607,10 @@
         <input id="addNewsUrl" name="source_url" type="url" autocomplete="off" placeholder="https://..." />
       </div>
       <div class="modal-field">
+        <label class="th" for="addNewsDate">วันที่</label>
+        <input id="addNewsDate" name="date" type="date" />
+      </div>
+      <div class="modal-field">
         <label class="th" for="addNewsCategory">หมวดหมู่ <span class="muted">(ไม่เลือก = แยกหมวดอัตโนมัติ)</span></label>
         <select id="addNewsCategory" name="category">
           <option value="">แยกหมวดอัตโนมัติ</option>
@@ -735,9 +739,10 @@ window.ASW_API = {
   // Manually add a news item (POST /api/news). category/severity optional —
   // the backend auto-classifies category when omitted. Returns {ok, inserted}
   // or {ok:true, duplicate:true} when the headline+link already exists.
-  async addNews({ title, source_url, category, severity }) {
+  async addNews({ title, source_url, date, category, severity }) {
     try {
       const body = { title, source_url };
+      if (date) body.date = date;
       if (category) body.category = category;
       if (severity) body.severity = severity;
       const r = await fetch('/api/news', {
@@ -2720,6 +2725,9 @@ function openAddNewsModal() {
   m.classList.add('show');
   m.setAttribute('aria-hidden', 'false');
   $('addNewsForm').reset();
+  // Default the date input to today (ICT)
+  const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  const dp = $('addNewsDate'); if (dp) dp.value = today;
   const err = $('addNewsErr'); if (err) err.textContent = '';
   const t = $('addNewsTitleInput'); if (t) setTimeout(() => t.focus(), 0);
 }
@@ -2791,6 +2799,7 @@ async function submitAddNews(e) {
   e.preventDefault();
   const title = ($('addNewsTitleInput').value || '').trim();
   const source_url = ($('addNewsUrl').value || '').trim();
+  const date = ($('addNewsDate').value || '').trim() || null;
   const category = ($('addNewsCategory').value || '').trim() || null;
   const severity = ($('addNewsSeverity').value || '').trim() || null;
   const errEl = $('addNewsErr');
@@ -2806,7 +2815,7 @@ async function submitAddNews(e) {
   const prev = btn.textContent;
   btn.disabled = true; btn.textContent = 'กำลังเพิ่ม…';
   try {
-    const r = await window.ASW_API.addNews({ title, source_url, category, severity });
+    const r = await window.ASW_API.addNews({ title, source_url, date, category, severity });
     if (!r || !r.ok) {
       errEl.textContent = 'เพิ่มข่าวไม่สำเร็จ: ' + ((r && r.error) || 'unknown');
       return;
