@@ -375,11 +375,18 @@
    * in the News & Factors view only.
    */
   #dashNewsList .news-item-uniform {
-    @apply grid items-center gap-3 p-2.5 mb-2 border border-border rounded-md bg-card cursor-pointer transition-colors;
+    @apply grid items-center gap-3 p-3 mb-2 border border-border rounded-lg bg-card cursor-pointer transition-all;
     grid-template-columns: 64px 1fr auto;
-    min-height: 64px;
+    min-height: 56px;
   }
-  #dashNewsList .news-item-uniform:hover { @apply bg-surface; }
+  #dashNewsList .news-item-uniform:hover {
+    @apply bg-surface;
+    border-color: var(--primary);
+    transform: translateX(2px);
+  }
+  #dashNewsList .news-item-uniform:active {
+    transform: translateX(0) scale(0.99);
+  }
   #dashNewsList .news-item-uniform.focused {
     border-color: var(--primary);
     background: rgba(59, 139, 212, 0.06);

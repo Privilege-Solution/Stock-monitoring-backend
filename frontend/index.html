@@ -1647,7 +1647,7 @@ function renderDashNewsCard(item) {
                   : item.change <  0     ? 'text-neg'
                   :                        'muted';
   const marked = item.chart_marked;
-  const pinIcon = isFeed ? `<span class="ni-pin ${marked ? 'on' : ''}" style="cursor:pointer;font-size:14px;color:${marked ? badge.color : '#ccc'};" title="${marked ? 'ถอน pin' : 'ปัก pin บนกราฟ'}">${marked ? '●' : '○'}</span>` : '';
+  const pinIcon = isFeed ? `<span class="ni-pin ${marked ? 'on' : ''}" style="cursor:pointer;font-size:16px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s;color:${marked ? badge.color : '#ccc'};background:${marked ? badge.color + '15' : 'transparent'};" title="${marked ? 'ถอน pin' : 'ปัก pin บนกราฟ'}">${marked ? '●' : '○'}</span>` : '';
   return `<div class="news-item-uniform${focused}"${dataAttrs} style="${marked ? 'background:' + badge.color + '0d;' : ''}">
     <div class="ni-date th">${fmtThaiShort(item.date)}</div>
     <div class="ni-title-row">
