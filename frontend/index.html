@@ -463,9 +463,11 @@
       <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
 
       <!-- Date picker — jump to any date instantly -->
-      <div class="card mb-16" style="display:flex;align-items:center;gap:12px;padding:10px 14px;">
+      <div class="card mb-16" style="display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap;">
         <span class="th" style="font-size:13px;font-weight:600;white-space:nowrap;">เลือกวันที่</span>
-        <input type="date" id="newsDatePicker" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
+        <input type="date" id="newsDateFrom" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
+        <span class="th muted" style="font-size:12px;">ถึง</span>
+        <input type="date" id="newsDateTo" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
         <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 12px;">วันนี้</button>
         <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
       </div>
@@ -838,8 +840,9 @@ const STATE = {
   focusedDate: null,
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
-  newsRange: 'ALL',      // '7D' | '10D' | '30D' | '90D' | 'ALL'  — ALL shows full history since IPO
-  newsDatePicker: null,  // YYYY-MM-DD when user picks a specific date via the calendar input
+  newsRange: 'ALL',      // '7D' | '10D' | '30D' | '90D' | 'ALL'
+  newsDateFrom: null,    // YYYY-MM-DD range start (from date picker)
+  newsDateTo: null,      // YYYY-MM-DD range end (from date picker)
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
 };
@@ -2348,16 +2351,18 @@ function syncNewsCatPills() {
 
 function renderUnifiedNews() {
   let items = buildMergedNewsItems();
-  // Show only the picked date or today by default. The range pills (7D/
-  // 30D/ALL) still work but the date picker takes priority.
-  const targetDate = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-  if (STATE.newsDatePicker || !STATE.newsRange || STATE.newsRange === 'ALL') {
-    // When no range pill is active OR a date is picked, filter to one day
-    if (STATE.newsDatePicker) {
-      items = items.filter(it => it.date === STATE.newsDatePicker);
-    } else {
-      items = items.filter(it => it.date === targetDate);
-    }
+  // Date range filter: if user picked a range (from/to), filter to that
+  // window. If only 'from' is set, show from that date onwards. If only
+  // 'to', show up to that date. If neither, default to today only
+  // (unless a range pill like 7D/30D/ALL is active).
+  if (STATE.newsDateFrom || STATE.newsDateTo) {
+    const from = STATE.newsDateFrom || '0000-01-01';
+    const to = STATE.newsDateTo || '9999-12-31';
+    items = items.filter(it => it.date >= from && it.date <= to);
+  } else if (!STATE.newsRange || STATE.newsRange === 'ALL') {
+    // Default: today only (when no range pill is active)
+    const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    items = items.filter(it => it.date === today);
   } else {
     items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
   }
@@ -2610,12 +2615,18 @@ async function loadAllDigests() {
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
-  // Default to today if no date is picked — the user wants to see only
-  // the selected date (or today) rather than the full history.
-  const targetDate = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-  let all = (window.ALL_SUMMARIES || []).filter(s => s.date === targetDate);
+  // Filter summaries by the same date range logic as the news feed.
+  let all = window.ALL_SUMMARIES || [];
+  if (STATE.newsDateFrom || STATE.newsDateTo) {
+    const from = STATE.newsDateFrom || '0000-01-01';
+    const to = STATE.newsDateTo || '9999-12-31';
+    all = all.filter(s => s.date >= from && s.date <= to);
+  } else if (!STATE.newsRange || STATE.newsRange === 'ALL') {
+    const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    all = all.filter(s => s.date === today);
+  }
   if (!all.length) {
-    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ไม่มีสรุปข่าวสำหรับวันที่เลือก —</div>';
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ไม่มีสรุปข่าวสำหรับช่วงวันที่เลือก —</div>';
     return;
   }
   // Render ALL summaries as a collapsible list. Each day is a <details>
@@ -2956,10 +2967,33 @@ function refreshNews() {
 function updateDateInfo() {
   const info = $('newsDateInfo');
   if (!info) return;
-  const d = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-  const summaries = (window.ALL_SUMMARIES || []).filter(s => s.date === d);
-  const news = (window.NEWS_DATA || []).filter(n => (n.date || '').slice(0, 10) === d);
-  info.textContent = (summaries.length ? summaries.length + ' สรุป · ' : 'ไม่มีสรุป · ') + news.length + ' ข่าว';
+  // Count what's visible in the current filter
+  const summaries = (window.ALL_SUMMARIES || []).filter(s => {
+    if (STATE.newsDateFrom || STATE.newsDateTo) {
+      const from = STATE.newsDateFrom || '0000-01-01';
+      const to = STATE.newsDateTo || '9999-12-31';
+      return s.date >= from && s.date <= to;
+    }
+    if (!STATE.newsRange || STATE.newsRange === 'ALL') {
+      const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+      return s.date === today;
+    }
+    return inNewsRange(s.date, STATE.newsRange);
+  });
+  const news = (window.NEWS_DATA || []).filter(n => {
+    const d = (n.date || '').slice(0, 10);
+    if (STATE.newsDateFrom || STATE.newsDateTo) {
+      const from = STATE.newsDateFrom || '0000-01-01';
+      const to = STATE.newsDateTo || '9999-12-31';
+      return d >= from && d <= to;
+    }
+    if (!STATE.newsRange || STATE.newsRange === 'ALL') {
+      const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+      return d === today;
+    }
+    return inNewsRange(d, STATE.newsRange);
+  });
+  info.textContent = summaries.length + ' สรุป · ' + news.length + ' ข่าว';
 }
 
 // Fetch all daily summaries and re-render so they appear in the panel.
@@ -3083,8 +3117,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#newsRangePills .pill').forEach(b => {
     b.addEventListener('click', () => {
       STATE.newsRange = b.dataset.range;
-      STATE.newsDatePicker = null;  // clear date picker when a range pill is clicked
-      const dp = $('newsDatePicker'); if (dp) dp.value = '';
+      STATE.newsDateFrom = null;
+      STATE.newsDateTo = null;
+      const dpFrom = $('newsDateFrom'); if (dpFrom) dpFrom.value = '';
+      const dpTo = $('newsDateTo'); if (dpTo) dpTo.value = '';
       document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x === b));
       renderUnifiedNews();
       renderDailySummary();
@@ -3092,31 +3128,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Date picker — jump to a specific date. Filters BOTH the summary panel
-  // and the news feed to only that day. Overrides range pills.
-  const dp = $('newsDatePicker');
-  if (dp) {
-    // Set min/max based on available data range
-    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) { dp.min = dates[0]; dp.max = dates[dates.length - 1]; }
-    dp.addEventListener('change', () => {
-      STATE.newsDatePicker = dp.value || null;
-      // Deactivate range pills when a date is picked
-      if (dp.value) {
-        document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
-      }
-      renderUnifiedNews();
-      renderDailySummary();
-      updateDateInfo();
-    });
+  // Date range picker — two inputs (from / to). Either can be set
+  // independently. Overrides range pills when active.
+  const dpFrom = $('newsDateFrom');
+  const dpTo = $('newsDateTo');
+  // Set min/max based on available data range
+  const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
+  if (dates.length) {
+    if (dpFrom) { dpFrom.min = dates[0]; dpFrom.max = dates[dates.length - 1]; }
+    if (dpTo) { dpTo.min = dates[0]; dpTo.max = dates[dates.length - 1]; }
   }
+  function onDateChange() {
+    STATE.newsDateFrom = dpFrom?.value || null;
+    STATE.newsDateTo = dpTo?.value || null;
+    // Deactivate range pills when a date range is active
+    if (STATE.newsDateFrom || STATE.newsDateTo) {
+      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
+    }
+    renderUnifiedNews();
+    renderDailySummary();
+    updateDateInfo();
+  }
+  if (dpFrom) dpFrom.addEventListener('change', onDateChange);
+  if (dpTo) dpTo.addEventListener('change', onDateChange);
   const dpClear = $('newsDateClear');
   if (dpClear) {
     dpClear.addEventListener('click', () => {
-      STATE.newsDatePicker = null;
-      if (dp) dp.value = '';
-      // Restore ALL range pill
-      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x.dataset.range === STATE.newsRange));
+      STATE.newsDateFrom = null;
+      STATE.newsDateTo = null;
+      STATE.newsRange = 'ALL';
+      if (dpFrom) dpFrom.value = '';
+      if (dpTo) dpTo.value = '';
+      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x.dataset.range === 'ALL'));
       renderUnifiedNews();
       renderDailySummary();
       updateDateInfo();
