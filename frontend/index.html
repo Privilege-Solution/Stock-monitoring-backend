@@ -464,9 +464,9 @@
 
       <!-- Date picker — jump to any date instantly -->
       <div class="card mb-16" style="display:flex;align-items:center;gap:12px;padding:10px 14px;">
-        <span class="th" style="font-size:13px;font-weight:600;white-space:nowrap;">📅 เลือกวันที่</span>
+        <span class="th" style="font-size:13px;font-weight:600;white-space:nowrap;">เลือกวันที่</span>
         <input type="date" id="newsDatePicker" class="input th" style="font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid #ddd;" />
-        <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 12px;">ล้างวันที่</button>
+        <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 12px;">วันนี้</button>
         <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
       </div>
 
@@ -474,7 +474,7 @@
       <div id="dailySummaryCard"></div>
 
       <!-- News feed — items only, no summaries mixed in -->
-      <h3 class="th" style="font-size:13px;margin:16px 0 8px;color:#888780;">📰 ข่าวทั้งหมด</h3>
+      <h3 class="th" style="font-size:13px;margin:16px 0 8px;color:#888780;">ข่าว</h3>
 
       <!-- Feed toolbar: search + day-count range pills + refresh -->
       <div class="card mb-16">
@@ -2348,11 +2348,17 @@ function syncNewsCatPills() {
 
 function renderUnifiedNews() {
   let items = buildMergedNewsItems();
-  // Date picker filter — when a specific date is selected, show ONLY that day.
-  if (STATE.newsDatePicker) {
-    items = items.filter(it => it.date === STATE.newsDatePicker);
+  // Show only the picked date or today by default. The range pills (7D/
+  // 30D/ALL) still work but the date picker takes priority.
+  const targetDate = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  if (STATE.newsDatePicker || !STATE.newsRange || STATE.newsRange === 'ALL') {
+    // When no range pill is active OR a date is picked, filter to one day
+    if (STATE.newsDatePicker) {
+      items = items.filter(it => it.date === STATE.newsDatePicker);
+    } else {
+      items = items.filter(it => it.date === targetDate);
+    }
   } else {
-    // Range filter (uses STATE.newsRange — matches toolbar pills).
     items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
   }
   // Search filter (text contains, case-insensitive, both streams).
@@ -2604,16 +2610,12 @@ async function loadAllDigests() {
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
-  let all = window.ALL_SUMMARIES || [];
-  // When a date is picked, show only that day's summary
-  if (STATE.newsDatePicker) {
-    all = all.filter(s => s.date === STATE.newsDatePicker);
-  }
+  // Default to today if no date is picked — the user wants to see only
+  // the selected date (or today) rather than the full history.
+  const targetDate = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  let all = (window.ALL_SUMMARIES || []).filter(s => s.date === targetDate);
   if (!all.length) {
-    const msg = STATE.newsDatePicker
-      ? '— ไม่มีสรุปข่าวสำหรับวันที่เลือก —'
-      : '— ยังไม่มีสรุปข่าวประจำวัน — รอ cron หลังดึงข่าวประจำวัน หรือกดปุ่ม "รีเฟรช" —';
-    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">' + escapeHtml(msg) + '</div>';
+    el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ไม่มีสรุปข่าวสำหรับวันที่เลือก —</div>';
     return;
   }
   // Render ALL summaries as a collapsible list. Each day is a <details>
@@ -2622,10 +2624,10 @@ function renderDailySummary() {
   const sorted = [...all].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   el.innerHTML = `
     <div class="mb-16">
-      <h3 class="th" style="font-size:13px;margin:0 0 8px;color:#888780;">🤖 สรุปข่าวประจำวัน (${sorted.length} วัน)</h3>
+      <h3 class="th" style="font-size:13px;margin:0 0 8px;color:#888780;">สรุปข่าวประจำวัน</h3>
       ${sorted.map(s => {
         const tone = (s.tone || 'neutral').toLowerCase();
-        const toneLabel = ({ bullish: '📈 บวก', bearish: '📉 ลบ', neutral: '➖ เป็นกลาง' })[tone] || tone;
+        const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
         const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
         const dt = new Date(s.date + 'T00:00:00');
         const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -2642,7 +2644,7 @@ function renderDailySummary() {
           <div style="padding:0 14px 12px;">
             ${s.headline ? `<div class="th" style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:8px;">${escapeHtml(s.headline)}</div>` : ''}
             ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.7;padding-left:18px;margin:4px 0;color:#555;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
-            ${s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">💭 ${escapeHtml(s.reason)}</div>` : ''}
+            ${s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">${escapeHtml(s.reason)}</div>` : ''}
           </div>
         </details>`;
       }).join('')}
@@ -2950,20 +2952,14 @@ function refreshNews() {
   updateDateInfo();
 }
 
-// Update the info text next to the date picker ("X สรุป, Y ข่าว")
+// Update the info text next to the date picker
 function updateDateInfo() {
   const info = $('newsDateInfo');
   if (!info) return;
-  if (STATE.newsDatePicker) {
-    const d = STATE.newsDatePicker;
-    const summaries = (window.ALL_SUMMARIES || []).filter(s => s.date === d);
-    const news = (window.NEWS_DATA || []).filter(n => (n.date || '').slice(0, 10) === d);
-    info.textContent = (summaries.length ? '🤖 ' + summaries.length + ' สรุป · ' : 'ไม่มีสรุป · ') + '📰 ' + news.length + ' ข่าว';
-  } else {
-    const summaries = (window.ALL_SUMMARIES || []).length;
-    const news = (window.NEWS_DATA || []).length;
-    info.textContent = 'ทั้งหมด: 🤖 ' + summaries + ' สรุป · 📰 ' + news + ' ข่าว';
-  }
+  const d = STATE.newsDatePicker || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  const summaries = (window.ALL_SUMMARIES || []).filter(s => s.date === d);
+  const news = (window.NEWS_DATA || []).filter(n => (n.date || '').slice(0, 10) === d);
+  info.textContent = (summaries.length ? summaries.length + ' สรุป · ' : 'ไม่มีสรุป · ') + news.length + ' ข่าว';
 }
 
 // Fetch all daily summaries and re-render so they appear in the panel.
