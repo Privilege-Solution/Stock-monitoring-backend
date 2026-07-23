@@ -1411,7 +1411,7 @@ function buildPinAnnotations(rows, showOnlyTypes) {
  */
 function buildMarkAnnotations(filtered) {
   const ann = {};
-  const marked = (window.NEWS_DATA || []).filter(n => n.chart_marked);
+  const marked = (window.NEWS_DATA || []).filter(n => n.chart_marked || n.show_pin);
   if (!marked.length || !filtered.length) return ann;
 
   const days = filtered.map(r => r.date).sort((a, b) => a.localeCompare(b));
@@ -1553,10 +1553,10 @@ function buildDashChart(filtered) {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
-              // Dashboard pin layer = user marks (chart_marked), not digest
-              // remarks. Surface the pinned news for the hovered date.
+              // Dashboard pin layer = user marks (chart_marked) OR auto-pinned
+              // (show_pin = HIGH severity items the system flagged).
               const marks = (window.NEWS_DATA || []).filter(
-                n => n.chart_marked && (n.date || '').slice(0,10) === ymd);
+                n => (n.chart_marked || n.show_pin) && (n.date || '').slice(0,10) === ymd);
               if (!marks.length) return '';
               return [''].concat(marks.map(n => {
                 const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
@@ -2154,16 +2154,15 @@ function buildPriceChart() {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
-              const row = DATA.find(r => r.date === ymd);
-              if (row) {
-                const items_ = eachRemark(row);
-                if (items_.length) {
-                  const it = items_[0];
-                  const c = classifyEvent(it);
-                  return ['', (c ? '[' + c.label + '] ' : '') + it.text];
-                }
-              }
-              return '';
+              // Use the SAME source as the dashboard — news_feed items
+              // that are chart_marked OR show_pin (auto-pinned by severity).
+              const marks = (window.NEWS_DATA || []).filter(
+                n => (n.chart_marked || n.show_pin) && (n.date || '').slice(0,10) === ymd);
+              if (!marks.length) return '';
+              return [''].concat(marks.slice(0, 3).map(n => {
+                const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+                return '[' + badge.label + '] ' + (n.title || '');
+              }));
             }
           }
         },
