@@ -647,7 +647,10 @@ async function writeNewsItems(items) {
       it.pipeline     ?? null,
       it.impact       ?? null,
       it.severity     ?? null,
-      it.show_pin     ?? false,
+      // Auto-pin HIGH severity items so they appear as pins on the chart
+      // without manual marking. If the source explicitly set show_pin, respect
+      // that; otherwise derive from severity.
+      (it.show_pin != null ? it.show_pin : (it.severity === 'high')),
       now,
       // RSS/Gemini sources that score relevance (rss-property) pre-compute
       // `display_priority` and pass it in directly. Sources that only know
