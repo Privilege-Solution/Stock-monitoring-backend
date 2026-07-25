@@ -1043,7 +1043,7 @@ const catLabel = (cat) => (REMARK_BADGE[cat] && REMARK_BADGE[cat].thaiLabel) || 
 // future filters (HIGH-only toggle, etc.) without requiring a schema
 // change.
 
-/* ============== Daily-digest remark (สรุปข่าว → pin + Remark) ==============
+/* ============== Daily-digest remark (สรุปข่าว   pin + Remark) ==============
  * One short remark per ICT date, derived from that day's AI digest
  * (news_daily_summary.digest). Built into window.DIGEST_REMARKS (a Map keyed
  * by date) by loadAllDigests(), then stamped onto DATA rows by
@@ -1258,7 +1258,7 @@ function applyKpiPriceLive() {
   }
   priceEl.textContent = fmtNum(displayPrice);
   const ch = refPrice ? ((displayPrice - refPrice) / refPrice) * 100 : 0;
-  chEl.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + ch.toFixed(2) + '%';
+  chEl.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '- ' : '') + ch.toFixed(2) + '%';
   chEl.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
 
   if (live) {
@@ -1266,9 +1266,9 @@ function applyKpiPriceLive() {
     if (card) {
       const ageSec = Math.round((Date.now() - LIVE_TICK.ts) / 1000);
       // Three badge modes based on Yahoo data source:
-      //   candle        → real-time 1-min tick (gold standard)
-      //   meta-fallback → 15-min delayed Yahoo meta (today's trade)
-      //   meta-pending  → yesterday's last trade; market may have just opened
+      //   candle          real-time 1-min tick (gold standard)
+      //   meta-fallback   15-min delayed Yahoo meta (today's trade)
+      //   meta-pending    yesterday's last trade; market may have just opened
       //                   without a tick yet. Still show the price but label
       //                   it so the user knows it's not fresh.
       const src = LIVE_TICK.source;
@@ -1326,7 +1326,7 @@ function renderKPIs(filtered) {
     $('kpiSet').textContent = fmtNum(lastSet);
     const setCh = pctChange(setPoints, 'setIdx');
     const el = $('kpiSetCh');
-    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '▼ ' : '') + (setCh || 0).toFixed(2) + '%';
+    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '- ' : '') + (setCh || 0).toFixed(2) + '%';
     el.className = 'kpi-delta ' + (setCh > 0 ? 'pos' : setCh < 0 ? 'neg' : 'mut');
   } else {
     $('kpiSet').textContent = '—';
@@ -1341,7 +1341,7 @@ function renderKPIs(filtered) {
     $('kpiProp').textContent = fmtNum(lastProp);
     const propCh = pctChange(propPoints, 'propIdx');
     const el = $('kpiPropCh');
-    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '▼ ' : '') + (propCh || 0).toFixed(2) + '%';
+    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '- ' : '') + (propCh || 0).toFixed(2) + '%';
     el.className = 'kpi-delta ' + (propCh > 0 ? 'pos' : propCh < 0 ? 'neg' : 'mut');
   } else {
     $('kpiProp').textContent = '—';
@@ -1573,7 +1573,7 @@ function buildDashChart(filtered) {
               if (!news.length && chg == null) return '';
               const lines = [''];
               if (chg != null) {
-                const arrow = chg > 0.1 ? '▲' : chg < -0.1 ? '▼' : '→';
+                const arrow = chg > 0.1 ? '+' : chg < -0.1 ? '-' : '~';
                 const sign = chg >= 0 ? '+' : '';
                 lines.push(arrow + ' ' + sign + chg.toFixed(2) + '%');
               }
@@ -1581,8 +1581,8 @@ function buildDashChart(filtered) {
                 lines.push(news.length + ' ข่าว:');
                 for (const n of news) {
                   const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                  const sev = n.severity === 'high' ? '★' : '';
-                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 50));
+                  const sev = n.severity === 'high' ? '' : '';
+                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 35));
                 }
               }
               return lines;
@@ -1836,7 +1836,7 @@ function priorityForItem(item) {
 
 // Bucket an item by how recent its date is vs today. Returns one of
 // 'today' | 'yesterday' | 'this_week' | 'last_week' | 'older'. Anything
-// missing/empty → 'older' so it lands in the long tail.
+// missing/empty   'older' so it lands in the long tail.
 function bucketByRelativeDate(dateStr, nowStr) {
   if (!dateStr) return 'older';
   const d = new Date(dateStr + 'T00:00:00');
@@ -2021,7 +2021,7 @@ async function buildPeerSnapshot() {
   body.innerHTML = peerRows.map(r => {
     const chg = r.change != null ? r.change : null;
     const hasData = r.close != null && chg != null;
-    const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '▼ ' : '─ ';
+    const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '- ' : '─ ';
     const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">ASW</span>' : '';
     const closeText = hasData ? `฿${r.close.toFixed(2)}` : '—';
     const colorStyle = !hasData
@@ -2196,7 +2196,7 @@ function buildPriceChart() {
               if (!news.length && chg == null) return '';
               const lines = [''];
               if (chg != null) {
-                const arrow = chg > 0.1 ? '▲' : chg < -0.1 ? '▼' : '→';
+                const arrow = chg > 0.1 ? '+' : chg < -0.1 ? '-' : '~';
                 const sign = chg >= 0 ? '+' : '';
                 lines.push(arrow + ' ' + sign + chg.toFixed(2) + '%');
               }
@@ -2204,8 +2204,8 @@ function buildPriceChart() {
                 lines.push(news.length + ' ข่าว:');
                 for (const n of news) {
                   const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                  const sev = n.severity === 'high' ? '★' : '';
-                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 50));
+                  const sev = n.severity === 'high' ? '' : '';
+                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 35));
                 }
               }
               return lines;
@@ -2275,7 +2275,7 @@ function buildVolumeChart(filtered) {
   });
 }
 
-/* Click a price-table row → highlight that date on the price chart
+/* Click a price-table row   highlight that date on the price chart
  * (active point + tooltip). Mirrors the dashboard's focusDashOnDate link,
  * but non-destructive: it doesn't re-zoom the axis, just pins the tooltip
  * so the table and graph stay visually connected. */
@@ -2322,7 +2322,7 @@ function renderPriceStats(filtered) {
     <div class="stat-row"><span class="label th">ราคาต่ำสุด</span><span class="val">฿${fmtNum(lo)}</span></div>
     <div class="stat-row"><span class="label th">ปริมาณเฉลี่ย</span><span class="val">${fmtBigNum(avgVol)} พันหุ้น</span></div>
     <div class="stat-row"><span class="label th">จำนวน Events</span><span class="val">${events}</span></div>
-    <div class="stat-row"><span class="label th">วันที่</span><span class="val">${fmtThaiShort(filtered[0].date)} → ${fmtThaiShort(filtered[filtered.length-1].date)}</span></div>
+    <div class="stat-row"><span class="label th">วันที่</span><span class="val">${fmtThaiShort(filtered[0].date)}   ${fmtThaiShort(filtered[filtered.length-1].date)}</span></div>
   `;
 }
 
@@ -2369,7 +2369,7 @@ async function loadNewsFeed() {
 // =============================================================================
 //
 // One scroll, severity-first. Builds a single merged list from Stream A
-// (DATA → eachRemark) and Stream B (window.NEWS_DATA from /api/news),
+// (DATA   eachRemark) and Stream B (window.NEWS_DATA from /api/news),
 // filters by search + range pill, sorts by display_priority desc, buckets
 // by relative date, and renders 5 collapsible sections.
 //
@@ -2965,7 +2965,7 @@ async function handleMarkNews(id) {
 function updateStatusBar() {
   $('sbFile').textContent = CURRENT_FILE_NAME;
   if (DATA.length) {
-    $('sbRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
+    $('sbRange').textContent = fmtThaiShort(DATA[0].date) + '   ' + fmtThaiShort(DATA[DATA.length-1].date);
     $('sbEvents').textContent = DATA.reduce((n, r) => n + eachRemark(r).length, 0);
   }
   const viewNames = { dashboard: 'Dashboard', price: 'ราคาย้อนหลัง', news: 'ข่าวและปัจจัย', settings: 'ตั้งค่า' };
@@ -2977,7 +2977,7 @@ function updateStatusBar() {
 function renderSettingsInfo() {
   $('currentFileName').textContent = CURRENT_FILE_NAME;
   if (DATA.length) {
-    $('currentFileRange').textContent = fmtThaiShort(DATA[0].date) + ' → ' + fmtThaiShort(DATA[DATA.length-1].date);
+    $('currentFileRange').textContent = fmtThaiShort(DATA[0].date) + '   ' + fmtThaiShort(DATA[DATA.length-1].date);
     $('currentFileEvents').textContent = DATA.reduce((n, r) => n + eachRemark(r).length, 0) + ' รายการ';
   }
   // Trigger async Data Health fetch
@@ -3172,7 +3172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
     refreshPrice();
   });
-  // Click any price-table row → highlight that date on the price chart.
+  // Click any price-table row   highlight that date on the price chart.
   const priceTableBody = $('priceTableBody');
   if (priceTableBody && priceTableBody.dataset.focusBound !== '1') {
     priceTableBody.dataset.focusBound = '1';
@@ -3188,7 +3188,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // News view — unified feed (migrate-v4 rebuild)
   //   Search box, range pills, bucket toggles, refresh buttons all bind here.
   //   Body-level click handler for `.news-item[data-date]` (set below) still
-  //   drives the "click → focus dashboard chart" flow.
+  //   drives the "click   focus dashboard chart" flow.
   const newsSearch = $('newsSearch');
   if (newsSearch) {
     newsSearch.addEventListener('input', () => {
@@ -3334,7 +3334,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // News refresh is driven by the single top-level Refresh button now — see
   // refreshNewsFeed() and the #refreshBtn handler (no per-panel button).
-  // Click news → focus dashboard chart (switch view if needed)
+  // Click news   focus dashboard chart (switch view if needed)
   document.body.addEventListener('click', (e) => {
     const item = e.target.closest('.news-item');
     if (item && item.dataset.date) {
@@ -3546,11 +3546,11 @@ async function loadDataHealth() {
   const set = (id, t) => { const el = $(id); if (el) el.textContent = t; };
   set('healthLastFetch', h.lastFetched ? new Date(h.lastFetched).toLocaleString('th-TH') + ' น.' : '—');
   set('healthRows', h.stored + ' / ' + h.expected + ' วัน');
-  set('healthRange', (h.dateMin || '—') + ' → ' + (h.dateMax || '—'));
+  set('healthRange', (h.dateMin || '—') + '   ' + (h.dateMax || '—'));
   set('healthMissing', h.missingGaps === 0 ? 'ไม่มีข้อมูลขาด' : (h.missingGaps + ' วัน'));
   const list = $('healthMissingList');
   if (list) {
-    const gaps = (h.missingDates || []).filter(d => d.reason === 'gap').slice(0, 50);
+    const gaps = (h.missingDates || []).filter(d => d.reason === 'gap').slice(0, 35);
     list.innerHTML = gaps.length
       ? gaps.map(g => '<li>' + g.date + ' <span class="muted">(gap)</span></li>').join('')
       : '<li class="muted">ครบถ้วน</li>';
