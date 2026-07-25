@@ -1553,15 +1553,39 @@ function buildDashChart(filtered) {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
-              // Dashboard pin layer = user marks (chart_marked) OR auto-pinned
-              // (show_pin = HIGH severity items the system flagged).
-              const marks = (window.NEWS_DATA || []).filter(
-                n => (n.chart_marked || n.show_pin) && (n.date || '').slice(0,10) === ymd);
-              if (!marks.length) return '';
-              return [''].concat(marks.map(n => {
-                const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                return '[' + badge.label + '] ' + (n.title || '');
-              }));
+              // Find the ASW price change for this date
+              const rowIdx = DATA.findIndex(r => r.date === ymd);
+              const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
+              const curClose = DATA[rowIdx]?.close;
+              const prevClose = prevRow?.close;
+              const chg = (curClose != null && prevClose != null)
+                ? ((curClose - prevClose) / prevClose) * 100 : null;
+              // Find relevant news for this date — ALL items, not just pinned.
+              // Sort by severity (high first) so the most important cause shows first.
+              const news = (window.NEWS_DATA || [])
+                .filter(n => (n.date || '').slice(0,10) === ymd)
+                .sort((a, b) => {
+                  const sa = a.severity === 'high' ? 0 : a.severity === 'medium' ? 1 : 2;
+                  const sb = b.severity === 'high' ? 0 : b.severity === 'medium' ? 1 : 2;
+                  return sa - sb;
+                })
+                .slice(0, 4); // top 4 most relevant
+              if (!news.length && chg == null) return '';
+              const lines = [''];
+              if (chg != null) {
+                const arrow = chg > 0.1 ? '▲' : chg < -0.1 ? '▼' : '→';
+                const sign = chg >= 0 ? '+' : '';
+                lines.push(arrow + ' ' + sign + chg.toFixed(2) + '%');
+              }
+              if (news.length) {
+                lines.push(news.length + ' ข่าว:');
+                for (const n of news) {
+                  const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+                  const sev = n.severity === 'high' ? '★' : '';
+                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 50));
+                }
+              }
+              return lines;
             }
           }
         },
@@ -2154,15 +2178,37 @@ function buildPriceChart() {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
               const ymd = dt.toISOString().slice(0,10);
-              // Use the SAME source as the dashboard — news_feed items
-              // that are chart_marked OR show_pin (auto-pinned by severity).
-              const marks = (window.NEWS_DATA || []).filter(
-                n => (n.chart_marked || n.show_pin) && (n.date || '').slice(0,10) === ymd);
-              if (!marks.length) return '';
-              return [''].concat(marks.slice(0, 3).map(n => {
-                const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                return '[' + badge.label + '] ' + (n.title || '');
-              }));
+              // Same tooltip format as dashboard — show price change + news.
+              const rowIdx = DATA.findIndex(r => r.date === ymd);
+              const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
+              const curClose = DATA[rowIdx]?.close;
+              const prevClose = prevRow?.close;
+              const chg = (curClose != null && prevClose != null)
+                ? ((curClose - prevClose) / prevClose) * 100 : null;
+              const news = (window.NEWS_DATA || [])
+                .filter(n => (n.date || '').slice(0,10) === ymd)
+                .sort((a, b) => {
+                  const sa = a.severity === 'high' ? 0 : a.severity === 'medium' ? 1 : 2;
+                  const sb = b.severity === 'high' ? 0 : b.severity === 'medium' ? 1 : 2;
+                  return sa - sb;
+                })
+                .slice(0, 4);
+              if (!news.length && chg == null) return '';
+              const lines = [''];
+              if (chg != null) {
+                const arrow = chg > 0.1 ? '▲' : chg < -0.1 ? '▼' : '→';
+                const sign = chg >= 0 ? '+' : '';
+                lines.push(arrow + ' ' + sign + chg.toFixed(2) + '%');
+              }
+              if (news.length) {
+                lines.push(news.length + ' ข่าว:');
+                for (const n of news) {
+                  const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+                  const sev = n.severity === 'high' ? '★' : '';
+                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 50));
+                }
+              }
+              return lines;
             }
           }
         },
