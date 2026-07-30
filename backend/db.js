@@ -15,6 +15,19 @@
 const { Pool } = require('pg');
 const { createHash } = require('node:crypto');
 
+// Normalize a date string to ensure the year is CE, not BE.
+// Gemini backfill scripts sometimes return Buddhist-era years (e.g. 2568
+// instead of 2025). This function catches them at the DB boundary so
+// they never get stored with wrong dates.
+function normalizeDateYear(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr;
+  const m = dateStr.match(/^(\d{4})-/);
+  if (!m) return dateStr;
+  let year = parseInt(m[1], 10);
+  if (year > 2100) year -= 543;
+  return year + dateStr.slice(4);
+}
+
 // sha1 seed for title_hash — mirrors the fetchers (rss-property.mjs / gemini-search.mjs).
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -639,7 +652,7 @@ async function writeNewsItems(items) {
     values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14})`);
     params.push(
       it.title,
-      it.date,
+      normalizeDateYear(it.date),
       it.category,
       it.source_url,
       it.source_label,

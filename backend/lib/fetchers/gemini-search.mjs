@@ -21,7 +21,7 @@
 import { createHash } from 'crypto';
 import db from '../../db.js';
 import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
-import { normalizeHeadline } from './news-rss-helpers.mjs';
+import { normalizeHeadline, normalizeDateYear } from './news-rss-helpers.mjs';
 
 const MODEL = 'gemini-2.5-flash';
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;

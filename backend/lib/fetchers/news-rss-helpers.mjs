@@ -91,6 +91,23 @@ export function extractSourceName(itemXml) {
   return google ? google.trim() : '';
 }
 
+// Normalize a date string from Gemini or RSS to ensure the year is CE
+// (Common Era), not BE (Buddhist Era). Gemini occasionally returns Thai
+// Buddhist-era years (e.g. "2568-07-14" instead of "2025-07-14") which
+// causes the frontend to display "14/7/11" (year 3111 BE via th-TH locale).
+//
+// Detects BE years by checking if the year > 2100 and subtracts 543.
+// Also handles 2-digit years > 70 (interpreted as 1970+) — unlikely but safe.
+export function normalizeDateYear(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr;
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return dateStr;
+  let year = parseInt(m[1], 10);
+  // BE → CE conversion (Buddhist Era = CE + 543)
+  if (year > 2100) year -= 543;
+  return `${year}-${m[2]}-${m[3]}${dateStr.slice(10)}`;
+}
+
 // Normalize a headline for dedup. Strips a trailing " - <Latin publisher>"
 // suffix (e.g. "ASW ปันผล - Marketeer Online" → "ASW ปันผล"), lowercases,
 // collapses whitespace, removes ASCII punctuation that publishers vary on.
