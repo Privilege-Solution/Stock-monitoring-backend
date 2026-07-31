@@ -469,7 +469,9 @@
           <button id="newsTodayBtn" class="th" style="padding:8px 14px;font-size:13px;background:#fff;border:none;cursor:pointer;">วันนี้</button>
           <button id="newsAllBtn" class="th active" style="padding:8px 14px;font-size:13px;background:var(--primary);color:#fff;border:none;cursor:pointer;">ทั้งหมด</button>
         </div>
-        <input type="date" id="newsDatePick" class="input th" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #e0e0e0;width:130px;" title="เลือกวันที่" />
+        <input type="date" id="newsDateFrom" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid #e0e0e0;width:120px;" title="จากวันที่" />
+        <span class="th muted" style="font-size:12px;">—</span>
+        <input type="date" id="newsDateTo" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid #e0e0e0;width:120px;" title="ถึงวันที่" />
         <button class="btn btn-ghost th" id="addNewsBtn" type="button" style="font-size:13px;padding:6px 12px;border-radius:8px;">+ เพิ่ม</button>
       </div>
 
@@ -825,8 +827,9 @@ const STATE = {
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
   newsRange: 'ALL',
-  newsView: 'all',       // 'today' | 'all' — simplified toggle
-  newsDatePick: null,    // YYYY-MM-DD when user picks a specific date
+  newsView: 'all',       // 'today' | 'all'
+  newsDateFrom: null,    // YYYY-MM-DD range start
+  newsDateTo: null,      // YYYY-MM-DD range end
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
 };
@@ -2500,9 +2503,11 @@ function renderUnifiedNews() {
   let items = buildMergedNewsItems();
   const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
-  // Date filter: picked date -> that day only; "today" view -> today; "all" -> everything
-  if (STATE.newsDatePick) {
-    items = items.filter(it => it.date === STATE.newsDatePick);
+  // Date filter: date range overrides toggle
+  if (STATE.newsDateFrom || STATE.newsDateTo) {
+    const from = STATE.newsDateFrom || '0000-01-01';
+    const to = STATE.newsDateTo || '9999-12-31';
+    items = items.filter(it => it.date >= from && it.date <= to);
   } else if (STATE.newsView === 'today') {
     items = items.filter(it => it.date === todayICT);
   }
@@ -3290,19 +3295,23 @@ document.addEventListener('DOMContentLoaded', () => {
     renderUnifiedNews();
   });
 
-  // Date picker — overrides toggle
-  const datePick = $('newsDatePick');
-  if (datePick) {
+  // Date range picker (from / to)
+  const dpFrom = $('newsDateFrom');
+  const dpTo = $('newsDateTo');
+  function onDateChange() {
+    STATE.newsDateFrom = dpFrom?.value || null;
+    STATE.newsDateTo = dpTo?.value || null;
+    renderUnifiedNews();
+  }
+  if (dpFrom) {
     const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) { datePick.min = dates[0]; datePick.max = dates[dates.length - 1]; }
-    datePick.addEventListener('change', () => {
-      STATE.newsDatePick = datePick.value || null;
-      if (datePick.value) {
-        if (todayBtn) { todayBtn.classList.remove('active'); todayBtn.style.background = '#fff'; todayBtn.style.color = ''; }
-        if (allBtn) { allBtn.classList.remove('active'); allBtn.style.background = '#fff'; allBtn.style.color = ''; }
-      }
-      renderUnifiedNews();
-    });
+    if (dates.length) { dpFrom.min = dates[0]; dpFrom.max = dates[dates.length - 1]; }
+    dpFrom.addEventListener('change', onDateChange);
+  }
+  if (dpTo) {
+    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
+    if (dates.length) { dpTo.min = dates[0]; dpTo.max = dates[dates.length - 1]; }
+    dpTo.addEventListener('change', onDateChange);
   }
 
   // Category tabs
