@@ -317,14 +317,13 @@
 
         <div class="card" style="display:flex; flex-direction:column; max-height: 500px;">
           <div class="row-between mb-8">
-            <h3 class="th" style="font-size:13px;">ข่าวล่าสุด</h3>
-            <div class="row" style="gap:8px; align-items:center;">
+            <h3 class="th" style="font-size:13px;">ข่าวล่าสุด <span id="dashNewsDateLabel" class="th muted" style="font-size:12px;font-weight:400;"></span></h3>
+            <div class="row" style="gap:4px; align-items:center;">
               <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
-              <button class="pin-picker-btn th" id="pinPickerBtn" type="button" title="ปักหมุดข่าวบนกราฟ"><span id="pinPickerBtnIcon"></span> ปักหมุด</button>
+              <button id="dashNewsPrev" class="th" style="font-size:14px;padding:2px 8px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:pointer;" title="วันก่อนหน้า">‹</button>
+              <button id="dashNewsNext" class="th" style="font-size:14px;padding:2px 8px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:pointer;" title="วันถัดไป">›</button>
             </div>
           </div>
-          <input type="text" id="dashNewsSearch" placeholder="ค้นหาในหัวข้อ + สรุป..."
-                 class="th" style="font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;" />
           <div id="dashNewsList" class="scroll-y" style="flex:1; min-height:0;"></div>
         </div>
       </div>
@@ -1735,65 +1734,73 @@ function renderDashNewsCard(item) {
 }
 
 function renderDashNews(filtered) {
-  // Stream (A): remark items from eachRemark() — 1 per trading day
-  const remarkItems = [];
-  filtered.forEach(r => eachRemark(r).forEach(item => remarkItems.push({
-    source: 'remark',
-    date: item.date,
-    category: item.category,
-    text: item.text,
-    close: item.close,
-    change: item.change,
-  })));
+  // Date-based sidebar: show news for the focused date (or latest if none)
+  const targetDate = STATE.focusedDate || (filtered.length ? filtered[filtered.length - 1].date : null);
+  const label = $('dashNewsDateLabel');
+  if (label) label.textContent = targetDate ? '· ' + fmtThaiDate(targetDate) : '';
 
-  // Stream (B): news_feed items from /api/news (loaded into NEWS_DATA
-  // by loadNewsFeed(); lazily fetched when Dashboard or Feed tab opens).
-  // Include items without URLs too — the user wants all news visible in
-  // the sidebar, not just linkable ones.
-  const feedItems = (window.NEWS_DATA || []).map(n => ({
+  // Show feed items for the focused date (+ 1 day before/after for context)
+  let feedItems = (window.NEWS_DATA || []).map(n => ({
     source: 'feed',
     date: (n.date || '').slice(0, 10),
     category: n.category || 'MACRO',
     text: n.title || '',
-    summary: n.summary || null,   // searched by #dashNewsSearch (title + สรุป)
     url: n.source_url,
     id: n.id,
     chart_marked: !!n.chart_marked,
-    impact_level: n.impact_level || null,
+    severity: n.severity,
   })).filter(it => it.text);
 
-  const merged = [...remarkItems, ...feedItems];
+  if (targetDate) {
+    // Show target date first, then adjacent dates
+    feedItems = feedItems.sort((a, b) => {
+      const ad = a.date === targetDate ? 0 : 1;
+      const bd = b.date === targetDate ? 0 : 1;
+      if (ad !== bd) return ad - bd;
+      return (b.date || '').localeCompare(a.date || '');
+    }).slice(0, 20);
+  } else {
+    feedItems = feedItems.sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 15);
+  }
 
-  const search = ($('dashNewsSearch').value || '').toLowerCase().trim();
-  // Matches the placeholder's promise ("ค้นหาในหัวข้อ + สรุป"): title OR summary.
-  const filteredItems = search
-    ? merged.filter(i => (i.text || '').toLowerCase().includes(search)
-                      || (i.summary || '').toLowerCase().includes(search))
-    : merged;
-
-  // Newest first by date string (YYYY-MM-DD sort works as lexical compare)
-  const sorted = [...filteredItems].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  $('dashNewsCount').textContent = sorted.length + ' รายการ';
+  $('dashNewsCount').textContent = feedItems.filter(i => i.date === targetDate).length + ' รายการ';
 
   const list = $('dashNewsList');
-  if (!sorted.length) {
-    list.innerHTML = '<div class="empty-state th">ไม่พบข่าวในช่วงเวลานี้</div>';
+  if (!feedItems.length) {
+    list.innerHTML = '<div class="empty-state th">ไม่พบข่าว</div>';
     return;
   }
 
-  const visible = sorted.slice(0, 15);
-  // Migrate-v8: every card uses renderDashNewsCard(item) — a single uniform
-  // shape (date | badge + title | price/chg). Edit/hide buttons + source
-  // label + summary + user_note live in the News & Factors view, NOT here.
-  list.innerHTML = visible.map(renderDashNewsCard).join('');
+  // Render cards with clickable links
+  list.innerHTML = feedItems.map(item => {
+    const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
+    const isTarget = item.date === targetDate;
+    const u = item.url;
+    const headline = escapeHtml((item.text || '').slice(0, 80));
+    const sev = item.severity === 'high' ? 'font-weight:600;' : '';
+    const link = u
+      ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" style="color:${badge.color};text-decoration:none;${sev}">${headline}</a>`
+      : `<span style="color:#555;${sev}">${headline}</span>`;
+    return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0f0;${isTarget ? '' : 'opacity:0.6;'}">
+      <span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;padding:2px 6px;border-radius:3px;margin-right:6px;">${escapeHtml(badge.label)}</span>
+      ${link}
+      <div class="th muted" style="font-size:11px;margin-top:2px;">${fmtThaiShort(item.date)}</div>
+    </div>`;
+  }).join('');
 
-  // Click handler — clicking a feed item toggles its chart pin (instead of
-  // opening the URL). This keeps the sidebar synced with the chart pins.
-  // Clicking a remark item still focuses the chart on that date.
-  list.querySelectorAll('.news-item-uniform').forEach(el => {
-    el.addEventListener('click', async () => {
-      if (el.dataset.source === 'feed' && el.dataset.id) {
-        // Toggle chart_marked via API
+  // Update prev/next button states
+  updateDateNav(targetDate);
+}
+
+// Navigate between dates that have news
+function updateDateNav(currentDate) {
+  const dates = [...new Set((window.NEWS_DATA || []).map(n => (n.date || '').slice(0,10)))].sort();
+  const idx = dates.indexOf(currentDate);
+  const prev = $('dashNewsPrev');
+  const next = $('dashNewsNext');
+  if (prev) prev.disabled = idx <= 0;
+  if (next) next.disabled = idx >= dates.length - 1 || idx < 0;
+}
         const id = parseInt(el.dataset.id, 10);
         const item = (window.NEWS_DATA || []).find(n => String(n.id) === el.dataset.id);
         const newMarked = item ? !item.chart_marked : true;
@@ -3344,6 +3351,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add news button
   const addNewsBtn = $('addNewsBtn');
   if (addNewsBtn) addNewsBtn.addEventListener('click', openAddNewsModal);
+
+  // Dashboard news date navigation (‹ ›)
+  const dPrev = $('dashNewsPrev');
+  const dNext = $('dashNewsNext');
+  if (dPrev) dPrev.addEventListener('click', () => {
+    const dates = [...new Set((window.NEWS_DATA || []).map(n => (n.date || '').slice(0,10)))].sort();
+    let idx = dates.indexOf(STATE.focusedDate);
+    if (idx > 0) { STATE.focusedDate = dates[idx - 1]; focusDashOnDate(STATE.focusedDate); renderDashNews(filterByRange(DATA, STATE.range)); }
+  });
+  if (dNext) dNext.addEventListener('click', () => {
+    const dates = [...new Set((window.NEWS_DATA || []).map(n => (n.date || '').slice(0,10)))].sort();
+    let idx = dates.indexOf(STATE.focusedDate);
+    if (idx < dates.length - 1) { STATE.focusedDate = dates[idx + 1]; focusDashOnDate(STATE.focusedDate); renderDashNews(filterByRange(DATA, STATE.range)); }
+  });
+
+  // Click on chart = select that date → sidebar jumps to it
+  const dashCanvas = document.getElementById('dashChart');
+  if (dashCanvas && typeof DASH_CHART !== 'undefined' && DASH_CHART) {
+    dashCanvas.style.cursor = 'pointer';
+    dashCanvas.addEventListener('click', (e) => {
+      const points = DASH_CHART.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+      if (points.length) {
+        const dt = new Date(points[0].parsed.x);
+        const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+        STATE.focusedDate = ymd;
+        focusDashOnDate(ymd);
+        renderDashNews(filterByRange(DATA, STATE.range));
+      }
+    });
+  }
   const addNewsCancel = $('addNewsCancel');
   if (addNewsCancel) addNewsCancel.addEventListener('click', closeAddNewsModal);
   const addNewsForm = $('addNewsForm');
