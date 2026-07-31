@@ -579,6 +579,7 @@ async function readMorningBrief() {
 async function upsertDailySummary(date, {
   digest = null, headline = null, tone = null, reason = null, bullets = null, sourceCount = null,
 } = {}) {
+  const safeDate = normalizeDateYear(date);
   await getPool().query(
     `INSERT INTO news_daily_summary (date, digest, headline, tone, reason, bullets, source_count, generated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -590,7 +591,7 @@ async function upsertDailySummary(date, {
        bullets      = EXCLUDED.bullets,
        source_count = EXCLUDED.source_count,
        generated_at = EXCLUDED.generated_at`,
-    [date, digest, headline, tone, reason, bullets, sourceCount, new Date().toISOString()]
+    [safeDate, digest, headline, tone, reason, bullets, sourceCount, new Date().toISOString()]
   );
 }
 
