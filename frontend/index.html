@@ -460,55 +460,34 @@
       </div>
     </section>
 
-    <!-- ====================== News & Factors View (unified feed, migrate-v4) ====================== -->
+    <!-- ====================== News View (redesigned) ====================== -->
     <section class="view" id="view-news">
-      <h2 class="view-title th">ข่าวและปัจจัย</h2>
-      <div class="view-sub th">ภาพรวมข่าวและปัจจัยที่กระทบหุ้น ASW</div>
-
-      <!-- Unified toolbar: date range + search + filters all in one card -->
-      <div class="card mb-16" style="padding:12px 14px;">
-        <!-- Row 1: Date range -->
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-          <span class="th" style="font-size:12px;font-weight:600;color:#888780;white-space:nowrap;">วันที่</span>
-          <input type="date" id="newsDateFrom" class="input th" style="font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid #e0e0e0;width:140px;" />
-          <span class="th muted" style="font-size:11px;">—</span>
-          <input type="date" id="newsDateTo" class="input th" style="font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid #e0e0e0;width:140px;" />
-          <button class="btn btn-ghost th" id="newsDateClear" type="button" style="font-size:12px;padding:4px 10px;">วันนี้</button>
-          <span id="newsDateInfo" class="th muted" style="font-size:12px;margin-left:auto;"></span>
+      <!-- Minimal toolbar: search + date toggle + category tabs -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <input type="text" id="newsSearch" class="input th" style="flex:1;font-size:14px;padding:8px 12px;border-radius:8px;border:1px solid #e0e0e0;" placeholder="ค้นหาข่าว..." />
+        <div style="display:flex;gap:0;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+          <button id="newsTodayBtn" class="th" style="padding:8px 14px;font-size:13px;background:#fff;border:none;cursor:pointer;">วันนี้</button>
+          <button id="newsAllBtn" class="th active" style="padding:8px 14px;font-size:13px;background:var(--primary);color:#fff;border:none;cursor:pointer;">ทั้งหมด</button>
         </div>
-        <!-- Divider -->
-        <div style="border-top:1px solid #f0f0f0;margin:0 -14px 10px;"></div>
-        <!-- Row 2: Search + range pills + add button -->
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-          <input type="text" id="newsSearch" class="input th" style="font-size:13px;padding:5px 10px;border-radius:6px;border:1px solid #e0e0e0;flex:1;min-width:160px;" placeholder="ค้นหาข่าว..." />
-          <div class="pill-row" id="newsRangePills" style="display:flex;gap:4px;">
-            <button class="pill th" data-range="7D" style="font-size:12px;padding:4px 10px;">7d</button>
-            <button class="pill th" data-range="30D" style="font-size:12px;padding:4px 10px;">30d</button>
-            <button class="pill th" data-range="90D" style="font-size:12px;padding:4px 10px;">90d</button>
-            <button class="pill th active" data-range="ALL" style="font-size:12px;padding:4px 10px;">ทั้งหมด</button>
-          </div>
-          <button class="btn btn-ghost th" id="addNewsBtn" type="button" style="font-size:12px;padding:4px 10px;">+ เพิ่มข่าว</button>
-        </div>
-        <!-- Row 3: Category chips -->
-        <div class="pill-row" id="newsCatPills" style="display:flex;gap:4px;flex-wrap:wrap;">
-          <button class="pill th active" data-cat="__all" style="font-size:12px;padding:4px 10px;">ทั้งหมด</button>
-          <button class="pill th" data-cat="COMPANY" style="font-size:12px;padding:4px 10px;">บริษัท</button>
-          <button class="pill th" data-cat="COMPETITOR" style="font-size:12px;padding:4px 10px;">คู่แข่ง</button>
-          <button class="pill th" data-cat="RATES" style="font-size:12px;padding:4px 10px;">ดอกเบี้ย</button>
-          <button class="pill th" data-cat="GOV_POLICY" style="font-size:12px;padding:4px 10px;">นโยบายรัฐ</button>
-          <button class="pill th" data-cat="INDUSTRY" style="font-size:12px;padding:4px 10px;">อุตสาหกรรม</button>
-          <button class="pill th" data-cat="MACRO" style="font-size:12px;padding:4px 10px;">มหภาค</button>
-          <button class="pill th" data-cat="POLITICS" style="font-size:12px;padding:4px 10px;">การเมือง</button>
-        </div>
+        <input type="date" id="newsDatePick" class="input th" style="font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #e0e0e0;width:130px;" title="เลือกวันที่" />
+        <button class="btn btn-ghost th" id="addNewsBtn" type="button" style="font-size:13px;padding:6px 12px;border-radius:8px;">+ เพิ่ม</button>
       </div>
 
-      <!-- Daily AI summaries -->
-      <div id="dailySummaryCard"></div>
+      <!-- Category tabs -->
+      <div id="newsCatTabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
+        <button class="news-tab active th" data-cat="__all" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:none;cursor:pointer;background:var(--primary);color:#fff;">ทั้งหมด</button>
+        <button class="news-tab th" data-cat="COMPANY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">บริษัท (ASW)</button>
+        <button class="news-tab th" data-cat="COMPETITOR" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">คู่แข่ง</button>
+        <button class="news-tab th" data-cat="RATES" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">ดอกเบี้ย</button>
+        <button class="news-tab th" data-cat="GOV_POLICY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">นโยบายรัฐ</button>
+        <button class="news-tab th" data-cat="INDUSTRY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">อุตสาหกรรม</button>
+        <button class="news-tab th" data-cat="MACRO" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">มหภาค</button>
+      </div>
 
-      <!-- News feed -->
-      <div id="newsDayGroups" class="news-day-groups"></div>
+      <!-- Unified timeline: summaries + news merged per day -->
+      <div id="newsTimeline"></div>
 
-      <div id="unifiedEmpty" class="empty-state th" hidden>— ไม่พบข่าวที่ตรงกับเงื่อนไขที่เลือก —</div>
+      <div id="unifiedEmpty" class="empty-state th" hidden style="padding:40px;text-align:center;color:#888780;">— ไม่พบข่าว —</div>
 
       <!-- Pipeline status row (bottom of feed) -->
       <div class="card mt-16">
@@ -845,9 +824,9 @@ const STATE = {
   focusedDate: null,
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
-  newsRange: 'ALL',      // 'TODAY' | '7D' | '10D' | '30D' | '90D' | 'ALL' ('ALL' = no date filter)
-  newsDateFrom: null,    // YYYY-MM-DD range start (from date picker)
-  newsDateTo: null,      // YYYY-MM-DD range end (from date picker)
+  newsRange: 'ALL',
+  newsView: 'all',       // 'today' | 'all' — simplified toggle
+  newsDatePick: null,    // YYYY-MM-DD when user picks a specific date
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
   newsCollapsed: {},     // date-grouped feed: keyed by 'YYYY-MM-DD'; all groups expanded by default
 };
@@ -2519,39 +2498,26 @@ function syncNewsCatPills() {
 
 function renderUnifiedNews() {
   let items = buildMergedNewsItems();
-  // Date range filter: if user picked a range (from/to), filter to that
-  // window. If only 'from' is set, show from that date onwards. If only
-  // 'to', show up to that date. Otherwise the range pill decides:
-  // 'TODAY' (วันนี้ button) = today only, 7D/30D/90D = rolling window,
-  // 'ALL' (or unset) = NO date filtering at all — "ทั้งหมด" means all.
-  if (STATE.newsDateFrom || STATE.newsDateTo) {
-    const from = STATE.newsDateFrom || '0000-01-01';
-    const to = STATE.newsDateTo || '9999-12-31';
-    items = items.filter(it => it.date >= from && it.date <= to);
-  } else if (STATE.newsRange === 'TODAY') {
-    const today = todayICT();
-    items = items.filter(it => it.date === today);
-  } else if (STATE.newsRange && STATE.newsRange !== 'ALL') {
-    items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
+  const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+  // Date filter: picked date -> that day only; "today" view -> today; "all" -> everything
+  if (STATE.newsDatePick) {
+    items = items.filter(it => it.date === STATE.newsDatePick);
+  } else if (STATE.newsView === 'today') {
+    items = items.filter(it => it.date === todayICT);
   }
-  // Search filter (case-insensitive) — headline OR summary, because the feed
-  // visibly renders item.summary and users search words they can see.
+
+  // Search
   const q = (STATE.newsSearch || '').toLowerCase().trim();
   if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q)
                                  || (it.summary || '').toLowerCase().includes(q));
-  // Migrate-v9 + 1:1 single-select: when not on "ทั้งหมด", keep only items
-  // whose category equals the selected chip. The DB stores one of the
-  // taxonomy-v2 keys directly (COMPANY / COMPETITOR / RATES / GOV_POLICY /
-  // POLITICS / INDUSTRY / MACRO), so the check is direct equality — no
-  // bucketFor() collapse needed. Items whose category isn't a known key are
-  // dropped from filtered views, matching what migrate-v9.js wrote to the DB.
+
+  // Category
   if (STATE.newsCats !== '__all') {
-    const want = STATE.newsCats;
-    items = items.filter(it => it.category === want);
+    items = items.filter(it => it.category === STATE.newsCats);
   }
-  // Sort: date desc primary, then severity/priority desc WITHIN a date. The
-  // date-first ordering is what makes the date-grouped feed read naturally
-  // (newest day on top, most-important item first within each day).
+
+  // Sort: date desc, then priority within day
   items.sort((a, b) => {
     const dd = (b.date || '').localeCompare(a.date || '');
     if (dd !== 0) return dd;
@@ -2559,35 +2525,44 @@ function renderUnifiedNews() {
     const pb = (b.display_priority != null) ? b.display_priority : priorityForItem(b);
     return pb - pa;
   });
-  // Group by calendar date (YYYY-MM-DD). Because the array is date-sorted,
-  // Map insertion order is already newest-first — no re-sort of the keys.
+
+  // Merge summaries into the same date group — one unified timeline
+  const summaryMap = {};
+  if (window.ALL_SUMMARIES) {
+    for (const s of window.ALL_SUMMARIES) summaryMap[s.date] = s;
+  }
   const groups = new Map();
   items.forEach(it => {
     const k = it.date || '—';
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(it);
+    if (!groups.has(k)) groups.set(k, { items: [], summary: summaryMap[k] || null });
+    groups.get(k).items.push(it);
   });
-  // Render one <header toggle> + <body> block per date into the container.
-  // Summaries are NOT injected here — they live in a separate panel above.
-  const container = $('newsDayGroups');
+
+  const container = $('newsTimeline');
   if (container) {
     container.innerHTML = items.length
-      ? [...groups.entries()].map(([date, list]) => {
-          const collapsed = !!STATE.newsCollapsed[date];
-          return `<section class="news-day">
-            <button class="news-day-toggle th" type="button" data-date="${escapeHtml(date)}" aria-expanded="${!collapsed}">
-              <span class="news-day-chevron">${icon('chevron-down')}</span>
-              <span class="news-day-date">${escapeHtml(fmtThaiDate(date))}</span>
-              <span class="news-day-count">${list.length} ข่าว</span>
-            </button>
-            <div class="news-day-body" data-date="${escapeHtml(date)}"${collapsed ? ' hidden' : ''}>
-              ${list.map(renderUnifiedNewsItem).join('')}
-            </div>
-          </section>`;
+      ? [...groups.entries()].map(([date, group]) => {
+          const s = group.summary;
+          const tone = (s?.tone || '').toLowerCase();
+          const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+          const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || '';
+          const bullets = s ? String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean) : [];
+          return '<div style="margin-bottom:20px;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0;">' +
+              '<span class="th" style="font-size:15px;font-weight:700;">' + escapeHtml(fmtThaiDate(date)) + '</span>' +
+              '<span class="th muted" style="font-size:12px;">' + group.items.length + ' ข่าว</span>' +
+              (s ? '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:' + toneColor + '1a;color:' + toneColor + ';font-weight:600;">' + escapeHtml(toneLabel) + '</span>' : '') +
+            '</div>' +
+            (s ? '<div style="background:#f8f8f6;border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ' + toneColor + ';">' +
+              (s.headline ? '<div class="th" style="font-size:14px;font-weight:600;margin-bottom:6px;">' + escapeHtml(s.headline) + '</div>' : '') +
+              (bullets.length ? '<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:#555;">' + bullets.map(b => '<li>' + escapeHtml(b) + '</li>').join('') + '</ul>' : '') +
+              (s.reason ? '<div class="th muted" style="font-size:11px;margin-top:6px;">' + escapeHtml(s.reason) + '</div>' : '') +
+            '</div>' : '') +
+            group.items.map(renderUnifiedNewsItem).join('') +
+          '</div>';
         }).join('')
       : '';
   }
-  // Empty state when search/range/category filtered everything out.
   const empty = $('unifiedEmpty');
   if (empty) empty.hidden = items.length > 0;
 }
