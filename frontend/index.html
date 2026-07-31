@@ -1552,7 +1552,11 @@ function buildDashChart(filtered) {
             afterBody: (items) => {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
-              const ymd = dt.toISOString().slice(0,10);
+              // Build the key from LOCAL parts. Data points are `r.date +
+              // 'T00:00:00'` (no Z) so parsed.x is local midnight; toISOString()
+              // would render the previous day for any viewer east of UTC (all of
+              // Thailand), making this tooltip show the wrong day's news.
+              const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
               // Find the ASW price change for this date
               const rowIdx = DATA.findIndex(r => r.date === ymd);
               const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
@@ -2177,7 +2181,8 @@ function buildPriceChart() {
             afterBody: (items) => {
               if (!items.length) return '';
               const dt = new Date(items[0].parsed.x);
-              const ymd = dt.toISOString().slice(0,10);
+              // LOCAL parts, not toISOString() — see the dashboard tooltip above.
+              const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
               // Same tooltip format as dashboard — show price change + news.
               const rowIdx = DATA.findIndex(r => r.date === ymd);
               const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
@@ -2720,7 +2725,7 @@ function renderDailySummary() {
         const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
         const dt = new Date(s.date + 'T00:00:00');
         const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-        const bullets = String(s.digest || '').split('\\n').map(x => x.trim().replace(/^[-•]\\s*/, '')).filter(Boolean);
+        const bullets = String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
         const isLatest = s.date === sorted[0].date;
         return `<details class="summary-day-card" ${isLatest ? 'open' : ''} style="background:#fff;border-radius:8px;margin-bottom:8px;border-left:3px solid ${toneColor};padding:0;">
           <summary style="padding:10px 14px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">

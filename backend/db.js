@@ -14,6 +14,9 @@
 
 const { Pool } = require('pg');
 const { createHash } = require('node:crypto');
+// Used by ensureDailyRow() so remark/pin/brief writes never create a row for a
+// weekend or SET holiday (which would show as a price-less point on the chart).
+const { isTradingDay } = require('./lib/thai-trading-days');
 
 // Normalize a date string to ensure the year is CE, not BE.
 // Gemini backfill scripts sometimes return Buddhist-era years (e.g. 2568
@@ -402,17 +405,44 @@ async function updateRemarks(date, { company = null, sector = null, macro = null
   return updateSingleRemark(date, { category, text });
 }
 
+// Make sure a `daily` row exists for `date` so the remark/pin/brief writers
+// below (all plain UPDATEs) actually match something.
+//
+// Why this is needed: `writeRows` — the price pipeline — is the ONLY creator of
+// `daily` rows, and it runs once a day at 17:35 ICT. The news crons run at
+// 08:00, 12:30, 15:00, 17:30 and 21:00 ICT, so for most of the day today's row
+// does not exist yet and every UPDATE silently matched 0 rows while still
+// reporting success. The Monday 08:00 morning brief was lost EVERY week this
+// way (at 08:00 Monday the newest row is still Friday's).
+//
+// Only trading days get a row: creating one for a weekend/holiday would put a
+// price-less point on the chart and an empty line in the daily price table.
+// Returns true if the date is writable, false if it was skipped.
+async function ensureDailyRow(date) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  if (!isTradingDay(date)) return false;
+  await getPool().query(
+    `INSERT INTO daily (date, fetched_at) VALUES ($1, $2)
+     ON CONFLICT (date) DO NOTHING`,
+    [date, new Date().toISOString()]
+  );
+  return true;
+}
+
 // Update only the single (remark, category) pair for a date. Used by the
 // gemini-search.mjs 'gemini-company' pipeline. The price pipeline never
 // touches these columns, so writeRows() can safely leave them alone.
 async function updateSingleRemark(date, { category = null, text = null } = {}) {
-  await getPool().query(
+  await ensureDailyRow(date);
+  const r = await getPool().query(
     `UPDATE daily
      SET remark   = $1,
          category = $2
      WHERE date = $3`,
     [text, category, date]
   );
+  if (!r.rowCount) console.warn(`[db] updateSingleRemark: no daily row for ${date} — remark dropped`);
+  return r.rowCount;
 }
 
 // Append a remark line for a date WITHOUT clobbering the existing remark
@@ -424,13 +454,16 @@ async function updateSingleRemark(date, { category = null, text = null } = {}) {
 // tooltip. category is COALESCE — we only set it if daily.category is null
 // (so COMPANY's explicit category isn't overwritten by a vague 'macro').
 async function appendRemarkPin(date, text, category = null) {
-  await getPool().query(
+  await ensureDailyRow(date);
+  const r = await getPool().query(
     `UPDATE daily
      SET remark   = COALESCE(remark || E'\n' || $1, $1),
          category = COALESCE(category, $2)
      WHERE date = $3`,
     [text, category, date]
   );
+  if (!r.rowCount) console.warn(`[db] appendRemarkPin: no daily row for ${date} — pin dropped`);
+  return r.rowCount;
 }
 
 // Migrate-v7: User-remark popover on the Daily Price Table.
@@ -442,10 +475,12 @@ async function setDailyRemark(date, note) {
     throw new Error('setDailyRemark: date (YYYY-MM-DD) required');
   }
   const trimmed = (note && typeof note === 'string') ? note.trim() : '';
-  await getPool().query(
+  await ensureDailyRow(date);
+  const r = await getPool().query(
     `UPDATE daily SET user_note = $1 WHERE date = $2`,
     [trimmed || null, date]
   );
+  return r.rowCount;
 }
 
 // =============================================================================
@@ -456,7 +491,8 @@ async function setDailyRemark(date, note) {
 // =============================================================================
 
 async function updateMorningBrief(date, { lastWeek = null, thisWeek = null, tone = null, reason = null } = {}) {
-  await getPool().query(
+  await ensureDailyRow(date);
+  const r = await getPool().query(
     `UPDATE daily
      SET morning_brief     = $1,
          morning_watch     = $2,
@@ -465,6 +501,8 @@ async function updateMorningBrief(date, { lastWeek = null, thisWeek = null, tone
      WHERE date = $5`,
     [lastWeek, thisWeek, tone, new Date().toISOString(), date]
   );
+  if (!r.rowCount) console.warn(`[db] updateMorningBrief: no daily row for ${date} — brief dropped`);
+  return r.rowCount;
 }
 
 // Returns the latest non-null morning brief (one row). Ordered by
@@ -877,6 +915,7 @@ async function readNewsStatus() {
 module.exports = {
   openDb,
   ensureSchema,
+  ensureDailyRow,
   closeDb,
   // daily
   writeRows,

@@ -27,6 +27,46 @@ async function loadTaxonomy() {
 
 const PORT = process.env.PORT || 3000;
 const app = express();
+
+// --- Async-handler safety net -------------------------------------------------
+// Express 4 does NOT forward a rejected promise from an `async` route handler to
+// the error middleware — it ignores the returned promise entirely. Node then
+// treats it as an unhandled rejection and, with the default
+// --unhandled-rejections=throw, KILLS THE PROCESS. Combined with
+// railway.json's restartPolicyMaxRetries:5, five such rejections take the
+// deployment down permanently.
+//
+// Many handlers here `await` outside their try block (e.g. `const id = await
+// db.logFetchStart()`), so a single dropped Postgres connection was enough to
+// exit(1). Rather than restructure ~28 handlers, wrap the routing methods once,
+// here, before any route is registered: every handler's return value is
+// normalized to a promise and routed to next(err) on rejection, so failures
+// become a clean 500 from the error middleware at the bottom of this file.
+//
+// `fn.length < 4` skips 4-arg error middleware, which must not be wrapped.
+for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+  const original = app[method].bind(app);
+  app[method] = (path, ...handlers) => original(path, ...handlers.map(fn =>
+    (typeof fn === 'function' && fn.length < 4)
+      ? function wrapped(req, res, next) {
+          return Promise.resolve(fn(req, res, next)).catch(next);
+        }
+      : fn
+  ));
+}
+
+// Last-resort backstops. The wrapper above covers routes; these cover anything
+// else that can reject unattended — most importantly the node-cron callbacks,
+// which node-cron invokes without attaching a rejection handler. Logging and
+// staying up is strictly better than exiting: a failed cron tick should not
+// take the HTTP server down with it.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+});
+
 app.use(cors());
 app.use(express.json());
 // Static: serve the frontend/ dir (HTML/CSS), plus an explicit route for the
@@ -124,7 +164,16 @@ app.post('/api/daily/:date/remark', async (req, res) => {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD', code: 'date_bad_format' });
     }
     const note = (req.body && typeof req.body.note === 'string') ? req.body.note : null;
-    await db.setDailyRemark(date, note);
+    const saved = await db.setDailyRemark(date, note);
+    // setDailyRemark ensures the daily row first, but only for trading days —
+    // a note on a weekend/holiday matches nothing. Report that instead of
+    // echoing ok:true for a write that never landed.
+    if (!saved) {
+      return res.status(404).json({
+        error: 'no daily row for that date (weekend, holiday, or outside the data range)',
+        code: 'daily_row_missing', date,
+      });
+    }
     // Echo back the trimmed note (or null) so the client can confirm.
     res.json({ ok: true, date, note: note && note.trim() ? note.trim() : null });
   } catch (e) {
@@ -682,10 +731,16 @@ async function _runDailyYahoo() {
     console.error('[scheduler] yahoo failed:', e.message || e);
   }
 }
-cron.schedule('35 10 * * *', async () => {
+// NOTE (fixed): both expressions previously resolved to 10:35 ICT — 35 minutes
+// after the market OPENS — because the UTC value (10:35) was pasted into the
+// expression that is interpreted as Asia/Bangkok, and the "UTC fallback" used
+// 03:35 UTC (= 10:35 ICT) as well. That made `daily.close` a mid-session price
+// instead of the true EOD close. The ICT-labelled schedule now says 17:35 ICT,
+// and the untimezoned fallback says 10:35 UTC — the same instant.
+cron.schedule('35 17 * * *', async () => {
   if (_yahooDailyGuard()) await _runDailyYahoo();
 }, { timezone: 'Asia/Bangkok' });
-cron.schedule('35 3 * * *', async () => {
+cron.schedule('35 10 * * *', async () => {
   if (_yahooDailyGuard()) await _runDailyYahoo();
 });
 
