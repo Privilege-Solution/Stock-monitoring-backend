@@ -13,9 +13,15 @@ const HOLIDAYS = new Set([
   '2026-08-10','2026-08-11','2026-10-23','2026-12-07','2026-12-10','2026-12-31',
 ]);
 
+// All date math below parses with an explicit 'Z' and reads UTC fields. Parsing
+// 'YYYY-MM-DDT00:00:00' without the Z yields LOCAL midnight, which then renders
+// as the PREVIOUS day via toISOString() on any host east of UTC — i.e. every
+// developer machine in Thailand. Production masked this because the container
+// has no TZ set (defaults to UTC); adding `ENV TZ=Asia/Bangkok` would have
+// silently shifted every date by one day.
 function isWeekend(dateISO) {
-  const d = new Date(dateISO + 'T00:00:00');
-  const dow = d.getDay();
+  const d = new Date(dateISO + 'T00:00:00Z');
+  const dow = d.getUTCDay();
   return dow === 0 || dow === 6;
 }
 
@@ -27,12 +33,18 @@ function isTradingDay(dateISO) {
   return !isWeekend(dateISO) && !isHoliday(dateISO);
 }
 
+// Every SET trading day in [fromISO, toISO] — weekends and holidays EXCLUDED,
+// as the name promises. It previously returned every calendar day, which broke
+// /api/health two ways: the "expected" count was ~50% too high (365 vs 244 for
+// a year), and the ~120 weekend/holiday entries per year flooded the caller's
+// 200-row display cap so genuine data gaps were truncated away and reported as
+// zero.
 function expectedTradingDays(fromISO, toISO) {
   const out = [];
-  const start = new Date(fromISO + 'T00:00:00');
-  const end = new Date(toISO + 'T00:00:00');
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    out.push(d.toISOString().slice(0, 10));
+  const end = new Date(toISO + 'T00:00:00Z');
+  for (let d = new Date(fromISO + 'T00:00:00Z'); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    if (isTradingDay(iso)) out.push(iso);
   }
   return out;
 }
@@ -59,8 +71,8 @@ function isMarketOpen(now = new Date()) {
 }
 
 function diffDays(fromISO, toISO) {
-  const a = new Date(fromISO + 'T00:00:00');
-  const b = new Date(toISO + 'T00:00:00');
+  const a = new Date(fromISO + 'T00:00:00Z');
+  const b = new Date(toISO + 'T00:00:00Z');
   return Math.floor((b - a) / 86400000);
 }
 

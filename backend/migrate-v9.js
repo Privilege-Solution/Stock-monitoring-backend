@@ -68,7 +68,12 @@ function parsePgUrl(url) {
     user: decodeURIComponent(u.username),
     password: decodeURIComponent(u.password),
     database: u.pathname.replace(/^\//, '') || 'postgres',
-    ssl: { rejectUnauthorized: false },
+    // Railway's managed Postgres on the private network does not offer SSL —
+    // forcing it fails with "The server does not support SSL connections".
+    // Mirrors resolveSslConfig() in db.js.
+    ssl: (u.hostname.endsWith('.railway.internal') || u.hostname === 'localhost' || u.hostname === '127.0.0.1')
+      ? false
+      : { rejectUnauthorized: false },
     max: 2,
   };
 }

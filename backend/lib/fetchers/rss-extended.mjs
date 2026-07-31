@@ -39,7 +39,10 @@ import db from '../../db.js';
 import {
   classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
 } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit } from './news-rss-helpers.mjs';
+
+// Max simultaneous Bing requests — see mapLimit() in news-rss-helpers.mjs.
+const BING_CONCURRENCY = 4;
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
@@ -96,14 +99,35 @@ const QUERIES = [
 // Broker signals — require at least one of these to land in the broker
 // bucket. Without these tokens a matched headline ("ASW ลุยตลาดภูเก็ต")
 // would be misrouted to broker instead of peer_news / company_filing.
-const BROKER_TOKENS = [
-  'โบรกเกอร์', 'บลจ.', 'บล.', 'ASPS', 'MST', 'KGI', 'KTBST', 'LH', 'JPM',
-  'บริษัทหลักทรัพย์',
-  'target price', 'ราคาเป้า', 'เรท',
-  'แนะนำซื้อ', 'แนะนำขาย', 'แนะนำถือ', 'แนะนำ', 'เรทหุ้น',
-  'อันดับ', 'Rating', 'ราคาพาร์',
+//
+// Split in two because the two scripts need different matching, and both had
+// bugs that made the requireAsw:'OR' gate far too permissive:
+//   - The bare Thai words 'แนะนำ' ("recommend") and 'อันดับ' ("rank") matched
+//     any headline containing them. "ธปท. แนะนำประชาชนระวังหนี้ครัวเรือน"
+//     passed the OR gate of `{ q:'แนะนำซื้อ ASW', severity:'high' }` and then
+//     inherited that QUERY row's severity/show_pin — a household-debt PSA
+//     landed at display_priority 115, pinned on the price chart and top of the
+//     feed. Only the specific forms survive (แนะนำซื้อ / แนะนำขาย / แนะนำถือ,
+//     and อันดับเครดิต for the credit-rating sense of 'อันดับ').
+//   - Latin broker tickers were matched with t.includes(), so bare 'LH' hit
+//     inside any word containing those letters. They now use word boundaries.
+const BROKER_TOKENS_THAI = [
+  'โบรกเกอร์', 'บลจ.', 'บล.', 'บริษัทหลักทรัพย์',
+  'ราคาเป้า', 'เรทหุ้น',
+  'แนะนำซื้อ', 'แนะนำขาย', 'แนะนำถือ',
+  'อันดับเครดิต', 'ราคาพาร์',
   'นายหน้า', 'โบรก', 'วิเคราะห์หุ้น', 'คาดกำไร', 'ประเมินหุ้น',
 ];
+const BROKER_TOKENS_LATIN = [
+  'ASPS', 'MST', 'KGI', 'KTBST', 'LH', 'JPM', 'target price', 'Rating',
+];
+// Lookaround boundaries so 'LH' / 'MST' can't match inside a longer word.
+const BROKER_LATIN_RE = new RegExp(
+  '(?<![A-Za-z])(' +
+  BROKER_TOKENS_LATIN.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') +
+  ')(?![A-Za-z])',
+  'i',
+);
 
 // Filing-side keywords — tighter than requireAsw alone. Makes sure that
 // "ASW ลุย..." (peer news) doesn't drift into company_filing.
@@ -124,7 +148,10 @@ const FILING_TOKENS = [
 function headlineMentionsBroker(title) {
   if (!title) return false;
   const t = title.toLowerCase();
-  return BROKER_TOKENS.some(kw => t.includes(kw.toLowerCase()));
+  // Thai: substring is correct (no word boundaries in the script).
+  if (BROKER_TOKENS_THAI.some(kw => t.includes(kw.toLowerCase()))) return true;
+  // Latin: word-boundary regex (see BROKER_LATIN_RE).
+  return BROKER_LATIN_RE.test(title);
 }
 
 function headlineMentionsFiling(title) {
@@ -168,15 +195,29 @@ function parseItem(itemXml, q) {
   //                            foreign-ownership, etc. — sector-level signal)
   // Company_filing intentionally has no extra gate beyond ASW — any ASW
   // mention is treated as company news.
-  if (q.requireAsw === true && !headlineMentionsAsw(title)) return null;
+  const mentionsAsw = headlineMentionsAsw(title);
+  if (q.requireAsw === true && !mentionsAsw) return null;
   if (q.requireAsw === 'OR'
-      && !(headlineMentionsAsw(title) || headlineMentionsBroker(title))) return null;
+      && !(mentionsAsw || headlineMentionsBroker(title))) return null;
 
   // Classify into the new 6-way taxonomy. The headline's title pattern wins
   // (matches migrate-v9.js priority); the query's legacy `category` is a
   // fallback for generic titles where no pattern matches.
   const category = classifyCategory(title, q.category);
-  const impact_level = impactLevelFromSeverity(q.severity);
+
+  // Severity/show_pin come from the QUERY row, which describes what the query
+  // is FOR — not what this particular headline actually says. On an 'OR' query
+  // a headline can qualify on the broker token ALONE and never mention the
+  // company, so stamping it with the query's severity:'high' + show_pin gave
+  // an unrelated headline display_priority 115 and pinned it to the chart.
+  // Only honour 'high' on an 'OR' query when the ASW/company condition is what
+  // matched. requireAsw:true rows always mention ASW (checked above) and
+  // requireAsw:false rows are deliberate sector-level signals (the กนง. policy
+  // -rate query is high-severity by design), so both keep their configured value.
+  const severity = (q.requireAsw === 'OR' && q.severity === 'high' && !mentionsAsw)
+    ? 'medium'
+    : (q.severity || 'medium');
+  const impact_level = impactLevelFromSeverity(severity);
 
   return {
     title,
@@ -191,8 +232,8 @@ function parseItem(itemXml, q) {
     title_hash: sha1(normalizeHeadline(title) || guid || link),
     pipeline: q.pipeline,
     impact: 'neutral',               // legacy sentiment column — RSS items don't score this
-    severity: q.severity || 'medium',
-    show_pin: q.severity === 'high',
+    severity,                        // content-aware (see above), not blindly q.severity
+    show_pin: severity === 'high',
     summary: null,
     impact_level,                    // taxonomy-v2 key
   };
@@ -214,16 +255,22 @@ async function fetchQuery(q, maxAgeDays) {
       .filter(Boolean)
       .filter(it => new Date(it.date + 'T00:00:00Z').getTime() >= cutoff);
   } catch (e) {
+    // Print the stack when there is one — this catch is broad enough to hide a
+    // programming error (a TypeError in parseItem() fails every item of every
+    // query), which otherwise reads as "0 items" with one opaque line.
     console.log(`[rss-extended] ${q.q} → ERR ${e.message}`);
+    if (e && e.stack) console.log(e.stack);
     return [];
   }
 }
 
 async function run({ sinceDate, maxAgeDays = 14 } = {}) {
-  console.log(`[rss-extended] fetching ${QUERIES.length} queries (maxAge=${maxAgeDays}d)`);
+  console.log(`[rss-extended] fetching ${QUERIES.length} queries (maxAge=${maxAgeDays}d, concurrency=${BING_CONCURRENCY})`);
   // Tighter maxAge (14d) than rss-property (7d) because broker/insider
   // headlines stop being actionable quickly. Override via arg if needed.
-  const all = (await Promise.all(QUERIES.map(q => fetchQuery(q, maxAgeDays)))).flat();
+  // Concurrency-capped rather than Promise.all — Bing throttles a full-batch
+  // fan-out and the resulting empty response is silent. See mapLimit().
+  const all = (await mapLimit(QUERIES, BING_CONCURRENCY, q => fetchQuery(q, maxAgeDays))).flat();
 
   // Dedupe by title_hash across queries — Google News surfaces overlapping
   // results for queries like "ASPS ASW" and "target price ASW".
@@ -242,10 +289,11 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
   const homepages = valid.filter(it => isHomepageUrl(it.source_url));
   if (homepages.length) {
     console.log(`[rss-extended] deepening ${homepages.length} homepage URLs...`);
-    await Promise.all(homepages.map(async (it) => {
+    // Capped too: each deepen costs up to 2 more Bing requests.
+    await mapLimit(homepages, BING_CONCURRENCY, async (it) => {
       const deep = await deepenHomepageUrl(it.title, it.source_label);
       if (deep) it.source_url = deep;
-    }));
+    });
   }
   const dropped = valid.filter(it => isHomepageUrl(it.source_url));
   const deepened = valid.filter(it => !isHomepageUrl(it.source_url));
@@ -271,5 +319,7 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
   return { ok: true, fetched: deepened.length, inserted, byCat, byImpact };
 }
 
-export { run };
+// headlineMentionsBroker is exported for unit testing — it is the gate that
+// decides whether a non-ASW headline may enter a broker query's results.
+export { run, headlineMentionsBroker };
 export default { run };

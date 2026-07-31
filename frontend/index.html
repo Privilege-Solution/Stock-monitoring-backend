@@ -221,6 +221,11 @@
   <!-- Main content -->
   <main class="main">
 
+    <!-- Shown only when the backend is reachable but has no daily rows yet
+         (fresh deploy / empty DB). Bundled sample prices are NOT rendered in
+         that case, so this banner is the honest empty state. -->
+    <div id="noDataBanner" class="empty-state th" hidden style="margin-bottom:12px;">— ยังไม่มีข้อมูล —</div>
+
     <!-- ====================== Dashboard View ====================== -->
     <section class="view active" id="view-dashboard">
 
@@ -658,9 +663,13 @@ window.ASW_API = {
     try { const r = await fetch('/api/metadata'); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { rowCount: (window.SAMPLE_DATA||[]).length, lastFetched: null, lastFetchOk: null, lastFetchSource: 'bundled', status: 'bundled' }; }
   },
+  // Returns [] when the backend is healthy but the DB has no rows yet, and
+  // null when the request itself failed. Callers MUST keep the two apart —
+  // silently substituting SAMPLE_DATA here made a fresh deploy render bundled
+  // 2021-2024 sample prices labelled "Live · yahoo". See applyDailyRows().
   async daily() {
     try { const r = await fetch('/api/daily'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
-    catch (e) { return window.SAMPLE_DATA || []; }
+    catch (e) { return null; }
   },
   async peers() {
     try { const r = await fetch('/api/peers'); if (!r.ok) throw 0; const d = await r.json(); return d; }
@@ -838,7 +847,7 @@ const STATE = {
   focusedDate: null,
   // Unified news feed (migrate-v4 view rebuild): replaces the 6 subtabs.
   newsSearch: '',
-  newsRange: 'ALL',      // '7D' | '10D' | '30D' | '90D' | 'ALL'
+  newsRange: 'ALL',      // 'TODAY' | '7D' | '10D' | '30D' | '90D' | 'ALL' ('ALL' = no date filter)
   newsDateFrom: null,    // YYYY-MM-DD range start (from date picker)
   newsDateTo: null,      // YYYY-MM-DD range end (from date picker)
   newsCats: '__all',     // '__all' = show all categories, otherwise exact-match the chip (1:1 single-select)
@@ -848,6 +857,46 @@ const STATE = {
 let DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompare(b.date));
 let DASH_CHART = null, VOL_CHART = null, PRICE_CHART = null;
 let CURRENT_FILE_NAME = 'sample_data.js';
+// Status-bar label used whenever the bundled sample rows are on screen — never
+// the "Live · <source>" label, so demo data can't be mistaken for live prices.
+const SAMPLE_FILE_LABEL = 'sample_data.js · ออฟไลน์ (ข้อมูลตัวอย่าง)';
+
+// Digest list from /api/daily-summaries, cached at module level. Every
+// reassignment of DATA replaces the row objects, and applyDigestRemarks()
+// stamps `digestRemark` in place — so each refresh path must re-stamp from
+// this cache or the Remark column blanks out after the 60-s auto-poll.
+let CACHED_DIGESTS = [];
+
+// Toggle the "no data yet" banner (backend up, DB empty).
+function setDataEmptyState(isEmpty) {
+  const el = $('noDataBanner');
+  if (el) el.hidden = !isEmpty;
+}
+
+// Single entry point for a /api/daily result.
+//   rows === null -> the fetch failed; fall back to bundled SAMPLE_DATA
+//   rows.length===0 -> backend healthy, DB empty; show the empty state
+//   otherwise -> real rows
+// Returns 'sample' | 'empty' | 'live' so the caller can label the source.
+// `keepOnFailure` — pass true from the refresh / 60s auto-poll paths. A fetch
+// failure there means a transient blip while we already hold good live data;
+// downgrading that to sample_data.js would be strictly worse than showing the
+// slightly stale rows we have. Only the initial bootstrap (which has nothing
+// to keep) falls back to the sample set.
+function applyDailyRows(rows, keepOnFailure = false) {
+  let mode;
+  if (rows == null) {
+    if (keepOnFailure && DATA && DATA.length) return 'stale';
+    DATA = (window.SAMPLE_DATA || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    mode = 'sample';
+  } else {
+    DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+    mode = rows.length ? 'live' : 'empty';
+  }
+  applyDigestRemarks(CACHED_DIGESTS);
+  setDataEmptyState(mode === 'empty');
+  return mode;
+}
 
 // ASW.BK (AssetWise) IPO date — first trading day (2021-04-28, close ฿8.76).
 // Anchors the "since IPO" pill, the IPO annotation line, and the return-since-IPO stat.
@@ -869,6 +918,9 @@ const fmtBigNum = (n) => {
   if (a >= 1e3) return (n/1e3).toFixed(2) + 'K';
   return n.toFixed(2);
 };
+// Today's calendar date in ICT (UTC+7) — the timezone every date string in
+// the DB is keyed by. Same expression that was inlined at the call sites.
+const todayICT = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 const fmtDate = (d) => {
   if (!d) return '—';
   const dt = new Date(d + 'T00:00:00');
@@ -1302,7 +1354,9 @@ function renderKPIs(filtered) {
     const v = last.volume;
     $('kpiVolume').textContent = v >= 1000 ? (v / 1000).toFixed(2) + 'M' : v.toFixed(2) + 'K';
     const withVol = filtered.filter(r => r.volume != null);
-    const last30 = withVol.slice(-31);
+    // The 30 days BEFORE today — today's own volume is the numerator of the
+    // ratio below, so including it in the average would dampen the signal.
+    const last30 = withVol.slice(-31, -1);
     const avg30 = last30.length ? last30.reduce((a,b) => a + (b.volume || 0), 0) / last30.length : null;
     const el = $('kpiVolumeCh');
     if (avg30 && avg30 > 0) {
@@ -1628,6 +1682,7 @@ function buildDashChart(filtered) {
 
 function focusDashOnDate(dateStr) {
   if (!DASH_CHART) return;
+  if (!DATA.length) return;   // empty DB — DATA[0] below would throw
   const dt = new Date(dateStr + 'T00:00:00');
   const start = new Date(dt); start.setDate(start.getDate() - 30);
   const end = new Date(dt); end.setDate(end.getDate() + 30);
@@ -1711,6 +1766,7 @@ function renderDashNews(filtered) {
     date: (n.date || '').slice(0, 10),
     category: n.category || 'MACRO',
     text: n.title || '',
+    summary: n.summary || null,   // searched by #dashNewsSearch (title + สรุป)
     url: n.source_url,
     id: n.id,
     chart_marked: !!n.chart_marked,
@@ -1720,8 +1776,10 @@ function renderDashNews(filtered) {
   const merged = [...remarkItems, ...feedItems];
 
   const search = ($('dashNewsSearch').value || '').toLowerCase().trim();
+  // Matches the placeholder's promise ("ค้นหาในหัวข้อ + สรุป"): title OR summary.
   const filteredItems = search
-    ? merged.filter(i => (i.text || '').toLowerCase().includes(search))
+    ? merged.filter(i => (i.text || '').toLowerCase().includes(search)
+                      || (i.summary || '').toLowerCase().includes(search))
     : merged;
 
   // Newest first by date string (YYYY-MM-DD sort works as lexical compare)
@@ -1777,6 +1835,19 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[m]));
+}
+
+// Scheme allow-list for anything that becomes an href. escapeHtml() alone is
+// not enough: it leaves `javascript:...` intact, and news_feed.source_url comes
+// from Gemini grounding + RSS redirects without protocol validation on the
+// pipeline insert path. Returns the url only when it is http(s), else null so
+// the caller can fall back to a plain (non-clickable) <span>.
+function safeUrl(u) {
+  if (!u) return null;
+  try {
+    const p = new URL(String(u));
+    return (p.protocol === 'http:' || p.protocol === 'https:') ? u : null;
+  } catch (e) { return null; }
 }
 
 // Inline SVG icon helper (Feather-inspired, MIT).
@@ -1856,17 +1927,20 @@ function bucketByRelativeDate(dateStr, nowStr) {
 
 // Unified-feeds range filter. Reuses STATE.newsRange so the pills stay in
 // sync with whatever the user clicked. 'ALL' = no cap; the day-count keys
-// (7D/10D/30D/90D) cap to a rolling N-day window. Legacy 'Today' is kept so
-// any stale callers still resolve, but no toolbar pill emits it anymore.
+// (7D/10D/30D/90D) cap to a rolling N-day window. 'TODAY' (emitted by the
+// วันนี้ button) is today only; legacy 'Today' is kept as an alias so any
+// stale callers still resolve.
 function inNewsRange(dateStr, range) {
   if (!dateStr) return true;
   if (!range || range === 'ALL') return true;
-  if (range === 'Today') {
-    return dateStr === new Date().toISOString().slice(0, 10);
+  if (range === 'TODAY' || range === 'Today') {
+    return dateStr === todayICT();
   }
   const days = { '7D': 7, '10D': 10, '30D': 30, '90D': 90, '1W': 7, '1M': 30, '3M': 90, '6M': 180 }[range];
   if (!days) return true;
-  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  // ICT basis, matching every other date computation in this file — a UTC
+  // cutoff made the window a day too wide between 00:00 and 07:00 ICT.
+  const cutoff = new Date(Date.now() + 7 * 3600 * 1000 - days * 86400000).toISOString().slice(0, 10);
   return dateStr >= cutoff;
 }
 
@@ -2045,8 +2119,8 @@ async function buildPeerSnapshot() {
       ? 'background:var(--card); position:sticky; top:calc(2rem); z-index:1;'
       : '';
     return `<tr style="${r.isASW ? 'font-weight:600;' : ''}">
-      <td style="${aswPin}"><strong>${r.ticker}</strong>${aswBadge}</td>
-      <td class="th muted" style="${aswPin}">${r.name}</td>
+      <td style="${aswPin}"><strong>${escapeHtml(r.ticker)}</strong>${aswBadge}</td>
+      <td class="th muted" style="${aswPin}">${escapeHtml(r.name)}</td>
       <td class="num" style="${aswPin}">${closeText}</td>
       <td class="num" style="${colorStyle}; font-weight:500; ${aswPin}">${chgText}</td>
     </tr>`;
@@ -2358,6 +2432,19 @@ async function loadNewsFeed() {
     window.NEWS_DATA = [];
   }
   renderUnifiedNews();
+  syncNewsDateBounds();
+}
+
+// Clamp the two date <input type="date">s to the span actually present in
+// NEWS_DATA. Must run AFTER the feed lands — the DOMContentLoaded handler
+// runs before the bootstrap Promise.all() resolves, so computing the bounds
+// there always saw an empty array and never set min/max.
+function syncNewsDateBounds() {
+  const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
+  if (!dates.length) return;
+  const lo = dates[0], hi = dates[dates.length - 1];
+  const dpFrom = $('newsDateFrom'); if (dpFrom) { dpFrom.min = lo; dpFrom.max = hi; }
+  const dpTo = $('newsDateTo');     if (dpTo)   { dpTo.min = lo;   dpTo.max = hi; }
 }
 
 
@@ -2436,22 +2523,24 @@ function renderUnifiedNews() {
   let items = buildMergedNewsItems();
   // Date range filter: if user picked a range (from/to), filter to that
   // window. If only 'from' is set, show from that date onwards. If only
-  // 'to', show up to that date. If neither, default to today only
-  // (unless a range pill like 7D/30D/ALL is active).
+  // 'to', show up to that date. Otherwise the range pill decides:
+  // 'TODAY' (วันนี้ button) = today only, 7D/30D/90D = rolling window,
+  // 'ALL' (or unset) = NO date filtering at all — "ทั้งหมด" means all.
   if (STATE.newsDateFrom || STATE.newsDateTo) {
     const from = STATE.newsDateFrom || '0000-01-01';
     const to = STATE.newsDateTo || '9999-12-31';
     items = items.filter(it => it.date >= from && it.date <= to);
-  } else if (!STATE.newsRange || STATE.newsRange === 'ALL') {
-    // Default: today only (when no range pill is active)
-    const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  } else if (STATE.newsRange === 'TODAY') {
+    const today = todayICT();
     items = items.filter(it => it.date === today);
-  } else {
+  } else if (STATE.newsRange && STATE.newsRange !== 'ALL') {
     items = items.filter(it => inNewsRange(it.date, STATE.newsRange));
   }
-  // Search filter (text contains, case-insensitive, both streams).
+  // Search filter (case-insensitive) — headline OR summary, because the feed
+  // visibly renders item.summary and users search words they can see.
   const q = (STATE.newsSearch || '').toLowerCase().trim();
-  if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q));
+  if (q) items = items.filter(it => (it.text || '').toLowerCase().includes(q)
+                                 || (it.summary || '').toLowerCase().includes(q));
   // Migrate-v9 + 1:1 single-select: when not on "ทั้งหมด", keep only items
   // whose category equals the selected chip. The DB stores one of the
   // taxonomy-v2 keys directly (COMPANY / COMPETITOR / RATES / GOV_POLICY /
@@ -2558,6 +2647,9 @@ function renderUnifiedNewsItem(item) {
   // now shows on every card — operator can remove a wrong/stale pipeline
   // item too. The handler confirms before deleting and warns that the
   // story may come back if the cron re-pulls the same headline.
+  // Scheme-checked href — a stored `javascript:` source_url would otherwise be
+  // one click from executing. null => render the plain <span> branch instead.
+  const href = safeUrl(item.url);
   const isManual = item.pipeline === 'manual';
   const manualBadge = isManual ? `<span class="news-manual-badge th">เพิ่มเอง</span>` : '';
   const delBtn = (item.id != null)
@@ -2574,8 +2666,8 @@ function renderUnifiedNewsItem(item) {
       <div class="news-card-tags">
         <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
       </div>
-      ${item.url
-        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>`
+      ${href
+        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>`
         : `<span class="news-card-title th" style="cursor:default">${escapeHtml(item.text)}</span>`
       }
       ${summaryHtml}
@@ -2594,7 +2686,9 @@ async function loadNewsStatus() {
     if (!r) return '— ยังไม่เคยรัน';
     // Local `ic` to avoid shadowing the global `icon(name)` SVG helper.
     const ic = r.ok ? icon('check') : icon('alert');
-    return `${ic} ${fmtTime(r.finished_at || r.started_at)} (${r.rows_added || 0} รายการ${r.ok ? '' : ' · ' + (r.error || 'fail')})`;
+    // fetch_log.error is String(e.message||e) from the fetchers — can contain
+    // '<', so it must be escaped before landing in innerHTML.
+    return `${ic} ${fmtTime(r.finished_at || r.started_at)} (${r.rows_added || 0} รายการ${r.ok ? '' : ' · ' + escapeHtml(r.error || 'fail')})`;
   };
   const dotClass = (r) => r && r.ok ? 'ok' : (r ? 'error' : 'pending');
   row.innerHTML = `
@@ -2688,7 +2782,8 @@ async function loadDailySummary() {
 // user's range / zoom / focus is preserved.
 async function loadAllDigests() {
   const items = await window.ASW_API.dailySummaries();
-  applyDigestRemarks(items);
+  CACHED_DIGESTS = items || [];   // keep the re-stamp cache in sync (see applyDailyRows)
+  applyDigestRemarks(CACHED_DIGESTS);
   const v = STATE.view;
   if (v === 'dashboard') refreshDashboard();
   else if (v === 'price') refreshPrice();
@@ -2698,15 +2793,19 @@ async function loadAllDigests() {
 function renderDailySummary() {
   const el = $('dailySummaryCard');
   if (!el) return;
-  // Filter summaries by the same date range logic as the news feed.
+  // Filter summaries by the same date range logic as the news feed (and as
+  // updateDateInfo's "N สรุป" counter — the day-count branch used to be
+  // missing here, so a 7D/30D/90D pill left this list unfiltered).
   let all = window.ALL_SUMMARIES || [];
   if (STATE.newsDateFrom || STATE.newsDateTo) {
     const from = STATE.newsDateFrom || '0000-01-01';
     const to = STATE.newsDateTo || '9999-12-31';
     all = all.filter(s => s.date >= from && s.date <= to);
-  } else if (!STATE.newsRange || STATE.newsRange === 'ALL') {
-    const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  } else if (STATE.newsRange === 'TODAY') {
+    const today = todayICT();
     all = all.filter(s => s.date === today);
+  } else if (STATE.newsRange && STATE.newsRange !== 'ALL') {
+    all = all.filter(s => inNewsRange(s.date, STATE.newsRange));
   }
   if (!all.length) {
     el.innerHTML = '<div class="card mb-16 muted th" style="font-size:12px;">— ไม่มีสรุปข่าวสำหรับช่วงวันที่เลือก —</div>';
@@ -3061,10 +3160,8 @@ function updateDateInfo() {
       const to = STATE.newsDateTo || '9999-12-31';
       return s.date >= from && s.date <= to;
     }
-    if (!STATE.newsRange || STATE.newsRange === 'ALL') {
-      const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-      return s.date === today;
-    }
+    if (STATE.newsRange === 'TODAY') return s.date === todayICT();
+    if (!STATE.newsRange || STATE.newsRange === 'ALL') return true;   // 'ทั้งหมด' = no date cap
     return inNewsRange(s.date, STATE.newsRange);
   });
   const news = (window.NEWS_DATA || []).filter(n => {
@@ -3074,10 +3171,8 @@ function updateDateInfo() {
       const to = STATE.newsDateTo || '9999-12-31';
       return d >= from && d <= to;
     }
-    if (!STATE.newsRange || STATE.newsRange === 'ALL') {
-      const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-      return d === today;
-    }
+    if (STATE.newsRange === 'TODAY') return d === todayICT();
+    if (!STATE.newsRange || STATE.newsRange === 'ALL') return true;   // 'ทั้งหมด' = no date cap
     return inNewsRange(d, STATE.newsRange);
   });
   info.textContent = summaries.length + ' สรุป · ' + news.length + ' ข่าว';
@@ -3219,12 +3314,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // independently. Overrides range pills when active.
   const dpFrom = $('newsDateFrom');
   const dpTo = $('newsDateTo');
-  // Set min/max based on available data range
-  const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-  if (dates.length) {
-    if (dpFrom) { dpFrom.min = dates[0]; dpFrom.max = dates[dates.length - 1]; }
-    if (dpTo) { dpTo.min = dates[0]; dpTo.max = dates[dates.length - 1]; }
-  }
+  // Min/max come from NEWS_DATA, which is still empty at DOMContentLoaded —
+  // syncNewsDateBounds() is (re)called from loadNewsFeed() and from the
+  // bootstrap once the feed has actually landed.
+  syncNewsDateBounds();
   function onDateChange() {
     STATE.newsDateFrom = dpFrom?.value || null;
     STATE.newsDateTo = dpTo?.value || null;
@@ -3241,12 +3334,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const dpClear = $('newsDateClear');
   if (dpClear) {
     dpClear.addEventListener('click', () => {
+      // 'วันนี้' = today only. Distinct from the 'ทั้งหมด' pill, which now
+      // means "no date filter" — no range pill matches 'TODAY', so clear them.
       STATE.newsDateFrom = null;
       STATE.newsDateTo = null;
-      STATE.newsRange = 'ALL';
+      STATE.newsRange = 'TODAY';
       if (dpFrom) dpFrom.value = '';
       if (dpTo) dpTo.value = '';
-      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x.dataset.range === 'ALL'));
+      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
       renderUnifiedNews();
       renderDailySummary();
       updateDateInfo();
@@ -3339,9 +3434,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // News refresh is driven by the single top-level Refresh button now — see
   // refreshNewsFeed() and the #refreshBtn handler (no per-panel button).
-  // Click news   focus dashboard chart (switch view if needed)
+  // Click news   focus dashboard chart (switch view if needed).
+  // The class is `.news-item-uniform` (sidebar cards) — `.news-item` matched
+  // nothing, so this flow was dead. Only remark cards carry data-date; feed
+  // cards carry data-id and are handled by the pin toggle in renderDashNews().
   document.body.addEventListener('click', (e) => {
-    const item = e.target.closest('.news-item');
+    const item = e.target.closest('.news-item-uniform');
     if (item && item.dataset.date) {
       STATE.focusedDate = item.dataset.date;
       if (STATE.view !== 'dashboard') {
@@ -3385,18 +3483,19 @@ document.addEventListener('DOMContentLoaded', () => {
         window.ASW_API.dailySummary(),
         window.ASW_API.dailySummaries(),
       ]);
-      if (rows && rows.length) {
-        DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
-      }
-      // Stamp each DATA row with its digest-derived short remark BEFORE the
-      // first render — eachRemark() (and thus chart pins + the Remark column)
-      // reads `row.digestRemark`, so this must happen before setView().
-      applyDigestRemarks(allDigests);
+      // Cache the digests BEFORE applyDailyRows() — it stamps each DATA row
+      // with its digest-derived short remark, and eachRemark() (chart pins +
+      // the Remark column) reads `row.digestRemark`, so this must happen
+      // before setView(). applyDailyRows() also keeps "fetch failed"
+      // (=> sample) apart from "backend up, DB empty" (=> empty state).
+      CACHED_DIGESTS = allDigests || [];
+      const dailyMode = applyDailyRows(rows);
       // Cache news_feed items + morning brief globally so renderDashNews() and
       // the Morning Brief tab can read them without an extra round-trip.
       if (newsRows) {
         window.NEWS_DATA = newsRows;
         window.__newsFeedLoaded = true;
+        syncNewsDateBounds();
       }
       if (brief && brief.date) {
         window.MORNING_BRIEF = brief;
@@ -3404,7 +3503,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dailySummary && dailySummary.date) {
         window.DAILY_SUMMARY = dailySummary;
       }
-      if (meta && meta.lastFetchSource) {
+      // Never label bundled sample rows with the live source — that is exactly
+      // how 595 rows of 2021-2024 demo prices ended up reading "Live · yahoo".
+      if (dailyMode === 'sample') {
+        CURRENT_FILE_NAME = SAMPLE_FILE_LABEL;
+      } else if (meta && meta.lastFetchSource) {
         CURRENT_FILE_NAME = meta.lastFetchSource === 'bundled' ? 'sample_data.js' : ('Live · ' + meta.lastFetchSource);
       }
       const lu = $('lastUpdated');
@@ -3439,10 +3542,21 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           try {
             const rows = await window.ASW_API.daily();
-            DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+            // null => fetch failed (sample fallback), [] => DB genuinely empty.
+            // applyDailyRows() also re-stamps digestRemark on the fresh row
+            // objects, otherwise the Remark column blanks out after a refresh.
+            // keepOnFailure: a blip here must not swap good live data for
+            // sample rows — 'stale' means we kept what we already had.
+            const mode = applyDailyRows(rows, true);
             const meta2 = await window.ASW_API.metadata();
-            CURRENT_FILE_NAME = 'Live · ' + (meta2.lastFetchSource || 'yahoo');
-            $('sbFile').textContent = CURRENT_FILE_NAME;
+            if (mode === 'stale') {
+              showToast('ดึงข้อมูลไม่สำเร็จ — แสดงข้อมูลล่าสุดที่มีอยู่');
+            } else {
+              CURRENT_FILE_NAME = mode === 'sample'
+                ? SAMPLE_FILE_LABEL
+                : 'Live · ' + (meta2.lastFetchSource || 'yahoo');
+              $('sbFile').textContent = CURRENT_FILE_NAME;
+            }
             const lu2 = $('lastUpdated');
             if (lu2 && meta2.lastFetched) {
               lu2.textContent = new Date(meta2.lastFetched).toLocaleString('th-TH',
@@ -3500,14 +3614,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (m.lastFetched === _lastFetchedSeen) return;
       _lastFetchedSeen = m.lastFetched;
       const rows = await window.ASW_API.daily();
-      DATA = rows.slice().sort((a, b) => a.date.localeCompare(b.date));
+      // Re-stamps digestRemark on the fresh row objects (applyDigestRemarks
+      // mutates in place, so the 60-s poll used to wipe the Remark column).
+      // keepOnFailure: the background poll must never downgrade good live data
+      // to sample rows because one request failed.
+      const mode = applyDailyRows(rows, true);
+      if (mode === 'stale') return;   // kept existing DATA — nothing to relabel
       if (typeof PEER_CACHE !== 'undefined') PEER_CACHE = null;
       const lu = $('lastUpdated');
       if (lu) {
         lu.textContent = new Date(m.lastFetched).toLocaleString('th-TH',
           { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) + ' น.';
       }
-      CURRENT_FILE_NAME = 'Live · ' + (m.lastFetchSource || 'yahoo');
+      CURRENT_FILE_NAME = mode === 'sample'
+        ? SAMPLE_FILE_LABEL
+        : 'Live · ' + (m.lastFetchSource || 'yahoo');
       const sb = $('sbFile'); if (sb) sb.textContent = CURRENT_FILE_NAME;
       setView(STATE.view);
       updateStatusBar();

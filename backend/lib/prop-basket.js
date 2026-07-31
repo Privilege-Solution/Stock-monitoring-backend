@@ -64,7 +64,8 @@ function computePropBasket(peerSeries) {
   if (!sorted.length) return [];
 
   // Find the first date for which ALL tickers have a row (so we have a % chg for every one).
-  const tickerIndices = sorted.map(() => 1); // start at index 1 so we can look back at index 0
+  // (A `tickerIndices` array used to be built here and was never read — the
+  // real per-ticker cursors are the `indices` array built below.)
   let startDate = null;
   // Walk: find the max of all "first-after-prev" dates where every ticker has prior + current.
   const firstDates = sorted.map(s => s[1]?.date).filter(Boolean);
@@ -89,7 +90,21 @@ function computePropBasket(peerSeries) {
   const maxDates = sorted.map(s => s[s.length - 1].date).filter(Boolean);
   const maxDate = maxDates.sort().slice(-1)[0];
 
-  for (let d = new Date(startDate + 'T00:00:00'); d <= new Date(maxDate + 'T00:00:00'); d.setDate(d.getDate() + 1)) {
+  // Iterate the calendar entirely in UTC. The bounds are parsed with an
+  // explicit 'Z' and the cursor advances with setUTCDate, so `toISOString()`
+  // renders exactly the calendar day we asked for.
+  //
+  // Previously the bounds were parsed WITHOUT 'Z' — i.e. in LOCAL time — while
+  // toISOString() rendered UTC. That was dormant only because the Railway
+  // container runs with no TZ set (so local === UTC); setting TZ=Asia/Bangkok
+  // would have made every `iso` land one calendar day EARLIER than intended,
+  // shifting the whole propIdx series and silently misaligning it against
+  // `close` / `setIdx` in joinByDate() — a wrong chart with no error anywhere.
+  //
+  // The end bound is also hoisted out of the loop condition: it was being
+  // re-parsed from a string on every single iteration of a multi-year walk.
+  const endMs = new Date(maxDate + 'T00:00:00Z').getTime();
+  for (let d = new Date(startDate + 'T00:00:00Z'); d.getTime() <= endMs; d.setUTCDate(d.getUTCDate() + 1)) {
     const iso = d.toISOString().slice(0, 10);
     const pcts = [];
     let allHave = true;

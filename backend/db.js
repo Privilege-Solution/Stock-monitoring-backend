@@ -22,13 +22,17 @@ const { isTradingDay } = require('./lib/thai-trading-days');
 // Gemini backfill scripts sometimes return Buddhist-era years (e.g. 2568
 // instead of 2025). This function catches them at the DB boundary so
 // they never get stored with wrong dates.
+// NOTE: must stay behaviourally identical to the ESM copy in
+// lib/fetchers/news-rss-helpers.mjs — the two diverged (this one matched
+// `^\d{4}-`, that one `^\d{4}-\d{2}-\d{2}`), so an input like '2568-7-4' was
+// converted by one and passed through untouched by the other. Same regex now.
 function normalizeDateYear(dateStr) {
   if (!dateStr || typeof dateStr !== 'string') return dateStr;
-  const m = dateStr.match(/^(\d{4})-/);
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return dateStr;
   let year = parseInt(m[1], 10);
   if (year > 2100) year -= 543;
-  return year + dateStr.slice(4);
+  return `${year}-${m[2]}-${m[3]}${dateStr.slice(10)}`;
 }
 
 // sha1 seed for title_hash — mirrors the fetchers (rss-property.mjs / gemini-search.mjs).
@@ -128,9 +132,17 @@ async function closeDb() {
 // deploy path — a brand-new Railway Postgres has no tables, so this is what
 // creates them. db.writeNewsItems() / readNewsFeed() require the news_feed
 // shape defined here.
+// Each statement runs on its own. Sending all ~25 as one query string made
+// Postgres treat them as a single implicit transaction, so ONE failure rolled
+// back ALL of them and a fresh deploy ended up with zero tables. The most
+// likely failure is the unique index on news_feed(title_hash) when a live table
+// still holds duplicate hashes from before the hash formula changed — with the
+// old all-or-nothing shape that single error took the whole schema down.
+// Failures are collected and rethrown together so one bad statement no longer
+// hides the rest.
 async function ensureSchema() {
   const p = getPool();
-  await p.query(`
+  const statements = splitSqlStatements(`
     CREATE TABLE IF NOT EXISTS daily (
       date              TEXT PRIMARY KEY,
       close             DOUBLE PRECISION,
@@ -224,6 +236,37 @@ async function ensureSchema() {
     );
     ALTER TABLE news_daily_summary ADD COLUMN IF NOT EXISTS headline TEXT;
   `);
+
+  const failures = [];
+  for (const sql of statements) {
+    try {
+      await p.query(sql);
+    } catch (e) {
+      const head = sql.replace(/\s+/g, ' ').slice(0, 80);
+      console.error(`[db] ensureSchema statement failed: ${head}… → ${e.message || e}`);
+      failures.push(`${head}… (${e.message || e})`);
+    }
+  }
+  if (failures.length) {
+    throw new Error(`ensureSchema: ${failures.length} statement(s) failed:\n  - ${failures.join('\n  - ')}`);
+  }
+}
+
+// Split a DDL script into individual statements. The script is authored here
+// and contains no dollar-quoted bodies, string literals with semicolons, or
+// procedural blocks — so splitting on `;` at end-of-statement is sufficient.
+// `--` line comments are stripped so a semicolon inside one can't split a
+// statement in half.
+function splitSqlStatements(script) {
+  return script
+    // Strip `--` comments. Use an explicit [^\r\n] class rather than `.*$`:
+    // this file has CRLF line endings, and `.` does not match \r, so an
+    // end-anchored `--.*$` silently fails to match and leaves whole comment
+    // blocks in place — they then split into bogus "statements".
+    .replace(/--[^\r\n]*/g, '')
+    .split(';')
+    .map(s => s.trim())
+    .filter(Boolean);
 }
 
 // ── daily ──────────────────────────────────────────────────────────────────
@@ -243,6 +286,11 @@ async function writeRows(rows) {
   if (!rows || rows.length === 0) return { added: 0, updated: 0 };
   const p = getPool();
   const now = new Date().toISOString();
+
+  // Normalize BE→CE at the boundary, same as writeNewsItems does. `daily.date`
+  // is the PRIMARY KEY, so a Buddhist-era year here would be permanently
+  // wrong and would sort after every real date.
+  rows = rows.map(r => (r && r.date ? { ...r, date: normalizeDateYear(r.date) } : r));
 
   // 1) Find which dates already exist — one round-trip, used to count added/updated.
   // date::text renders as 'YYYY-MM-DD' which matches the ISO strings from the
@@ -326,24 +374,20 @@ async function readAllRows(start, end) {
   // (remark_company / remark_sector / remark_macro) was dropped from the
   // schema in the fresh-install shape. The single (remark, category) pair
   // carries everything the UI needs; legacy callers have been migrated.
-  let sql, params;
-  if (start && end) {
-    sql = `SELECT date, close, "change" AS "change", volume, value,
+  // Build the range incrementally. The old shape gated on `start && end`, so
+  // passing only one bound silently dropped the filter and returned the entire
+  // table (every row, including the morning_* TEXT blobs) with no indication.
+  const COLS = `SELECT date, close, "change" AS "change", volume, value,
                   "setIdx" AS "setIdx", "propIdx" AS "propIdx",
                   remark, category,
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
                   user_note
-           FROM daily WHERE date BETWEEN $1 AND $2 ORDER BY date ASC`;
-    params = [start, end];
-  } else {
-    sql = `SELECT date, close, "change" AS "change", volume, value,
-                  "setIdx" AS "setIdx", "propIdx" AS "propIdx",
-                  remark, category,
-                  morning_brief, morning_watch, morning_remark, morning_weekly_at,
-                  user_note
-           FROM daily ORDER BY date ASC`;
-    params = [];
-  }
+           FROM daily`;
+  const where = [];
+  const params = [];
+  if (start) { params.push(start); where.push(`date >= $${params.length}`); }
+  if (end)   { params.push(end);   where.push(`date <= $${params.length}`); }
+  const sql = `${COLS}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY date ASC`;
   const r = await p.query(sql, params);
   return r.rows;
 }
@@ -419,6 +463,7 @@ async function updateRemarks(date, { company = null, sector = null, macro = null
 // price-less point on the chart and an empty line in the daily price table.
 // Returns true if the date is writable, false if it was skipped.
 async function ensureDailyRow(date) {
+  date = normalizeDateYear(date);
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   if (!isTradingDay(date)) return false;
   await getPool().query(
@@ -499,7 +544,10 @@ async function updateMorningBrief(date, { lastWeek = null, thisWeek = null, tone
          morning_remark    = $3,
          morning_weekly_at = $4
      WHERE date = $5`,
-    [lastWeek, thisWeek, tone, new Date().toISOString(), date]
+    // `reason` used to be destructured and then thrown away — the caller in
+    // gemini-search.mjs passes a real rationale that was never stored. There is
+    // no dedicated column, so it rides along with the tone it explains.
+    [lastWeek, thisWeek, reason ? `${tone} — ${reason}` : tone, new Date().toISOString(), date]
   );
   if (!r.rowCount) console.warn(`[db] updateMorningBrief: no daily row for ${date} — brief dropped`);
   return r.rowCount;
@@ -633,7 +681,10 @@ async function writePeers(tickers, names, peers) {
     }
     await client.query('COMMIT');
   } catch (e) {
-    await client.query('ROLLBACK');
+    // If the connection died mid-transaction the ROLLBACK throws too, and that
+    // secondary error would replace the real cause. Swallow it so the original
+    // failure is what propagates.
+    try { await client.query('ROLLBACK'); } catch { /* connection already gone */ }
     throw e;
   } finally {
     client.release();
@@ -737,7 +788,9 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   const params = [];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
-  params.push(Math.min(limit || 100, 500));
+  // Clamp low as well as high — a negative limit reached Postgres as
+  // `LIMIT -5`, which errors with "LIMIT must not be negative" (a 500).
+  params.push(Math.max(1, Math.min(limit || 100, 500)));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
                       impact_level, user_note, chart_marked
@@ -897,7 +950,15 @@ async function readNewsStatus() {
       COUNT(*)                                                  AS total,
       COUNT(*) FILTER (WHERE severity = 'high')                 AS high,
       COUNT(*) FILTER (WHERE display_priority >= 75)            AS high_priority,
-      COUNT(*) FILTER (WHERE SUBSTR(fetched_at, 1, 10) = TO_CHAR(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD')) AS today
+      -- "today" means today in ICT, like every other date in this app.
+      -- Comparing UTC-vs-UTC (the old shape) made the badge show YESTERDAY's
+      -- count between 00:00 and 07:00 ICT, then flip abruptly at 07:00.
+      -- fetched_at is an ISO-8601 UTC string, so shift it to Bangkok before
+      -- taking the date part.
+      COUNT(*) FILTER (
+        WHERE SUBSTR((fetched_at::timestamptz AT TIME ZONE 'Asia/Bangkok')::text, 1, 10)
+            = TO_CHAR(NOW() AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')
+      ) AS today
     FROM news_feed
   `);
   return {

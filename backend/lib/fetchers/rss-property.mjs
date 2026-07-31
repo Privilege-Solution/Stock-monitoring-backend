@@ -26,7 +26,12 @@
 
 import db from '../../db.js';
 import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit } from './news-rss-helpers.mjs';
+
+// Max simultaneous Bing requests. Bing throttles an unbounded fan-out (25
+// queries at once, then every deepen search at once) and a throttled response
+// is silent — see mapLimit() in news-rss-helpers.mjs.
+const BING_CONCURRENCY = 4;
 
 const QUERIES = [
   // ── ASW direct ──────────────────────────────────────────────────────────
@@ -92,10 +97,23 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 //     legitimate ASW headlines containing these substrings.
 //   - DROP_WORDS_THAI: full Thai words where word boundaries aren't a concern
 //     (Thai doesn't use spaces) — substring matching is correct.
+//
+// DROP_WORDS_LATIN is matched CASE-SENSITIVELY. The regex used to carry the
+// 'i' flag, which made short SET tickers collide with ordinary English words
+// and hard-dropped perfectly good headlines:
+//   "Global demand lifts Thai condo market"      → \bGLOBAL\b
+//   "Pattaya Bay condo project by AssetWise"     → \bBAY\b
+//   "ASW aims for top spot among Bangkok devs"   → \bTOP\b
+//   "True cost of owning a Bangkok condo"        → \bTRUE\b
+// Real headlines write SET tickers in uppercase ("หุ้น TRUE", "PTT ประกาศ"),
+// so case-sensitivity costs nothing and removes the whole false-positive class.
+// The handful of entries that are genuinely mixed-case brand names (KBank,
+// Krungsri, cardX, Bitcoin, Crypto) live in DROP_WORDS_LATIN_CI below and keep
+// case-insensitive matching.
 const DROP_WORDS_LATIN = [
-  // Thai banks (full names + abbreviations + 4-letter SET tickers)
-  'BAY', 'KBank', 'KBANK', 'SCB', 'KTB', 'TTB', 'TISCO', 'KKP',
-  'KTC', 'AEONTS', 'Krungsri', 'cardX',
+  // Thai banks (abbreviations + 4-letter SET tickers)
+  'BAY', 'KBANK', 'SCB', 'KTB', 'TTB', 'TISCO', 'KKP',
+  'KTC', 'AEONTS',
   // Energy + petrochem
   'PTT', 'PTTEP', 'TOP', 'BANPU', 'BCP', 'IRPC', 'ESSO', 'SPRC', 'GPSC',
   // Telecom
@@ -108,8 +126,12 @@ const DROP_WORDS_LATIN = [
   'BDMS', 'BH', 'CHG',
   // Materials / industrial
   'SCC', 'TOA',
-  // Other unrelated
-  'Bitcoin', 'Crypto',
+];
+// Mixed-case brand names — these are never written in another case in the
+// wild AND are long/distinctive enough that a case-insensitive match can't
+// collide with an English word, so they keep the 'i' flag.
+const DROP_WORDS_LATIN_CI = [
+  'KBank', 'Krungsri', 'cardX', 'Bitcoin', 'Crypto',
 ];
 const DROP_WORDS_THAI = [
   // Thai bank names (no abbreviations — those are in LATIN list)
@@ -132,12 +154,16 @@ const DROP_WORDS_THAI = [
   'ทองคำ', 'คริปโต', 'กองทุนรวม', 'ประกันภัย',
 ];
 
-// Single-letter tickers OR / ORI / etc. need word-boundary match too —
-// 'OR' was the worst offender (matches 'for', 'report', 'reform', etc).
-// `\b` in JS regex works on ASCII word chars; safer here than the
-// t.includes() substring scan we used to do.
+// Short tickers OR / ORI / etc. need a word-boundary match — 'OR' was the
+// worst offender (matches 'for', 'report', 'reform', etc). `\b` in JS regex
+// works on ASCII word chars; safer here than the t.includes() substring scan
+// we used to do. NOTE: no 'i' flag — see the DROP_WORDS_LATIN comment above.
+const escapeRe = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DROP_LATIN_RE = new RegExp(
-  '\\b(' + DROP_WORDS_LATIN.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+  '\\b(' + DROP_WORDS_LATIN.map(escapeRe).join('|') + ')\\b'
+);
+const DROP_LATIN_CI_RE = new RegExp(
+  '\\b(' + DROP_WORDS_LATIN_CI.map(escapeRe).join('|') + ')\\b',
   'i'
 );
 
@@ -184,7 +210,8 @@ const HIGH_KEYWORDS = [
   { kw: 'คณะรัฐมนตรี',    boost: 15, type: 'policy' },
   { kw: 'เงินเฟ้อ',       boost: 10, type: 'macro' },
   { kw: 'GDP',            boost: 10, type: 'macro' },
-  { kw: 'ภาวะเศรษฐกิจ',   boost: 10, type: 'macro' },
+  // 'ภาวะเศรษฐกิจ' was listed TWICE, so a generic macro headline collected 20
+  // instead of 10 and its display_priority was inflated above real sector news.
   { kw: 'ภาวะเศรษฐกิจ',   boost: 10, type: 'macro' },
   // REIC / sector data
   { kw: 'REIC',           boost: 25, type: 'sector' },
@@ -197,17 +224,29 @@ const HIGH_KEYWORDS = [
 // generic sector headline sits at 60-70.
 function scoreItem(title) {
   const t = title.toLowerCase();
-  // Hard drop first — any DROP keyword kills it. Latin tickers use a
-  // word-boundary regex so they don't match unrelated English fragments
-  // (the source of bug #1: 'OR' matched inside 'report', 'reform', etc).
-  if (DROP_LATIN_RE.test(title)) return 0;
-  for (const kw of DROP_WORDS_THAI) {
-    if (t.includes(kw.toLowerCase())) return 0;
-  }
-  // Sum up HIGH keyword boosts.
+  // Sum the HIGH keyword boosts FIRST. The DROP scan used to run before this
+  // and `return 0` immediately, which meant the ASW boost was never even
+  // computed — so an ASW-direct headline that happened to name an unrelated
+  // ticker ("ASW จับมือ SCB ปล่อยสินเชื่อโครงการ") was killed outright. We need
+  // to know whether this is ASW news BEFORE deciding to drop it.
   let score = 0;
-  for (const { kw, boost } of HIGH_KEYWORDS) {
-    if (t.includes(kw.toLowerCase())) score += boost;
+  let aswDirect = false;
+  for (const { kw, boost, type } of HIGH_KEYWORDS) {
+    if (t.includes(kw.toLowerCase())) {
+      score += boost;
+      if (type === 'asw') aswDirect = true;
+    }
+  }
+  // Hard drop — any DROP keyword kills the item, UNLESS it is ASW-direct.
+  // ASW is the whole point of the feed; no off-sector keyword outranks it.
+  // Latin tickers use word-boundary regexes (case-sensitive for the uppercase
+  // SET tickers) so they don't match unrelated English words.
+  if (!aswDirect) {
+    if (DROP_LATIN_RE.test(title)) return 0;
+    if (DROP_LATIN_CI_RE.test(title)) return 0;
+    for (const kw of DROP_WORDS_THAI) {
+      if (t.includes(kw.toLowerCase())) return 0;
+    }
   }
   return score;
 }
@@ -303,14 +342,22 @@ async function fetchQuery(query, maxAgeDays) {
       .filter(Boolean)
       .filter(it => new Date(it.date + 'T00:00:00Z').getTime() >= cutoff);
   } catch (e) {
+    // Print the stack when there is one. This catch is broad enough to swallow
+    // a programming error (a TypeError inside parseItem() applies to EVERY
+    // item of EVERY query), which then presented as "0 items" plus one opaque
+    // line — indistinguishable from Bing simply having no results.
     console.log(`[rss-property] ${query.q} → ERR ${e.message}`);
+    if (e && e.stack) console.log(e.stack);
     return [];
   }
 }
 
 async function run({ sinceDate, maxAgeDays = 7 } = {}) {
-  console.log(`[rss-property] fetching ${QUERIES.length} queries (maxAge=${maxAgeDays}d)`);
-  const all = (await Promise.all(QUERIES.map(q => fetchQuery(q, maxAgeDays)))).flat();
+  console.log(`[rss-property] fetching ${QUERIES.length} queries (maxAge=${maxAgeDays}d, concurrency=${BING_CONCURRENCY})`);
+  // Concurrency-capped, not Promise.all — 25 simultaneous Bing hits get
+  // throttled and a throttled response is silently indistinguishable from an
+  // empty result set. See mapLimit() in news-rss-helpers.mjs.
+  const all = (await mapLimit(QUERIES, BING_CONCURRENCY, q => fetchQuery(q, maxAgeDays))).flat();
 
   // Dedupe by title_hash (guid-based) across all queries — Google News can
   // surface the same article in multiple query results.
@@ -332,10 +379,12 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
   const homepages = valid.filter(it => isHomepageUrl(it.source_url));
   if (homepages.length) {
     console.log(`[rss-property] deepening ${homepages.length} homepage URLs...`);
-    await Promise.all(homepages.map(async (it) => {
+    // Also concurrency-capped: each deepen is up to 2 more Bing requests, so
+    // an unbounded fan-out here was the heavier of the two throttling risks.
+    await mapLimit(homepages, BING_CONCURRENCY, async (it) => {
       const deep = await deepenHomepageUrl(it.title, it.source_label);
       if (deep) it.source_url = deep;
-    }));
+    });
   }
   const dropped = valid.filter(it => isHomepageUrl(it.source_url));
   const deepened = valid.filter(it => !isHomepageUrl(it.source_url));
@@ -351,5 +400,7 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
   return { ok: true, fetched: valid.length, inserted };
 }
 
-export { run };
+// scoreItem is exported for unit testing — the DROP/boost interaction is the
+// part of this file most prone to silent false-positive drops.
+export { run, scoreItem };
 export default { run };

@@ -156,47 +156,60 @@ function headlineOverlap(origNorm, resultNorm) {
 
 // Some headlines must carry a company/keyword token to count as a real
 // match (prevents matching an ASW headline against an unrelated article
-// that just happens to mention "หุ้น" or "อสังหาฯ"). Returns the token
-// we require the result title to contain, or '' if no specific token is
-// required (in which case overlap score alone decides).
-function requiredToken(title) {
+// that just happens to mention "หุ้น" or "อสังหาฯ"). Returns the LIST of
+// aliases for the detected company — ANY ONE of which qualifies a result
+// title — or [] when no specific token is required (in which case overlap
+// score alone decides).
+//
+// WHY a list: this used to return a single LATIN token ('ASW', 'SPALI',
+// 'TRIS', 'Fed') and deepenHomepageUrl() then did
+// `if (!rNorm.includes(req.toLowerCase())) continue;`. Thai publishers write
+// the company name in THAI, so the result title never contained the Latin
+// ticker and EVERY Thai-language ASW/peer item was dropped:
+//   requiredToken('แอสเซทไวส์ ออกหุ้นกู้ 920 ล้านบาท')          -> 'ASW'
+//   normalizeHeadline('แอสเซทไวส์ เสนอขายหุ้นกู้ชุดใหม่').includes('asw')
+//                                                              -> false
+// i.e. exactly the ASW news this product exists to track. Each row now pairs
+// the DETECTOR regex with every spelling that identifies the same company, so
+// the gate still rejects results about a DIFFERENT company (an SPALI article
+// contains neither 'asw' nor 'แอสเซทไวส์') while accepting the Thai spelling.
+export function requiredAliases(title) {
   const checks = [
-    [/ASW|Assetwise|แอสเซทไวส์|AssetWise/i, 'ASW'],
-    [/\bAP\b.*Thailand|แอ็น\s*ไทยแลนด์/i, 'AP'],
-    [/\bLH\b|แลนด์แอนด์เฮ้าส์/i, 'LH'],
-    [/\bORN\b|นาวี่\s*แอสเซท/i, 'ORN'],
-    [/SPALI|ศุภาลัย/i, 'SPALI'],
-    [/SIRI|แสนสิริ/i, 'SIRI'],
-    [/NOBLE|โนเบล/i, 'NOBLE'],
-    [/\bORI\b|ออริจิ้น/i, 'ORI'],
-    [/\bQH\b|ควอลิตี้เฮ้าส์/i, 'QH'],
-    [/PRUK|พฤกษา/i, 'PRUK'],
-    [/PROUD|พรู๊ด/i, 'PROUD'],
-    [/\bPS\b\s*Property|เพอร์เฟค|Perfect/i, 'PF'],
-    [/SENA|เซนา/i, 'SENA'],
-    [/\bBTS\b|บีทีเอส/i, 'BTS'],
-    [/ANAN|อนันดา/i, 'ANAN'],
-    [/\bLPN\b|แอล\.พี\.เอ็น|ลาดพร้าว\s*เน็ท/i, 'LPN'],
-    [/PROUD|พรู๊ด/i, 'PROUD'],
-    [/\bSPF\b|ศรีสวัสดิ์/i, 'SPF'],
-    [/\bAF\b|อาร์เอฟ/i, 'RF'],
-    [/\bDRE\b|ดิแอสเซท/i, 'DRE'],
-    [/\bRML\b|ราชมงคล\s*พร็อพเพอร์ตี้/i, 'RML'],
-    [/\bB\*M\b|แบม/i, 'BM'],
-    [/\bLALIN\b|ลลิล\s*พร็อพเพอร์ตี้/i, 'LALIN'],
-    [/\bMBK\b|เอ็มบีเค/i, 'MBK'],
-    [/\bS\b&P\b|ศุภกิจ\s*พร็อพเพอร์ตี้/i, 'SP'],
-    [/\bSTEC\b|สิงหะ\s*พร็อพเพอร์ตี้/i, 'STEC'],
-    [/\bCHAN\b|ชน/i, 'CHAN'],
-    [/\bRABBIT\b|แรบบิท/i, 'RABBIT'],
-    [/\bROJANA\b|โรจนะ/i, 'ROJANA'],
-    [/TRIS|ทริส/i, 'TRIS'],
-    [/ธปท|BOT\b/i, 'ธปท'],
-    [/กนง/i, 'กนง'],
-    [/Fed|เฟด/i, 'Fed'],
+    [/ASW|Assetwise|แอสเซทไวส์|แอสเสทไวส์/i,   ['ASW', 'Assetwise', 'แอสเซทไวส์', 'แอสเสทไวส์']],
+    [/\bAP\b.*Thailand|เอพี\s*ไทยแลนด์|แอ็น\s*ไทยแลนด์/i, ['AP', 'เอพี', 'แอ็น']],
+    [/\bLH\b|แลนด์แอนด์เฮ้าส์/i,               ['LH', 'แลนด์แอนด์เฮ้าส์', 'แลนด์ แอนด์ เฮ้าส์']],
+    [/\bORN\b|นาวี่\s*แอสเซท/i,                ['ORN', 'นาวี่']],
+    [/SPALI|ศุภาลัย/i,                          ['SPALI', 'ศุภาลัย']],
+    [/SIRI|แสนสิริ/i,                           ['SIRI', 'แสนสิริ']],
+    [/NOBLE|โนเบล|โนเบิล/i,                     ['NOBLE', 'โนเบล', 'โนเบิล']],
+    [/\bORI\b|ออริจิ้น/i,                       ['ORI', 'ออริจิ้น']],
+    [/\bQH\b|ควอลิตี้เฮ้าส์|ควอลิตี้เฮาส์/i,    ['QH', 'ควอลิตี้เฮ้าส์', 'ควอลิตี้เฮาส์']],
+    [/PRUK|พฤกษา/i,                             ['PRUK', 'PSH', 'พฤกษา']],
+    [/PROUD|พรู๊ด/i,                            ['PROUD', 'พรู๊ด']],
+    [/\bPS\b\s*Property|เพอร์เฟค|Perfect/i,     ['PF', 'เพอร์เฟค', 'Perfect']],
+    [/SENA|เซนา/i,                              ['SENA', 'เซนา']],
+    [/\bBTS\b|บีทีเอส/i,                        ['BTS', 'บีทีเอส']],
+    [/ANAN|อนันดา/i,                            ['ANAN', 'อนันดา']],
+    [/\bLPN\b|แอล\.พี\.เอ็น|ลาดพร้าว\s*เน็ท/i,  ['LPN', 'แอล.พี.เอ็น', 'แอลพีเอ็น']],
+    [/\bSPF\b|ศรีสวัสดิ์/i,                     ['SPF', 'ศรีสวัสดิ์']],
+    [/\bAF\b|อาร์เอฟ/i,                         ['RF', 'AF', 'อาร์เอฟ']],
+    [/\bDRE\b|ดิแอสเซท/i,                       ['DRE', 'ดิแอสเซท']],
+    [/\bRML\b|ราชมงคล\s*พร็อพเพอร์ตี้/i,        ['RML', 'ราชมงคล']],
+    [/\bB\*M\b|แบม/i,                           ['BM', 'แบม']],
+    [/\bLALIN\b|ลลิล\s*พร็อพเพอร์ตี้/i,         ['LALIN', 'ลลิล']],
+    [/\bMBK\b|เอ็มบีเค/i,                       ['MBK', 'เอ็มบีเค']],
+    [/\bS\b&P\b|ศุภกิจ\s*พร็อพเพอร์ตี้/i,       ['SP', 'ศุภกิจ']],
+    [/\bSTEC\b|สิงหะ\s*พร็อพเพอร์ตี้/i,         ['STEC', 'สิงหะ']],
+    [/\bCHAN\b|ชน/i,                            ['CHAN', 'ชน']],
+    [/\bRABBIT\b|แรบบิท/i,                      ['RABBIT', 'แรบบิท']],
+    [/\bROJANA\b|โรจนะ/i,                       ['ROJANA', 'โรจนะ']],
+    [/TRIS|ทริส/i,                              ['TRIS', 'ทริส']],
+    [/ธปท|BOT\b/i,                              ['ธปท', 'BOT', 'ธนาคารแห่งประเทศไทย']],
+    [/กนง/i,                                    ['กนง']],
+    [/Fed|เฟด/i,                                ['Fed', 'เฟด']],
   ];
-  for (const [re, tok] of checks) if (re.test(title)) return tok;
-  return '';
+  for (const [re, aliases] of checks) if (re.test(title)) return aliases;
+  return [];
 }
 
 // Distinctive Latin/numeric keyword extractor — pulls English letters,
@@ -232,7 +245,7 @@ export async function deepenHomepageUrl(headline, sourceLabel) {
   if (!headline) return null;
   const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
   const origNorm = normalizeHeadline(headline);
-  const req = requiredToken(headline);
+  const req = requiredAliases(headline);        // [] when nothing is required
 
   // Pass 1: search the raw headline.
   let results = await bingNewsSearch(headline, UA);
@@ -243,8 +256,10 @@ export async function deepenHomepageUrl(headline, sourceLabel) {
 
   for (const r of results) {
     const rNorm = normalizeHeadline(r.title);
-    // Required token must appear in result title (prevents FPT-instead-of-ASW).
-    if (req && !rNorm.includes(req.toLowerCase())) continue;
+    // One of the required aliases must appear in the result title (prevents
+    // FPT-instead-of-ASW). ANY alias counts — Latin ticker OR Thai spelling —
+    // because a Thai publisher's headline carries only the Thai name.
+    if (req.length && !req.some(a => rNorm.includes(a.toLowerCase()))) continue;
     if (!isUsableArticleUrl(r.url) || isHomepageUrl(r.url)) continue;
     // Match if EITHER:
     //   (a) Token overlap ≥ 0.6 — works well for English / mixed headlines
@@ -256,11 +271,37 @@ export async function deepenHomepageUrl(headline, sourceLabel) {
     const overlap = headlineOverlap(origNorm, rNorm);
     const origKw = new Set(distinctiveKeywords(origNorm));
     const sharedKw = distinctiveKeywords(rNorm).filter(k => origKw.has(k.toLowerCase())).length;
-    if (overlap >= 0.6 || (req && sharedKw >= 3)) {
+    if (overlap >= 0.6 || (req.length && sharedKw >= 3)) {
       return r.url;
     }
   }
   return null;
+}
+
+// Run `fn` over `items` with at most `limit` calls in flight at a time, and
+// return the results in INPUT order (same contract as Promise.all).
+//
+// WHY: both RSS fetchers used a bare `Promise.all`, which fired all 25 query
+// fetches simultaneously and then every homepage-deepen search simultaneously
+// (up to 2 more Bing requests each). Bing throttles that hard, and a throttled
+// response is INVISIBLE downstream — bingNewsSearch() returns [],
+// deepenHomepageUrl() returns null, and the item is dropped as "no deep URL
+// found" with nothing in the log pointing at rate limiting. Capping the fan-out
+// keeps us under Bing's threshold; a 25-query batch still finishes in ~7 rounds.
+export async function mapLimit(items, limit, fn) {
+  const list = Array.from(items);
+  const out = new Array(list.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= list.length) return;
+      out[i] = await fn(list[i], i);
+    }
+  };
+  const width = Math.max(1, Math.min(limit, list.length));
+  await Promise.all(Array.from({ length: width }, worker));
+  return out;
 }
 
 // Internal: hit Bing News RSS and decode each result into {title, url}.
@@ -271,7 +312,14 @@ async function bingNewsSearch(query, ua) {
       'https://www.bing.com/news/search?q=' + encodeURIComponent(query) + '&format=rss',
       { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
     );
-    if (!res.ok) return [];
+    if (!res.ok) {
+      // LOG, don't swallow: a Bing 429 used to be indistinguishable from
+      // "no results" — the caller just dropped the item. The status code is
+      // the only signal that we're being throttled rather than genuinely
+      // finding nothing, so it has to reach the Railway log.
+      console.log(`[bing-search] "${String(query).slice(0, 60)}" → HTTP ${res.status}`);
+      return [];
+    }
     const xml = await res.text();
     const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
     return items.map(it => {
@@ -279,5 +327,10 @@ async function bingNewsSearch(query, ua) {
       const link = (it.match(/<link[^>]*>([\s\S]*?)<\/link>/) || [])[1]?.trim() || '';
       return { title, url: extractPublisherUrl(link) };
     }).filter(x => x.url);
-  } catch { return []; }
+  } catch (e) {
+    // Same reasoning as the !res.ok branch — a network timeout must not look
+    // like an empty result set.
+    console.log(`[bing-search] "${String(query).slice(0, 60)}" → ERR ${e.message}`);
+    return [];
+  }
 }

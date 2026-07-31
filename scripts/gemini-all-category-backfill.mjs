@@ -120,7 +120,16 @@ function parseItems(text) {
 
 const { default: db } = await import('../backend/db.js');
 const { Pool } = await import('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+// Railway's private-network Postgres does not offer SSL; forcing it fails the
+// connection. Same heuristic as the other scripts and db.js.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: (() => {
+    const u = new URL(process.env.DATABASE_URL);
+    if (u.hostname.endsWith('.railway.internal') || u.hostname === 'localhost' || u.hostname === '127.0.0.1') return false;
+    return { rejectUnauthorized: false };
+  })(),
+});
 
 const { rows: existing } = await pool.query('SELECT title_hash FROM news_feed');
 const seen = new Set(existing.map(r => r.title_hash));

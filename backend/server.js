@@ -8,6 +8,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('node:crypto');
 const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
@@ -67,8 +68,69 @@ process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err && err.stack ? err.stack : err);
 });
 
-app.use(cors());
+// CORS: previously `cors()` with no options, which sends
+// `Access-Control-Allow-Origin: *` — any website could read this API from a
+// visitor's browser. The dashboard is served from this same origin (see
+// express.static below), so it needs no CORS headers at all. Set
+// ALLOWED_ORIGIN only if you host the frontend somewhere else.
+app.use(cors({ origin: process.env.ALLOWED_ORIGIN || false }));
 app.use(express.json());
+
+// --- Access control ----------------------------------------------------------
+// There was none: every mutating route was reachable unauthenticated on a
+// public Railway URL, including `DELETE /api/news/:id` (unconditional — a loop
+// over ids wipes the feed) and `POST /api/news/refresh-all` (a Gemini quota
+// drain). Both gates below are OPT-IN so an existing deployment keeps working
+// after this deploy; a loud boot warning fires when neither is configured.
+//
+//   DASHBOARD_USER + DASHBOARD_PASS  → HTTP Basic Auth over everything,
+//     including the dashboard HTML. The browser prompts once and then sends
+//     the header automatically, so the frontend needs no changes.
+//   API_TOKEN                        → accepted via `X-API-Token`, for
+//     curl/cron/monitoring that can't do Basic Auth.
+//
+// If API_TOKEN is set but Basic is NOT, only mutating methods are gated: a
+// browser has no way to send a custom header for a top-level navigation, so
+// gating GETs on the token alone would lock the dashboard out entirely.
+const BASIC_USER = process.env.DASHBOARD_USER || '';
+const BASIC_PASS = process.env.DASHBOARD_PASS || '';
+const API_TOKEN  = process.env.API_TOKEN || '';
+const AUTH_ENABLED = Boolean((BASIC_USER && BASIC_PASS) || API_TOKEN);
+
+// Length-independent comparison so a wrong-length guess can't be distinguished
+// from a wrong-value one by timing.
+function safeEqual(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+const BASIC_ENABLED = Boolean(BASIC_USER && BASIC_PASS);
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+app.use((req, res, next) => {
+  if (!AUTH_ENABLED) return next();
+  // Railway's healthcheck hits /api/health with no credentials — keep it open
+  // so an authenticated deployment doesn't fail its own healthcheck.
+  if (req.path === '/api/health') return next();
+  // Token-only setup: read paths stay open (see note above), writes are gated.
+  if (!BASIC_ENABLED && !MUTATING.has(req.method)) return next();
+
+  if (API_TOKEN) {
+    const t = req.get('X-API-Token');
+    if (t && safeEqual(t, API_TOKEN)) return next();
+  }
+  if (BASIC_ENABLED) {
+    const h = req.get('Authorization') || '';
+    if (h.startsWith('Basic ')) {
+      const [u, ...rest] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':');
+      if (safeEqual(u, BASIC_USER) && safeEqual(rest.join(':'), BASIC_PASS)) return next();
+    }
+    res.set('WWW-Authenticate', 'Basic realm="ASW Monitor", charset="UTF-8"');
+  }
+  return res.status(401).json({ error: 'unauthorized', code: 'auth_required' });
+});
+
 // Static: serve the frontend/ dir (HTML/CSS), plus an explicit route for the
 // repo-root `sample_data.js` (the frontend loads it via <script src> and the
 // seed function below reads it from disk — both need an exact path).
@@ -127,6 +189,11 @@ function seedFromSampleData() {
 // with a timestamp + key headers so we can compare against Railway logs
 // when the response is 500. Gated to non-production.
 app.get('/api/debug/trace', (req, res) => {
+  // The comment above always claimed this was gated, but the check was missing
+  // — it leaked pid/uptime publicly. Now it actually matches /api/debug/yahoo-test.
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'not found' });
+  }
   console.log('[trace]', new Date().toISOString(), req.method, req.path,
     'origin=', req.headers.origin || '(none)',
     'ua=', req.headers['user-agent'] || '(none)');
@@ -144,6 +211,15 @@ app.get('/api/debug/trace', (req, res) => {
 app.get('/api/daily', async (req, res) => {
   try {
     const { start, end } = req.query;
+    // Validate before hitting the DB. `?start[]=x` arrives as an array and used
+    // to reach pg as a malformed BETWEEN operand → opaque 500; and a start
+    // without an end was silently ignored, returning the whole table (see
+    // readAllRows, which now handles one-sided ranges).
+    for (const [name, v] of [['start', start], ['end', end]]) {
+      if (v !== undefined && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v))) {
+        return res.status(400).json({ error: `${name} must be YYYY-MM-DD`, code: 'date_bad_format' });
+      }
+    }
     const rows = await db.readAllRows(start, end);
     res.json({ rows, count: rows.length });
   } catch (e) {
@@ -244,7 +320,11 @@ app.get('/api/intraday', async (req, res) => {
       ts: INTRADAY.ts,
       marketOpen: INTRADAY.marketOpen,
       source: INTRADAY.source,
-      cacheAgeMs: cacheAgeMs === Infinity ? null : Math.round(cacheAgeMs / 1000),
+      // `cacheAgeMs` carried a value in SECONDS. Keep the old key (a client may
+      // read it) but make it actually milliseconds, and expose the seconds
+      // value under an honestly-named key.
+      cacheAgeMs:  cacheAgeMs === Infinity ? null : Math.round(cacheAgeMs),
+      cacheAgeSec: cacheAgeMs === Infinity ? null : Math.round(cacheAgeMs / 1000),
       lastError: INTRADAY.lastError,
     });
   } catch (e) {
@@ -283,11 +363,16 @@ app.get('/api/health', async (req, res) => {
     }
     const expected = expectedTradingDays(meta.dateMin, meta.dateMax);
     const stored = await db.getStoredDates();
-    const missingDates = expected
+    // Count gaps across the FULL list, then cap only what we send. Slicing
+    // first meant the 200-row payload cap silently truncated real gaps out of
+    // the count — with a multi-year range /api/health reported 1 gap when 4
+    // existed. expectedTradingDays now excludes weekends/holidays, so every
+    // entry here is a genuine missing trading day.
+    const allMissing = expected
       .filter(d => !stored.has(d))
-      .map(d => ({ date: d, reason: classify(d) }))
-      .slice(0, 200); // cap payload
-    const missingGaps = missingDates.filter(m => m.reason === 'gap').length;
+      .map(d => ({ date: d, reason: classify(d) }));
+    const missingGaps = allMissing.filter(m => m.reason === 'gap').length;
+    const missingDates = allMissing.slice(0, 200); // cap payload
     res.json({
       expected: expected.length,
       stored: stored.size,
@@ -303,29 +388,47 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Backfill any gaps found by /api/health, retrying with a long backoff.
+//
+// This used to await the backoff INSIDE the request: on the worst path the
+// client waited 60s + 300s = 6 minutes before getting a byte. Railway's edge
+// proxy and every browser time out well before that, so `res.json` wrote to a
+// dead socket and the operator — seeing a hung spinner — clicked again,
+// stacking concurrent retry chains that each hammered Yahoo. Now the work is
+// detached and the route answers 202 immediately; poll /api/metadata (or
+// /api/health) for the result.
+let _healthRefreshRunning = false;
 app.post('/api/health/refresh', async (req, res) => {
-  const meta = await db.metadata();
-  const sinceDate = meta.dateMin || null;
+  if (_healthRefreshRunning) {
+    return res.status(409).json({ ok: false, error: 'a backfill is already running', code: 'already_running' });
+  }
   const source = (req.body && req.body.source) || 'yahoo';
-  const delays = [60_000, 5 * 60_000, 15 * 60_000];
-  const maxAttempts = 3;
-  let lastError = null;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const id = await db.logFetchStart();
-    try {
-      const { rows } = await runFetch({ source, sinceDate });
-      const { added, updated } = await db.writeRows(rows);
-      await db.logFetchFinish(id, 1, source, added, updated, null);
-      return res.json({ ok: true, attempts: attempt, added, updated });
-    } catch (e) {
-      lastError = String(e.message || e);
-      await db.logFetchFinish(id, 0, source, 0, 0, lastError);
-      if (attempt < maxAttempts) {
-        await new Promise(r => setTimeout(r, delays[attempt - 1]));
+  _healthRefreshRunning = true;
+  res.status(202).json({ ok: true, started: true, source, pollWith: '/api/metadata' });
+
+  (async () => {
+    const meta = await db.metadata();
+    const sinceDate = meta.dateMin || null;
+    const delays = [60_000, 5 * 60_000, 15 * 60_000];
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const id = await db.logFetchStart();
+      try {
+        const { rows } = await runFetch({ source, sinceDate });
+        const { added, updated } = await db.writeRows(rows);
+        await db.logFetchFinish(id, 1, source, added, updated, null);
+        console.log(`[health/refresh] ok attempt=${attempt} added=${added} updated=${updated}`);
+        return;
+      } catch (e) {
+        const lastError = String(e.message || e);
+        await db.logFetchFinish(id, 0, source, 0, 0, lastError);
+        console.error(`[health/refresh] attempt ${attempt}/${maxAttempts} failed:`, lastError);
+        if (attempt < maxAttempts) await new Promise(r => setTimeout(r, delays[attempt - 1]));
       }
     }
-  }
-  res.json({ ok: false, attempts: maxAttempts, error: lastError });
+  })()
+    .catch(e => console.error('[health/refresh] background task failed:', e.message || e))
+    .finally(() => { _healthRefreshRunning = false; });
 });
 
 // --- AI Remarks (Gemini-search pipeline) ---
@@ -362,7 +465,7 @@ app.get('/api/news', async (req, res) => {
     const rows = await db.readNewsFeed({
       category: category || null,
       since: since || null,
-      limit: Math.min(parseInt(limit || '100', 10) || 100, 500),
+      limit: Math.max(1, Math.min(parseInt(limit || '100', 10) || 100, 500)),
     });
     res.json({ rows, count: rows.length });
   } catch (e) {
@@ -664,7 +767,12 @@ db.openDb();
     const m = await db.metadata();
     console.log(`[startup] rows=${m.rowCount} range=${m.dateMin} → ${m.dateMax}`);
   } catch (e) {
-    console.error('[startup] DB error:', e.message || e);
+    // Previously this only logged and fell through, so app.listen() still ran
+    // and the service came up looking healthy while every endpoint returned
+    // 500. Exit instead: Railway then reports a failed deploy and keeps the
+    // last working revision serving traffic.
+    console.error('[startup] FATAL DB error:', e.stack || e.message || e);
+    process.exit(1);
   }
 })();
 
@@ -767,7 +875,26 @@ cron.schedule('35 10 * * *', async () => {
 // block the others. `phase` is 'morning' | 'midday' | 'afternoon' |
 // 'evening' | 'night' | 'manual' — used for log lines and the Monday
 // morning-brief + evening daily-summary gates.
+// Re-entrancy guard: POST /api/news/refresh-all kicks off a batch in the
+// background, so a cron tick landing during it would run two batches at once —
+// duplicate Gemini calls against the same quota, duplicate fetch_log rows and
+// interleaved run records in /api/news/status. Set/checked synchronously so the
+// two callers cannot both pass.
+let _newsBatchRunning = false;
 async function runNewsBatch(phase) {
+  if (_newsBatchRunning) {
+    console.log(`[scheduler:${phase}] another news batch is already running — skip`);
+    return;
+  }
+  _newsBatchRunning = true;
+  try {
+    return await _runNewsBatch(phase);
+  } finally {
+    _newsBatchRunning = false;
+  }
+}
+
+async function _runNewsBatch(phase) {
   console.log(`[scheduler:${phase}] news batch start`);
   const sources = [
     // maxAge=30d for rss-property — Bing returns items up to ~30 days old
@@ -876,6 +1003,11 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`ASW Monitor backend on http://localhost:${PORT}`);
+  if (AUTH_ENABLED) {
+    console.log(`[auth] enabled (${BASIC_USER && BASIC_PASS ? 'basic' : ''}${BASIC_USER && BASIC_PASS && API_TOKEN ? '+' : ''}${API_TOKEN ? 'token' : ''})`);
+  } else {
+    console.warn('[auth] *** NO AUTH CONFIGURED — every mutating route, including DELETE /api/news/:id, is open to anyone who can reach this URL. Set DASHBOARD_USER + DASHBOARD_PASS (and/or API_TOKEN) to close it. ***');
+  }
   // Warm the intraday cache immediately on boot. Earlier we waited for
   // the first cron tick (every 3 min) which meant /api/intraday returned
   // null for up to 3 minutes after a restart — the dashboard KPI card

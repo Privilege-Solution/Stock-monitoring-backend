@@ -30,8 +30,16 @@ const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 
 // Thai long-form date so Gemini can disambiguate "วันนี้" — eg. "2 กรกฎาคม
 // พ.ศ. 2569". toLocaleDateString returns Buddhist Era by default in th-TH.
+//
+// timeZone MUST be pinned to Asia/Bangkok: without it toLocaleDateString uses
+// the SYSTEM timezone (UTC on Railway), so any run in the 00:00–07:00 ICT
+// window asked Gemini for YESTERDAY's Thai date while todayISO() — which does
+// use ICT — stamped the resulting rows with TODAY's date. The prompt and the
+// DB key have to agree on which day "วันนี้" is.
 const todayThai = () =>
-  new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+  new Date().toLocaleDateString('th-TH', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
 // ISO date key (YYYY-MM-DD) for `daily.date` writes. MUST be used for any DB
 // key — todayThai() returns a Buddhist-era display string ("2 กรกฎาคม 2569")
@@ -281,6 +289,26 @@ REASON: ปัจจัยบวกจากโครงการใหม่แ
 // dashboard.
 const ALLOWED_IMPACT_LEVELS = new Set(['HIGH', 'MEDIUM', 'LOW']);
 
+// Normalize a raw enum value (CATEGORY / IMPACT_LEVEL) out of Gemini's text.
+//
+// WHY: the prompt templates literally show the placeholder syntax —
+// "CATEGORY: [COMPANY]" and "IMPACT_LEVEL: [HIGH | MEDIUM | LOW]" — so Gemini
+// frequently echoes the brackets (and sometimes the whole alternation list).
+// The raw value "[COMPANY]" then failed ALLOWED_CATEGORIES.has() and was
+// SILENTLY coerced to 'MACRO', which mis-filed ASW company news into the macro
+// bucket and, via the same path on IMPACT_LEVEL, downgraded every HIGH to
+// MEDIUM — killing the macro HIGH chart pins entirely.
+//
+// Strip the brackets, then take the first token before whitespace or the "|"
+// alternation bar, uppercased.
+function normalizeEnumValue(raw) {
+  return String(raw || '')
+    .replace(/[[\]]/g, ' ')
+    .trim()
+    .split(/[\s|]+/)[0]
+    .toUpperCase();
+}
+
 // Map legacy sentiment IMPACT (positive/negative/neutral) onto the new
 // impact_level vocabulary as a fallback for older Gemini runs that haven't
 // been updated yet. positive → HIGH (good news moves valuation), negative
@@ -415,11 +443,26 @@ function parseAIResult(text, pipeline, grounding) {
   // each headline via groundingSupports (which maps text ranges to chunks).
   const blocks = [];
   let searchFrom = 0;
-  for (const part of text.split('---')) {
-    if (!part.trim()) continue;
+  const pushBlock = (part) => {
+    if (!part.trim()) return;
     const start = text.indexOf(part, searchFrom);
+    if (start < 0) return;                    // defensive — can't happen for substrings
     blocks.push({ text: part, start, end: start + part.length });
     searchFrom = start + part.length;
+  };
+  for (const part of text.split('---')) {
+    if (!part.trim()) continue;
+    // Gemini sometimes omits the "---" separators the prompt asks for and
+    // returns 2–3 records back to back inside ONE block. `get()` below only
+    // returns the FIRST match per key, so a 3-item response silently collapsed
+    // to item #1 and items 2..N were lost with no log line anywhere. Detect it
+    // by counting HEADLINE: occurrences and re-split on the line that starts
+    // the next record (every record begins with CATEGORY:).
+    if ((part.match(/HEADLINE:/g) || []).length > 1) {
+      for (const sub of part.split(/\n(?=CATEGORY:)/)) pushBlock(sub);
+    } else {
+      pushBlock(part);
+    }
   }
 
   return blocks.map(({ text: block, start, end }) => {
@@ -427,10 +470,28 @@ function parseAIResult(text, pipeline, grounding) {
       const m = block.match(new RegExp(`${key}:\\s*(.+)`));
       return m ? m[1].trim() : null;
     };
-    const rawCategory = (get('CATEGORY') || '').toUpperCase();
-    const category = ALLOWED_CATEGORIES.has(rawCategory) ? rawCategory : 'MACRO';
-    const rawImpactLevel = (get('IMPACT_LEVEL') || '').toUpperCase();
-    const impactLevel = ALLOWED_IMPACT_LEVELS.has(rawImpactLevel) ? rawImpactLevel : 'MEDIUM';
+    // Bracket-tolerant enum parsing (see normalizeEnumValue). Coercions are
+    // WARNED rather than applied silently so genuine format drift shows up in
+    // the Railway logs instead of quietly re-filing everything as MACRO/MEDIUM.
+    const rawCategory = normalizeEnumValue(get('CATEGORY'));
+    let category = rawCategory;
+    if (!ALLOWED_CATEGORIES.has(category)) {
+      if (rawCategory) console.warn(`[gemini] unexpected CATEGORY "${get('CATEGORY')}" → coerced to MACRO`);
+      category = 'MACRO';
+    }
+    const rawImpactLevel = normalizeEnumValue(get('IMPACT_LEVEL'));
+    let impactLevel = rawImpactLevel;
+    if (!ALLOWED_IMPACT_LEVELS.has(impactLevel)) {
+      if (rawImpactLevel) console.warn(`[gemini] unexpected IMPACT_LEVEL "${get('IMPACT_LEVEL')}" → coerced to MEDIUM`);
+      impactLevel = 'MEDIUM';
+    }
+    // The prompts don't ask for a DATE: line (rows are stamped with the run's
+    // ICT date), but grounded output occasionally volunteers one — and when it
+    // does it is often a Buddhist-era year ("2569-07-14"), which the th-TH
+    // frontend renders as year 3112. normalizeDateYear() is the BE→CE safety
+    // net; we only accept the result if it's a well-formed CE date.
+    const statedDate = normalizeDateYear(get('DATE') || '');
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(statedDate) ? statedDate : todayISO();
     const statedUrl = get('URL');
     // Resolve the URL against grounding: keep Gemini's URL if its hostname
     // matches a grounded publisher, otherwise replace with the publisher
@@ -439,7 +500,7 @@ function parseAIResult(text, pipeline, grounding) {
       ? resolveGroundedUrl(statedUrl, { start, end }, grounding, trustedHosts)
       : statedUrl;
     return {
-      date: todayISO(),                             // ICT date (UTC+7) — was UTC, causing off-by-one for evening items
+      date,                                      // Gemini's DATE: if valid (BE→CE normalized), else ICT today
       pipeline,
       category,                                  // taxonomy-v2: COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO
       headline:  get('HEADLINE'),
@@ -468,40 +529,119 @@ function parseAIResult(text, pipeline, grounding) {
 // GEMINI HTTP CALL
 // =============================================================================
 
+// Is this Gemini failure worth another attempt? 429 (quota / rate limit), any
+// 5xx ("the model is overloaded" comes back as a 503 and is routine on
+// gemini-2.5-flash), and the abort/timeout errors AbortSignal.timeout() raises
+// (they carry no `.status`). 400 / 403 / 404 are permanent — a malformed body
+// or a bad API key will fail identically on every retry, so short-circuit
+// rather than burn the cron slot sleeping.
+function isRetryableGeminiError(e) {
+  const status = e?.status;
+  if (status === 429) return true;
+  if (status && status >= 500) return true;
+  if (status) return false;                     // 400/403/404 — permanent
+  return e?.name === 'AbortError' || e?.name === 'TimeoutError';
+}
+
 // One POST per pipeline. The body shape is the v1beta `generateContent`
 // format. Google Search grounding (`tools:[{google_search:{}}]`) is OPT-IN
 // via the `ground` flag: the news-SEARCH pipelines (company/sector/macro)
 // need it to pull real articles; synthesis tasks (daily summary) must work
 // only from the provided items, so they pass { ground:false } and we omit
 // `tools` entirely (grounding would send the model off to search and it'd
-// regurgitate snippets). If Gemini ever returns 429 we surface the error to
-// the caller — the scheduler wraps each invocation in logFetchFinish so
-// retry logic lives at that layer.
-async function geminiSearch(prompt, { ground = true, maxTokens = 2048, timeoutMs = 30_000 } = {}) {
+// regurgitate snippets).
+//
+// RETRY: this used to say "retry logic lives at the scheduler layer" — it did
+// not. server.js only try/catches each fetcher and logs the failure, so a
+// single transient `503 model overloaded` or a 429 lost that pipeline for the
+// entire batch (and, for the Monday-only morning brief, for the whole week).
+// Backoff now lives HERE, mirroring the approach in yahoo.mjs `withRetry`
+// (kept local to this file rather than shared — the two differ in what they
+// treat as retryable and yahoo's version carries a `.symbol` field).
+//
+// Default maxTokens raised 2048 → 8192: see thinkingConfig below.
+async function geminiSearch(
+  prompt,
+  { ground = true, maxTokens = 8192, timeoutMs = 30_000, retries = 3 } = {},
+) {
   const body = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens },
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: maxTokens,
+      // gemini-2.5-flash has "thinking" ON by default and thinking tokens are
+      // charged against maxOutputTokens. A long grounded search spent the whole
+      // 2048-token budget thinking, returned finishReason:'MAX_TOKENS' with an
+      // EMPTY content.parts array, `text` became '', parseAIResult() returned
+      // [] and the company/sector/macro pipelines recorded a silent success
+      // with zero rows. This is a fixed-format extraction task — we don't need
+      // chain-of-thought at all, so switch it off and give the whole budget to
+      // the answer. (The daily-summary path had already worked around the
+      // symptom by bumping to 8192; that is now the default for every caller.)
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   };
   if (ground) body.tools = [{ google_search: {} }];
-  // Bound the wait: Node's global fetch has no default timeout, so a hung
-  // Gemini connection would stall the cron indefinitely on Railway. 30s is
-  // generous for a grounded-search generate call; synthesis tasks that let the
-  // model think (daily summary) pass a larger budget + timeout.
-  const res = await fetch(`${ENDPOINT}?key=${process.env.GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
-  const j = await res.json();
-  const candidate = j.candidates?.[0];
-  const text = candidate?.content?.parts?.[0]?.text || '';
-  // extractGrounding returns null when there's no metadata (synthesis tasks
-  // pass ground:false). The 3 search pipelines (company/sector/macro) pass
-  // the result straight to parseAIResult, which uses it to validate URLs.
-  const grounding = extractGrounding(candidate);
-  return { text, grounding };
+
+  // One attempt. Bound the wait: Node's global fetch has no default timeout, so
+  // a hung Gemini connection would stall the cron indefinitely on Railway. 30s
+  // is generous for a grounded-search generate call; synthesis tasks that need
+  // a bigger answer (daily summary) pass a larger budget + timeout. The signal
+  // is built per-attempt so each retry gets a fresh clock.
+  const attemptOnce = async () => {
+    const res = await fetch(`${ENDPOINT}?key=${process.env.GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+      const err = new Error(`Gemini ${res.status}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+      err.status = res.status;                  // read by isRetryableGeminiError
+      throw err;
+    }
+    const j = await res.json();
+    const candidate = j.candidates?.[0];
+    // Read EVERY part, not just parts[0] — Gemini splits a long grounded answer
+    // across multiple parts and taking only the first truncated the response
+    // mid-record, so the tail items vanished.
+    const text = (candidate?.content?.parts || []).map(p => p.text || '').join('');
+    // A truncated or empty completion is a FAILURE, not "no news". Returning ''
+    // here made parseAIResult() emit [] and the pipeline log `ok` — the exact
+    // silent-success mode this fix exists to remove. Throw so logFetchFinish
+    // records a real error the operator can see.
+    if (candidate?.finishReason === 'MAX_TOKENS' || !text.trim()) {
+      throw new Error(
+        `Gemini returned no usable text (finishReason=${candidate?.finishReason || 'none'}, ` +
+        `parts=${(candidate?.content?.parts || []).length}, maxOutputTokens=${maxTokens})`,
+      );
+    }
+    // extractGrounding returns null when there's no metadata (synthesis tasks
+    // pass ground:false). The 3 search pipelines (company/sector/macro) pass
+    // the result straight to parseAIResult, which uses it to validate URLs.
+    const grounding = extractGrounding(candidate);
+    return { text, grounding };
+  };
+
+  // Exponential backoff with jitter: ~1s, then ~2s (3 attempts = 2 waits),
+  // each scaled by 0.5–1.5x so concurrent pipelines don't retry in lockstep.
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await attemptOnce();
+    } catch (e) {
+      lastErr = e;
+      if (!isRetryableGeminiError(e) || attempt === retries) break;
+      const wait = 1000 * Math.pow(2, attempt - 1) * (0.5 + Math.random());
+      console.warn(
+        `[gemini] attempt ${attempt}/${retries} failed ` +
+        `(${e.status || e.name || 'no-status'}: ${String(e.message).slice(0, 140)}); ` +
+        `retry in ${Math.round(wait)}ms`,
+      );
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
 }
 
 // =============================================================================
@@ -570,6 +710,26 @@ function parseTone(raw) {
     tone = 'neutral';
   }
   return { tone, raw: r };
+}
+
+// Cut the daily-summary HEADLINE down to the ≤100-char Remark cell.
+//
+// Prefer cutting at a space so we don't sever a word, BUT only when that space
+// lands reasonably deep into the string. Thai has NO inter-word spaces, so on a
+// Thai headline the last space before index 100 is almost always the single
+// space right after the leading Latin ticker — a 138-char
+// "ASW เปิดโครงการ…" truncated to literally "ASW…", destroying the remark.
+// Requiring cut >= MIN_SPACE_CUT keeps the word-safe cut for Latin/mixed
+// headlines and falls back to a hard slice at 100 for Thai. A prefix slice is
+// safe for Thai either way: combining marks attach to the preceding base
+// character, so a cut never leaves a dangling mark.
+const MAX_HEADLINE = 100;
+const MIN_SPACE_CUT = 60;
+function truncateHeadline(headline) {
+  const s = String(headline || '');
+  if (s.length <= MAX_HEADLINE) return s;
+  const cut = s.lastIndexOf(' ', MAX_HEADLINE);
+  return (cut >= MIN_SPACE_CUT ? s.slice(0, cut) : s.slice(0, MAX_HEADLINE)).trimEnd() + '…';
 }
 
 // Repair a KEY_POINTS section that Gemini collapsed onto a single line (the
@@ -709,10 +869,10 @@ async function runDailySummary(sinceDate) {
     return { ok: true, reason: 'no-news', date, sourceCount: 0 };
   }
 
-  // Give the model room to think through the HEADLINE rules and still emit the
-  // full KEY_POINTS/TONE/REASON — the shared 2048 default cuts mid-bullet when
-  // thinking runs long, truncating the digest and dropping tone/reason. 8192
-  // covers thinking + answer; 90s is the matching upper bound on the wait.
+  // maxTokens is stated explicitly even though 8192 is now the shared default
+  // (this path is where the truncation was first diagnosed, so keep it pinned).
+  // 90s is the matching upper bound on the wait — this is the longest prompt we
+  // send and it has no grounding round-trip to hide behind.
   const { text } = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), {
     ground: false, maxTokens: 8192, timeoutMs: 90_000,
   });
@@ -725,16 +885,11 @@ async function runDailySummary(sinceDate) {
   const keyPoints = normalizeBullets(extractSection(text, 'KEY_POINTS'));
   // HEADLINE: one ≤100-char sentence summing up the day — becomes the Remark
   // cell. First line only (the spec is a single sentence), leading bullet
-  // stripped. If Gemini runs long, cut at the last phrase boundary (space) at
-  // or before 100 so we don't sever a Thai word; fall back to a hard slice
-  // when there's no space. A prefix slice is safe for Thai either way:
-  // combining marks attach to the preceding base, never leaving a dangling mark.
-  let headline = String(extractSection(text, 'HEADLINE') || '')
-    .split('\n')[0].replace(/^[-•*]\s*/, '').trim();
-  if (headline.length > 100) {
-    const cut = headline.lastIndexOf(' ', 100);
-    headline = (cut > 0 ? headline.slice(0, cut) : headline.slice(0, 100)).trimEnd() + '…';
-  }
+  // stripped, then Thai-safe truncation (see truncateHeadline).
+  const headline = truncateHeadline(
+    String(extractSection(text, 'HEADLINE') || '')
+      .split('\n')[0].replace(/^[-•*]\s*/, '').trim(),
+  );
   const toneMatch = text.match(/TONE:\s*(.+)/);
   const reasonMatch = text.match(/REASON:\s*(.+)/);
   const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
@@ -770,5 +925,8 @@ async function run({ source, sinceDate } = {}) {
   }
 }
 
-export { run, parseAIResult, geminiSearch, normalizeForNewsFeed, extractSection, parseTone, normalizeBullets };
+export {
+  run, parseAIResult, geminiSearch, normalizeForNewsFeed, extractSection,
+  parseTone, normalizeBullets, truncateHeadline, normalizeEnumValue,
+};
 export default { run };
