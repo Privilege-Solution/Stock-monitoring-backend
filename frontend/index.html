@@ -3269,59 +3269,61 @@ document.addEventListener('DOMContentLoaded', () => {
       renderUnifiedNews();
     });
   }
-  document.querySelectorAll('#newsRangePills .pill').forEach(b => {
-    b.addEventListener('click', () => {
-      STATE.newsRange = b.dataset.range;
-      STATE.newsDateFrom = null;
-      STATE.newsDateTo = null;
-      const dpFrom = $('newsDateFrom'); if (dpFrom) dpFrom.value = '';
-      const dpTo = $('newsDateTo'); if (dpTo) dpTo.value = '';
-      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.toggle('active', x === b));
+
+  // Today / All toggle
+  const todayBtn = $('newsTodayBtn');
+  const allBtn = $('newsAllBtn');
+  if (todayBtn) todayBtn.addEventListener('click', () => {
+    STATE.newsView = 'today';
+    STATE.newsDatePick = null;
+    const dp = $('newsDatePick'); if (dp) dp.value = '';
+    todayBtn.classList.add('active'); todayBtn.style.background = 'var(--primary)'; todayBtn.style.color = '#fff';
+    if (allBtn) { allBtn.classList.remove('active'); allBtn.style.background = '#fff'; allBtn.style.color = ''; }
+    renderUnifiedNews();
+  });
+  if (allBtn) allBtn.addEventListener('click', () => {
+    STATE.newsView = 'all';
+    STATE.newsDatePick = null;
+    const dp = $('newsDatePick'); if (dp) dp.value = '';
+    allBtn.classList.add('active'); allBtn.style.background = 'var(--primary)'; allBtn.style.color = '#fff';
+    if (todayBtn) { todayBtn.classList.remove('active'); todayBtn.style.background = '#fff'; todayBtn.style.color = ''; }
+    renderUnifiedNews();
+  });
+
+  // Date picker — overrides toggle
+  const datePick = $('newsDatePick');
+  if (datePick) {
+    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
+    if (dates.length) { datePick.min = dates[0]; datePick.max = dates[dates.length - 1]; }
+    datePick.addEventListener('change', () => {
+      STATE.newsDatePick = datePick.value || null;
+      if (datePick.value) {
+        if (todayBtn) { todayBtn.classList.remove('active'); todayBtn.style.background = '#fff'; todayBtn.style.color = ''; }
+        if (allBtn) { allBtn.classList.remove('active'); allBtn.style.background = '#fff'; allBtn.style.color = ''; }
+      }
       renderUnifiedNews();
-      renderDailySummary();
-      updateDateInfo();
+    });
+  }
+
+  // Category tabs
+  document.querySelectorAll('.news-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      STATE.newsCats = tab.dataset.cat || '__all';
+      document.querySelectorAll('.news-tab').forEach(t => {
+        t.classList.remove('active');
+        t.style.background = '#fff';
+        t.style.color = '';
+        t.style.border = '1px solid #e0e0e0';
+      });
+      tab.classList.add('active');
+      tab.style.background = 'var(--primary)';
+      tab.style.color = '#fff';
+      tab.style.border = 'none';
+      renderUnifiedNews();
     });
   });
 
-  // Date range picker — two inputs (from / to). Either can be set
-  // independently. Overrides range pills when active.
-  const dpFrom = $('newsDateFrom');
-  const dpTo = $('newsDateTo');
-  // Min/max come from NEWS_DATA, which is still empty at DOMContentLoaded —
-  // syncNewsDateBounds() is (re)called from loadNewsFeed() and from the
-  // bootstrap once the feed has actually landed.
-  syncNewsDateBounds();
-  function onDateChange() {
-    STATE.newsDateFrom = dpFrom?.value || null;
-    STATE.newsDateTo = dpTo?.value || null;
-    // Deactivate range pills when a date range is active
-    if (STATE.newsDateFrom || STATE.newsDateTo) {
-      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
-    }
-    renderUnifiedNews();
-    renderDailySummary();
-    updateDateInfo();
-  }
-  if (dpFrom) dpFrom.addEventListener('change', onDateChange);
-  if (dpTo) dpTo.addEventListener('change', onDateChange);
-  const dpClear = $('newsDateClear');
-  if (dpClear) {
-    dpClear.addEventListener('click', () => {
-      // 'วันนี้' = today only. Distinct from the 'ทั้งหมด' pill, which now
-      // means "no date filter" — no range pill matches 'TODAY', so clear them.
-      STATE.newsDateFrom = null;
-      STATE.newsDateTo = null;
-      STATE.newsRange = 'TODAY';
-      if (dpFrom) dpFrom.value = '';
-      if (dpTo) dpTo.value = '';
-      document.querySelectorAll('#newsRangePills .pill').forEach(x => x.classList.remove('active'));
-      renderUnifiedNews();
-      renderDailySummary();
-      updateDateInfo();
-    });
-  }
-  // Manual add-news modal (เพิ่มข่าวเอง): button opens, cancel/overlay/Esc
-  // close, form submits. Category <option>s populate on first open.
+  // Add news button
   const addNewsBtn = $('addNewsBtn');
   if (addNewsBtn) addNewsBtn.addEventListener('click', openAddNewsModal);
   const addNewsCancel = $('addNewsCancel');
