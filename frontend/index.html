@@ -1571,10 +1571,18 @@ function buildDashChart(filtered) {
             if (!el) {
               el = document.createElement('div');
               el.id = 'dashChartTooltip';
-              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.1);pointer-events:auto;font-size:13px;z-index:1000;max-width:340px;';
+              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:auto;font-size:13px;z-index:1000;max-width:340px;';
               chart.canvas.parentNode.appendChild(el);
+              // Prevent chart from stealing mouse events while user reads the tooltip
+              el.addEventListener('mouseenter', () => { el._hovered = true; });
+              el.addEventListener('mouseleave', () => { el._hovered = false; el.style.display = 'none'; });
             }
-            if (tooltip.opacity === 0) { el.style.display = 'none'; return; }
+
+            // If user is hovering the tooltip itself, don't hide
+            if (tooltip.opacity === 0) {
+              if (!el._hovered) el.style.display = 'none';
+              return;
+            }
             el.style.display = 'block';
 
             const items = tooltip.dataPoints || [];
