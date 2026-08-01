@@ -3224,7 +3224,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   // News search
-  $('dashNewsSearch').addEventListener('input', () => {
+  const dns = $('dashNewsSearch');
+  if (dns) dns.addEventListener('input', () => {
     renderDashNews(filterByRange(DATA, STATE.range));
   });
   // Table pagination
