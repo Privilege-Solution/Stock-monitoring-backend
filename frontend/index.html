@@ -3191,7 +3191,7 @@ async function loadAllSummaries() {
 // (Removed — app uses bundled sample_data.js only; no upload needed for MVP demo.)
 
 /* ============== Event wiring ============== */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try {
   // Migrate-v7: inject SVG icons into static HTML placeholders (news toolbar).
   // The placeholders can't use ${icon(...)} because they're in HTML markup,
