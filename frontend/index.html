@@ -1801,31 +1801,6 @@ function updateDateNav(currentDate) {
   if (prev) prev.disabled = idx <= 0;
   if (next) next.disabled = idx >= dates.length - 1 || idx < 0;
 }
-        const id = parseInt(el.dataset.id, 10);
-        const item = (window.NEWS_DATA || []).find(n => String(n.id) === el.dataset.id);
-        const newMarked = item ? !item.chart_marked : true;
-        try {
-          const r = await fetch(`/api/news/${id}/mark`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ marked: newMarked }),
-          });
-          if (r.ok) {
-            if (item) item.chart_marked = newMarked;
-            // Re-render chart + sidebar
-            buildDashChart(filterByRange(DATA, STATE.range));
-            renderDashNews(filterByRange(DATA, STATE.range));
-          }
-        } catch {}
-        return;
-      }
-      STATE.focusedDate = el.dataset.date;
-      focusDashOnDate(STATE.focusedDate);
-      renderDashNews(filterByRange(DATA, STATE.range));
-    });
-  });
-}
-
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({
