@@ -3192,6 +3192,7 @@ async function loadAllSummaries() {
 
 /* ============== Event wiring ============== */
 document.addEventListener('DOMContentLoaded', () => {
+  try {
   // Migrate-v7: inject SVG icons into static HTML placeholders (news toolbar).
   // The placeholders can't use ${icon(...)} because they're in HTML markup,
   // not JS template literals.
@@ -3695,6 +3696,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // add load; the client just re-reads the server's cached value.
   setTimeout(pollIntraday, 1500);
   setInterval(pollIntraday, 20_000);
+  } catch (e) {
+    console.error('DOMContentLoaded crashed:', e.message, e.stack);
+    document.body.insertAdjacentHTML('afterbegin',
+      '<div style="background:#fee;color:#a00;padding:10px 14px;font-size:13px;font-family:sans-serif;z-index:9999;">' +
+      'JS Error: ' + (e.message || e) + ' — check console (F12)</div>');
+  }
 });
 
 async function loadDataHealth() {
