@@ -1477,12 +1477,15 @@ function buildMarkAnnotations(filtered) {
   for (const [day, items] of byTargetDay) {
     const row = byDate.get(day);
     if (!row || row.close == null) continue;
-    // Place pin EXACTLY on the ASW close price line — no offset.
+    // Use the highest-priority category's colour for this date's pin
+    const CAT_PRIORITY = { COMPANY: 0, COMPETITOR: 1, RATES: 2, GOV_POLICY: 3, INDUSTRY: 4, MACRO: 5, POLITICS: 6 };
+    const sorted = [...items].sort((a, b) => (CAT_PRIORITY[a.category] ?? 9) - (CAT_PRIORITY[b.category] ?? 9));
+    const badge = REMARK_BADGE[sorted[0].category] || REMARK_BADGE.MACRO;
     ann['usrMark_' + (i++)] = {
       type: 'point',
       xValue: day + 'T00:00:00',
       yValue: row.close,
-      backgroundColor: '#1a1a18',
+      backgroundColor: badge.color,
       borderColor: '#ffffff',
       borderWidth: 2,
       radius: 5,
