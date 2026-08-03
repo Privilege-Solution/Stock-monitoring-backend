@@ -1460,49 +1460,32 @@ function buildMarkAnnotations(filtered) {
     return best;
   };
 
-  // Group pinned items by (date, category) so each category get its own
-  // coloured pin — not just the single highest-priority category per date.
-  // Pins on the same date are offset vertically so they don't overlap.
-  const byDayCat = new Map();
+  // One pin per date — use a single dark colour so all pins look uniform.
+  // The tooltip and sidebar show individual category colours per news item.
+  const byTargetDay = new Map();
   for (const n of marked) {
     const d = (n.date || '').slice(0, 10);
     if (!d) continue;
     const ms = new Date(d + 'T00:00:00').getTime();
     if (!(ms >= firstMs && ms <= lastMs)) continue;
     const day = byDate.has(d) ? d : nearestDay(ms);
-    const row = byDate.get(day);
-    if (!row || row.close == null) continue;
-    const cat = n.category || 'MACRO';
-    const key = day + '|' + cat;
-    if (!byDayCat.has(key)) byDayCat.set(key, { day, category: cat, close: row.close });
-  }
-
-  const CAT_ORDER = ['COMPANY','COMPETITOR','RATES','GOV_POLICY','INDUSTRY','MACRO','POLITICS'];
-  // Group keys by day to compute vertical offsets
-  const byDay = new Map();
-  for (const [key, val] of byDayCat) {
-    if (!byDay.has(val.day)) byDay.set(val.day, []);
-    byDay.get(val.day).push(val);
+    if (!byTargetDay.has(day)) byTargetDay.set(day, []);
+    byTargetDay.get(day).push(n);
   }
 
   let i = 0;
-  for (const [day, cats] of byDay) {
-    // Sort categories by priority within the day
-    cats.sort((a, b) => (CAT_ORDER.indexOf(a.category) ?? 9) - (CAT_ORDER.indexOf(b.category) ?? 9));
-    cats.forEach((c, idx) => {
-      const badge = REMARK_BADGE[c.category] || REMARK_BADGE.MACRO;
-      // Offset: first pin on price line, subsequent ones stack above
-      const yOff = cats.length > 1 ? (idx - (cats.length - 1) / 2) * 0.15 : 0;
-      ann['usrMark_' + (i++)] = {
-        type: 'point',
-        xValue: day + 'T00:00:00',
-        yValue: c.close + yOff,
-        backgroundColor: badge.color,
-        borderColor: '#ffffff',
-        borderWidth: 2,
-        radius: 6,
-      };
-    });
+  for (const [day, items] of byTargetDay) {
+    const row = byDate.get(day);
+    if (!row || row.close == null) continue;
+    ann['usrMark_' + (i++)] = {
+      type: 'point',
+      xValue: day + 'T00:00:00',
+      yValue: row.close,
+      backgroundColor: '#1a1a18',
+      borderColor: '#ffffff',
+      borderWidth: 2,
+      radius: items.length > 1 ? 7 : 5,
+    };
   }
   return ann;
 }
