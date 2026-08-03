@@ -1477,6 +1477,7 @@ function buildMarkAnnotations(filtered) {
   for (const [day, items] of byTargetDay) {
     const row = byDate.get(day);
     if (!row || row.close == null) continue;
+    // Place pin EXACTLY on the ASW close price line — no offset.
     ann['usrMark_' + (i++)] = {
       type: 'point',
       xValue: day + 'T00:00:00',
@@ -1484,7 +1485,7 @@ function buildMarkAnnotations(filtered) {
       backgroundColor: '#1a1a18',
       borderColor: '#ffffff',
       borderWidth: 2,
-      radius: items.length > 1 ? 7 : 5,
+      radius: 5,
     };
   }
   return ann;
