@@ -1557,76 +1557,29 @@ function buildDashChart(filtered) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          enabled: false, // disable canvas tooltip — use external HTML tooltip for clickable links
-          external: function(context) {
-            const { chart, tooltip } = context;
-            let el = document.getElementById('dashChartTooltip');
-            if (!el) {
-              el = document.createElement('div');
-              el.id = 'dashChartTooltip';
-              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:auto;font-size:13px;z-index:1000;max-width:340px;';
-              chart.canvas.parentNode.appendChild(el);
-              // Prevent chart from stealing mouse events while user reads the tooltip
-              el.addEventListener('mouseenter', () => { el._hovered = true; });
-              el.addEventListener('mouseleave', () => { el._hovered = false; el.style.display = 'none'; });
-            }
-
-            // If user is hovering the tooltip itself, don't hide
-            if (tooltip.opacity === 0) {
-              if (!el._hovered) el.style.display = 'none';
-              return;
-            }
-            el.style.display = 'block';
-
-            const items = tooltip.dataPoints || [];
-            if (!items.length) { el.style.display = 'none'; return; }
-            const dt = new Date(items[0].parsed.x);
-            const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-            const dateStr = dt.toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'numeric' });
-
-            const rowIdx = DATA.findIndex(r => r.date === ymd);
-            const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
-            const curClose = DATA[rowIdx]?.close;
-            const prevClose = prevRow?.close;
-            const chg = (curClose != null && prevClose != null) ? ((curClose - prevClose) / prevClose) * 100 : null;
-
-            const news = (window.NEWS_DATA || [])
-              .filter(n => (n.date || '').slice(0,10) === ymd)
-              .sort((a, b) => {
-                const sa = a.severity === 'high' ? 0 : a.severity === 'medium' ? 1 : 2;
-                const sb = b.severity === 'high' ? 0 : b.severity === 'medium' ? 1 : 2;
-                return sa - sb;
-              }).slice(0, 5);
-
-            let html = '<div style="font-weight:700;margin-bottom:6px;font-size:14px;">' + dateStr + '</div>';
-            for (const dp of items) {
-              const v = dp.parsed.y;
-              const lbl = dp.dataset.label;
-              html += '<div style="color:#555;">' + lbl + ': ' + (lbl.includes('ASW') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
-            }
-            if (chg != null) {
-              const c = chg >= 0 ? '#1D9E75' : '#A32D2D';
-              html += '<div style="color:' + c + ';font-weight:600;margin-top:4px;">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div>';
-            }
-            if (news.length) {
-              html += '<div style="border-top:1px solid #f0f0f0;margin-top:6px;padding-top:6px;font-size:12px;color:#888;margin-bottom:4px;">' + news.length + ' ข่าว</div>';
-              for (const n of news) {
-                const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                const u = n.source_url || '';
-                if (u) {
-                  html += '<a href="' + escapeHtml(u) + '" target="_blank" rel="noopener" style="display:block;color:' + badge.color + ';text-decoration:none;margin-bottom:3px;font-size:12px;line-height:1.4;">[' + badge.label + '] ' + escapeHtml((n.title || '').slice(0, 45)) + '</a>';
-                } else {
-                  html += '<div style="color:#888;margin-bottom:3px;font-size:12px;">[' + badge.label + '] ' + escapeHtml((n.title || '').slice(0, 45)) + '</div>';
-                }
-              }
-            }
-            el.innerHTML = html;
-
-            // Position tooltip
-            const rect = chart.canvas.getBoundingClientRect();
-            const parentRect = chart.canvas.parentNode.getBoundingClientRect();
-            el.style.left = (tooltip.caretX + 12) + 'px';
-            el.style.top = (tooltip.caretY - 10) + 'px';
+          // Keep the default canvas tooltip — price info only.
+          // News links live in the sidebar (click chart to populate).
+          // No external HTML tooltip — eliminates the hover-chase problem.
+          backgroundColor: 'rgba(255,255,255,0.98)',
+          borderColor: '#e0e0e0',
+          borderWidth: 1,
+          padding: 10,
+          titleColor: '#1a1a18',
+          bodyColor: '#555',
+          displayColors: true,
+          callbacks: {
+            title: (items) => {
+              if (!items.length) return '';
+              const d = new Date(items[0].parsed.x);
+              return d.toLocaleDateString('th-TH', { day:'2-digit', month:'short', year:'numeric' });
+            },
+            label: (item) => {
+              const v = item.parsed.y;
+              if (item.dataset.label === 'ASW Close') return 'ASW: ฿' + v.toFixed(2);
+              if (item.dataset.label === 'SET Index') return 'SET: ' + v.toFixed(2);
+              if (item.dataset.label === 'PROP Index') return 'PROP: ' + v.toFixed(2);
+              return item.dataset.label + ': ' + v;
+            },
           }
         },
         annotation: { annotations }
