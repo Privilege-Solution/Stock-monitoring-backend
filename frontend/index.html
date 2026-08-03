@@ -1735,7 +1735,12 @@ function renderDashNewsCard(item) {
 
 function renderDashNews(filtered) {
   // Date-based sidebar: show news for the focused date (or latest if none)
-  const targetDate = STATE.focusedDate || (filtered.length ? filtered[filtered.length - 1].date : null);
+  // Use focusedDate, or default to the LATEST news date (not price date)
+  const newsDates = [...new Set((window.NEWS_DATA || []).map(n => (n.date || '').slice(0,10)))].sort();
+  const latestNewsDate = newsDates.length ? newsDates[newsDates.length - 1] : null;
+  let targetDate = STATE.focusedDate || latestNewsDate;
+  // Set focusedDate so prev/next buttons work on first render
+  if (!STATE.focusedDate && targetDate) STATE.focusedDate = targetDate;
   const label = $('dashNewsDateLabel');
   if (label) label.textContent = targetDate ? '· ' + fmtThaiDate(targetDate) : '';
 
