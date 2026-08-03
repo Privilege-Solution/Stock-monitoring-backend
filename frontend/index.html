@@ -320,8 +320,8 @@
             <h3 class="th" style="font-size:13px;">ข่าวล่าสุด <span id="dashNewsDateLabel" class="th muted" style="font-size:12px;font-weight:400;"></span></h3>
             <div class="row" style="gap:4px; align-items:center;">
               <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
-              <button id="dashNewsPrev" class="th" style="font-size:14px;padding:2px 8px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:pointer;" title="วันก่อนหน้า">‹</button>
-              <button id="dashNewsNext" class="th" style="font-size:14px;padding:2px 8px;border:1px solid #e0e0e0;border-radius:4px;background:#fff;cursor:pointer;" title="วันถัดไป">›</button>
+              <button id="dashNewsPrev" type="button" style="font-size:16px;padding:2px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#333;" title="วันก่อนหน้า">‹</button>
+              <button id="dashNewsNext" type="button" style="font-size:16px;padding:2px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#333;" title="วันถัดไป">›</button>
             </div>
           </div>
           <div id="dashNewsList" class="scroll-y" style="flex:1; min-height:0;"></div>
@@ -1795,11 +1795,22 @@ function renderDashNews(filtered) {
 // Navigate between dates that have news
 function updateDateNav(currentDate) {
   const dates = [...new Set((window.NEWS_DATA || []).map(n => (n.date || '').slice(0,10)))].sort();
-  const idx = dates.indexOf(currentDate);
   const prev = $('dashNewsPrev');
   const next = $('dashNewsNext');
-  if (prev) prev.disabled = idx <= 0;
-  if (next) next.disabled = idx >= dates.length - 1 || idx < 0;
+  if (!currentDate || !dates.length) {
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+  const idx = dates.indexOf(currentDate);
+  if (prev) {
+    prev.disabled = idx <= 0;
+    prev.style.opacity = idx <= 0 ? '0.3' : '1';
+  }
+  if (next) {
+    next.disabled = idx >= dates.length - 1;
+    next.style.opacity = idx >= dates.length - 1 ? '0.3' : '1';
+  }
 }
 
 function escapeHtml(s) {
