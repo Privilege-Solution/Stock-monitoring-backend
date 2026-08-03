@@ -3359,19 +3359,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (idx < dates.length - 1) { STATE.focusedDate = dates[idx + 1]; focusDashOnDate(STATE.focusedDate); renderDashNews(filterByRange(DATA, STATE.range)); }
   });
 
-  // Click on chart = select that date → sidebar jumps to it
+  // Click on chart = select that date → sidebar shows news immediately
   const dashCanvas = document.getElementById('dashChart');
-  if (dashCanvas && typeof DASH_CHART !== 'undefined' && DASH_CHART) {
+  if (dashCanvas) {
     dashCanvas.style.cursor = 'pointer';
     dashCanvas.addEventListener('click', (e) => {
+      // Wait for DASH_CHART to be ready (built by buildDashChart)
+      if (typeof DASH_CHART === 'undefined' || !DASH_CHART) return;
       const points = DASH_CHART.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
-      if (points.length) {
-        const dt = new Date(points[0].parsed.x);
-        const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-        STATE.focusedDate = ymd;
-        focusDashOnDate(ymd);
-        renderDashNews(filterByRange(DATA, STATE.range));
-      }
+      if (!points.length) return;
+      const dt = new Date(points[0].parsed.x);
+      const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      STATE.focusedDate = ymd;
+      renderDashNews(filterByRange(DATA, STATE.range));
     });
   }
   const addNewsCancel = $('addNewsCancel');
