@@ -803,6 +803,41 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   return r.rows;
 }
 
+// Pin-worthy news across the FULL date range — the chart's pin source.
+//
+// Deliberately separate from readNewsFeed(). That one is capped at 500 rows and
+// ordered by display_priority DESC, which is right for the feed and wrong for
+// the chart: rss-property writes display_priority up to 125 (see
+// rss-property.mjs#scoreItem) on rows that are NOT pins (severity='medium',
+// show_pin=false), while a pinned HIGH-severity Gemini row scores 115. Those
+// non-pin rows therefore outrank genuine pins inside the 500-row window, and the
+// oldest pins fall off the end first — so an IPO-era backfill would land in the
+// table and still draw nothing on the chart.
+//
+// Selecting on the pin flags instead keeps the result set small and complete no
+// matter how large news_feed grows: show_pin is auto-set only for
+// severity='high' (writeNewsItems), and chart_marked is the user's manual pin.
+// Ordered date ASC so the chart gets them in timeline order.
+async function readNewsPins({ since = null, until = null, limit = 5000 } = {}) {
+  const p = getPool();
+  const where = ['hidden = FALSE', '(show_pin = TRUE OR chart_marked = TRUE)'];
+  const params = [];
+  if (since) { params.push(since); where.push(`date >= $${params.length}`); }
+  if (until) { params.push(until); where.push(`date <= $${params.length}`); }
+  params.push(Math.max(1, Math.min(limit || 5000, 20000)));
+  const r = await p.query(
+    `SELECT id, title, date, category, source_url, source_label,
+            pipeline, impact, severity, show_pin, display_priority, summary,
+            impact_level, user_note, chart_marked
+     FROM news_feed
+     WHERE ${where.join(' AND ')}
+     ORDER BY date ASC, display_priority DESC, id ASC
+     LIMIT $${params.length}`,
+    params
+  );
+  return r.rows;
+}
+
 // Set/clear the user_note for a single row by id. Empty / null / whitespace
 // clears the note. Caller just awaits — return value is discarded.
 async function setNewsNote(id, note) {
@@ -1004,6 +1039,7 @@ module.exports = {
   priorityForItem,      // derived priority, used by writeNewsItems
   writeNewsItems,
   readNewsFeed,
+  readNewsPins,         // GET /api/news/pins — chart pins, uncapped by the feed's 500
   readNewsStatus,       // GET /api/news/status payload
   setNewsNote,          // v6 — user_note writer
   setNewsMark,          // POST /api/news/:id/mark — dashboard chart pin toggle

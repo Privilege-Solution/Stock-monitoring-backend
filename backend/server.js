@@ -473,6 +473,32 @@ app.get('/api/news', async (req, res) => {
   }
 });
 
+// Pin-worthy news for the dashboard chart, across the whole date range.
+//
+// GET /api/news is capped at 500 rows ordered by display_priority DESC, which
+// is correct for the feed but silently truncates chart pins: rss-property rows
+// score up to 125 without being pins at all, outranking pinned HIGH-severity
+// rows at 115, so the oldest pins drop out of the window first. The chart needs
+// every pin from the IPO onward, and that set is small (severity='high' or a
+// manual mark), so it gets its own uncapped-by-500 route.
+//
+//   ?since=YYYY-MM-DD  lower bound (the frontend passes the IPO date)
+//   ?until=YYYY-MM-DD  upper bound
+app.get('/api/news/pins', async (req, res) => {
+  try {
+    const { since, until } = req.query;
+    for (const [name, v] of [['since', since], ['until', until]]) {
+      if (v !== undefined && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v))) {
+        return res.status(400).json({ error: `${name} must be YYYY-MM-DD`, code: 'date_bad_format' });
+      }
+    }
+    const rows = await db.readNewsPins({ since: since || null, until: until || null });
+    res.json({ rows, count: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e.message || e), code: 'news_pins_failed' });
+  }
+});
+
 // Manually add a news item (single-tenant — all clients see it). Reuses the same
 // news_feed table + dedup (title_hash) + severity-first sort as the pipelines, so
 // the row flows into the existing feed with no special-casing. pipeline='manual'
