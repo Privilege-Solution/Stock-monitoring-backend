@@ -676,7 +676,7 @@ window.ASW_API = {
     catch (e) { return { ok: false, error: 'offline' }; }
   },
   async newsFeed() {
-    try { const r = await fetch('/api/news?limit=200'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
+    try { const r = await fetch('/api/news?limit=500'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
     catch (e) { return []; }
   },
   async newsRefresh(source) {
@@ -2361,7 +2361,7 @@ async function loadNewsFeed() {
   try {
     // User-hidden rows are already excluded server-side; this cache is the
     // single source of truth for both renderDashNews() and renderUnifiedNews().
-    const r = await fetch('/api/news?limit=200');
+    const r = await fetch('/api/news?limit=500');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     window.NEWS_DATA = d.rows || [];
