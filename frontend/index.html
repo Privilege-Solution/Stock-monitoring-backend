@@ -3910,9 +3910,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dashCanvas = document.getElementById('dashChart');
   if (dashCanvas) {
     dashCanvas.style.cursor = 'pointer';
+
+    // Tell a click apart from a drag. A drag-to-zoom (and a shift+drag pan)
+    // ends with a mouseup that the browser ALSO reports as a click on the
+    // canvas — so every zoom gesture was opening the news modal for whichever
+    // pin happened to sit under the release point. Record where the gesture
+    // started and ignore the click if the pointer travelled.
+    //
+    // pointerdown, not mousedown, so touch drags are covered by the same guard.
+    const DRAG_SLOP_PX = 6;   // generous enough for hand tremor on a real click
+    let gestureStart = null;
+    dashCanvas.addEventListener('pointerdown', (e) => {
+      gestureStart = { x: e.clientX, y: e.clientY };
+    });
+    // A drag that leaves the canvas still ends the gesture; without this a
+    // later click could be measured against a stale start point.
+    dashCanvas.addEventListener('pointercancel', () => { gestureStart = null; });
+
     dashCanvas.addEventListener('click', (e) => {
       // Wait for DASH_CHART to be ready (built by buildDashChart)
       if (typeof DASH_CHART === 'undefined' || !DASH_CHART) return;
+
+      const start = gestureStart;
+      gestureStart = null;
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > DRAG_SLOP_PX) {
+        return;   // that was a zoom/pan drag, not a click on a pin
+      }
 
       // Pin first. Chart.js index-matching is far too precise for these dots —
       // one trading day is ~2 CSS px at the default 6M zoom while a pin is
