@@ -1515,6 +1515,39 @@ function newsForChartDay(ymd) {
   return out;
 }
 
+// How close (in CSS px, horizontally) a click must land to count as hitting a
+// pin. Deliberately larger than the dot itself: a pin is drawn at radius 5, but
+// at the default 6M zoom one trading day occupies only ~2 CSS px, so the dot is
+// five times wider than the single data index behind it.
+const PIN_HIT_RADIUS = 12;
+
+// The pin a click landed on, or null.
+//
+// Chart.js `mode:'index'` snaps to the nearest data point, which made the pins
+// effectively unclickable: to open the day you meant, the click had to land
+// within ~1px, and anything further resolved to a neighbouring trading day that
+// has no news — so the modal never opened and the pin looked dead. Matching
+// against PIN_NEWS_BY_DAY (the days that actually carry a dot) instead means a
+// click anywhere on the visible dot resolves to it.
+//
+// Horizontal distance only, matching the chart's own `intersect:false`
+// behaviour — requiring the pointer to also be near the price line vertically
+// would reintroduce the same precision problem on a different axis.
+function nearestPinDay(evt) {
+  if (typeof DASH_CHART === 'undefined' || !DASH_CHART) return null;
+  if (!PIN_NEWS_BY_DAY || !PIN_NEWS_BY_DAY.size) return null;
+  const rect = DASH_CHART.canvas.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  let best = null, bestDist = Infinity;
+  for (const day of PIN_NEWS_BY_DAY.keys()) {
+    const px = DASH_CHART.scales.x.getPixelForValue(new Date(day + 'T00:00:00').getTime());
+    if (!Number.isFinite(px)) continue;
+    const d = Math.abs(px - x);
+    if (d < bestDist) { bestDist = d; best = day; }
+  }
+  return bestDist <= PIN_HIT_RADIUS ? best : null;
+}
+
 function buildMarkAnnotations(filtered) {
   const ann = {};
   // newsForChart() — not NEWS_DATA — so historical pins survive the feed's
@@ -3615,15 +3648,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     dashCanvas.addEventListener('click', (e) => {
       // Wait for DASH_CHART to be ready (built by buildDashChart)
       if (typeof DASH_CHART === 'undefined' || !DASH_CHART) return;
+
+      // Pin first. Chart.js index-matching is far too precise for these dots —
+      // one trading day is ~2 CSS px at the default 6M zoom while a pin is
+      // drawn at radius 5, so a click that visually lands on the pin resolved
+      // to a neighbouring day with no news and opened nothing at all.
+      const pinDay = nearestPinDay(e);
+      if (pinDay) {
+        STATE.focusedDate = pinDay;
+        renderDashNews(filterByRange(DATA, STATE.range));
+        openNewsDetailModal(pinDay);
+        return;
+      }
+
+      // Not on a pin — focus the clicked date and update the sidebar, opening
+      // the modal only if that day has news.
       const points = DASH_CHART.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
       if (!points.length) return;
-      const dt = new Date(points[0].parsed.x);
-      const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      // Chart.js 4 returns {element, datasetIndex, index} from this call —
+      // there is NO `parsed` property on it. Reading `points[0].parsed.x` threw
+      // "Cannot read properties of undefined" on EVERY chart click, which is
+      // why clicking a pin appeared to do nothing at all: the listener died
+      // before it could focus the date or open anything.
+      //
+      // Read the raw datum instead. It is already the 'YYYY-MM-DDT00:00:00'
+      // string this chart was built from, so slicing beats round-tripping
+      // through Date() — which also drops the local-timezone hazard the old
+      // getFullYear()/getMonth()/getDate() reconstruction carried.
+      const pt = points[0];
+      const datum = DASH_CHART.data.datasets[pt.datasetIndex]?.data[pt.index];
+      const ymd = datum && datum.x ? String(datum.x).slice(0, 10) : null;
+      if (!ymd) return;
       STATE.focusedDate = ymd;
       renderDashNews(filterByRange(DATA, STATE.range));
-      // Open the detail modal only when the day actually has news. Clicking a
-      // bare stretch of the price line keeps its old behaviour (focus the date,
-      // update the sidebar) instead of popping an empty dialog.
       if (newsForChartDay(ymd).length) openNewsDetailModal(ymd);
     });
   }
