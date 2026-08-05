@@ -139,6 +139,28 @@
   .pin-picker-btn:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
   .pin-picker-btn .icon-svg { width: 12px; height: 12px; }
 
+  /* News-detail modal (chart pin click). Wider than the form modals because
+     each row carries a full headline rather than a one-line field. */
+  .news-detail-card { max-width: 620px; }
+  .news-detail-list { max-height: 58vh; overflow-y: auto; margin-top: 0.5rem; }
+  .nd-item {
+    display: block; text-decoration: none; color: inherit;
+    padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border);
+    border-radius: 0.375rem;
+  }
+  a.nd-item:hover { background: var(--surface); }
+  a.nd-item:hover .nd-title { text-decoration: underline; }
+  .nd-item.nd-nolink { opacity: 0.62; cursor: default; }
+  .nd-head { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; flex-wrap: wrap; }
+  .nd-title { font-size: 0.88rem; line-height: 1.45; }
+  .nd-summary { font-size: 0.76rem; color: var(--muted); margin-top: 0.25rem; line-height: 1.5; }
+  .nd-meta { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; }
+  .nd-sev {
+    font-size: 0.62rem; font-weight: 700; padding: 0.05rem 0.3rem;
+    border-radius: 0.2rem; text-transform: uppercase;
+  }
+  .nd-empty { padding: 1.2rem 0.5rem; text-align: center; color: var(--muted); font-size: 0.85rem; }
+
   .pin-picker-list { max-height: 60vh; overflow-y: auto; margin-top: 0.5rem; }
   .pin-picker-item {
     display: flex; align-items: center; gap: 0.5rem;
@@ -627,6 +649,20 @@
     <div id="pinPickerList" class="pin-picker-list"></div>
     <div class="modal-actions">
       <button type="button" id="pinPickerClose" class="th">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<!-- News detail for one chart date. Opened by clicking a pin/point on the
+     dashboard chart; the hover tooltip is now a skim preview only, so this is
+     where headlines are actually read and clicked through. -->
+<div class="modal-overlay" id="newsDetailModal" aria-hidden="true">
+  <div class="modal-card news-detail-card" role="dialog" aria-modal="true" aria-labelledby="newsDetailTitle">
+    <h3 class="th" id="newsDetailTitle">ข่าว</h3>
+    <p class="modal-sub th" id="newsDetailSub"></p>
+    <div id="newsDetailList" class="news-detail-list"></div>
+    <div class="modal-actions">
+      <button type="button" id="newsDetailClose" class="th">ปิด</button>
     </div>
   </div>
 </div>
@@ -1628,18 +1664,19 @@ function buildDashChart(filtered) {
             if (!el) {
               el = document.createElement('div');
               el.id = 'dashChartTooltip';
-              // max-height + scroll so a busy day's list stays fully reachable
-              // instead of running off the chart; overscroll-behavior keeps the
-              // wheel inside the panel once it is scrollable.
-              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:auto;font-size:13px;z-index:1000;max-width:340px;max-height:280px;overflow-y:auto;overscroll-behavior:contain;';
+              // SKIM PREVIEW ONLY. Reading and clicking happen in the detail
+              // modal (openNewsDetailModal), so this panel is deliberately
+              // non-interactive: pointer-events:none means it can never swallow
+              // a click meant for the chart or block a hover as the pointer
+              // sweeps across, which is what makes fast skimming feel right.
+              // It also no longer needs a grace period to be entered.
+              // z-index sits BELOW .modal-overlay (50) so it cannot cover the
+              // modal it launches.
+              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:none;font-size:13px;z-index:40;max-width:320px;max-height:260px;overflow:hidden;';
               chart.canvas.parentNode.appendChild(el);
 
-              // Hide on a TIMER, never instantly. Chart.js reports opacity 0 as
-              // soon as the pointer leaves the chart's hit area — which is
-              // before it has crossed the gap into this panel, so `_hovered` is
-              // still false at that moment. Hiding there is what made the links
-              // impossible to click: the panel vanished mid-journey. The timer
-              // gives the pointer time to arrive, and arriving cancels it.
+              // Kept so openNewsDetailModal() can cancel a pending hide without
+              // knowing whether one is scheduled.
               el._hideAt = null;
               el._cancelHide = () => {
                 if (el._hideAt) { clearTimeout(el._hideAt); el._hideAt = null; }
@@ -1648,30 +1685,17 @@ function buildDashChart(filtered) {
                 el._cancelHide();
                 el._hideAt = setTimeout(() => {
                   el._hideAt = null;
-                  if (!el._hovered) el.style.display = 'none';
+                  el.style.display = 'none';
                 }, ms);
               };
-              el.addEventListener('mouseenter', () => { el._hovered = true; el._cancelHide(); });
-              el.addEventListener('mouseleave', () => { el._hovered = false; el._scheduleHide(180); });
-
-              // Hover affordance for the links — inline styles can't express
-              // :hover, so the rule is injected once.
-              if (!document.getElementById('dashChartTooltipStyle')) {
-                const st = document.createElement('style');
-                st.id = 'dashChartTooltipStyle';
-                st.textContent = '#dashChartTooltip a{cursor:pointer;}' +
-                                 '#dashChartTooltip a:hover{text-decoration:underline !important;}';
-                document.head.appendChild(st);
-              }
             }
             if (tooltip.opacity === 0) {
-              // ~0.5s of travel budget: comfortable for a deliberate move to
-              // the panel, short enough that it doesn't linger over the chart.
-              if (!el._hovered) el._scheduleHide(500);
+              // Short, not zero: a tiny delay stops the panel strobing while the
+              // pointer crosses gaps between points during a fast sweep.
+              el._scheduleHide(80);
               return;
             }
             el._cancelHide();
-            if (el._hovered) return;
             el.style.display = 'block';
 
             const items = tooltip.dataPoints || [];
@@ -1686,36 +1710,28 @@ function buildDashChart(filtered) {
               html += '<div style="color:#555;">' + dp.dataset.label + ': ' + (dp.dataset.label.includes('ASW') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
             }
 
-            // News with clickable links. Reads newsForChart() so a pin from
-            // 2021 opens a tooltip with its actual headlines — NEWS_DATA alone
-            // holds only the recent top-500 and would render a bare price box
-            // under every historical pin.
+            // Headlines as PLAIN TEXT — the panel is pointer-events:none, so an
+            // anchor here could never be clicked anyway. Clicking the chart
+            // opens the detail modal, which is where the links live. Reads
+            // newsForChartDay() so a pin snapped off a SET holiday still
+            // previews the news it was built from.
             const dayNews = newsForChartDay(ymd)
               .sort((a, b) => {
                 const sa = a.severity === 'high' ? 0 : a.severity === 'medium' ? 1 : 2;
                 const sb = b.severity === 'high' ? 0 : b.severity === 'medium' ? 1 : 2;
                 return sa - sb;
               });
-            // The panel scrolls now, so the cap is only a sanity bound rather
-            // than "what fits" — everything listed stays clickable.
-            const news = dayNews.slice(0, 12);
+            // Skim depth: a few headlines is enough to decide whether to click
+            // in. The full list is one click away and does not need repeating.
+            const news = dayNews.slice(0, 4);
 
             if (news.length) {
-              const more = dayNews.length > news.length ? ` (แสดง ${news.length})` : '';
-              html += '<div style="border-top:1px solid #f0f0f0;margin-top:6px;padding-top:6px;font-size:12px;color:#888;margin-bottom:4px;">' + dayNews.length + ' ข่าว' + more + ' — <b>คลิกเพื่ออ่าน</b></div>';
+              const more = dayNews.length > news.length ? ` +${dayNews.length - news.length}` : '';
+              html += '<div style="border-top:1px solid #f0f0f0;margin-top:6px;padding-top:6px;font-size:12px;color:#888;margin-bottom:4px;">' + dayNews.length + ' ข่าว' + more + ' — <b>คลิกเพื่อดูรายละเอียด</b></div>';
               for (const n of news) {
                 const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                // safeUrl, not raw escapeHtml — source_url reaches news_feed
-                // from Gemini grounding and RSS redirects with no protocol
-                // check, and escapeHtml leaves `javascript:` intact. Non-http(s)
-                // falls through to the plain-text branch below.
-                const u = safeUrl(n.source_url);
-                const headline = escapeHtml((n.title || '').slice(0, 50));
-                if (u) {
-                  html += '<a href="' + escapeHtml(u) + '" target="_blank" rel="noopener" style="display:block;color:' + badge.color + ';text-decoration:none;margin-bottom:4px;font-size:12px;line-height:1.4;">[' + badge.label + '] ' + headline + ' →</a>';
-                } else {
-                  html += '<div style="color:#888;margin-bottom:4px;font-size:12px;">[' + badge.label + '] ' + headline + '</div>';
-                }
+                const headline = escapeHtml((n.title || '').slice(0, 46));
+                html += '<div style="color:' + badge.color + ';margin-bottom:3px;font-size:12px;line-height:1.4;">[' + escapeHtml(badge.label) + '] ' + headline + '</div>';
               }
             }
 
@@ -3108,6 +3124,85 @@ function closePinPicker() {
   m.setAttribute('aria-hidden', 'true');
 }
 
+/* ============== News Detail Modal (chart pin click) ==============
+ * Clicking a point on the dashboard chart opens the day's news here. This is
+ * the read-and-click surface; the hover tooltip is a skim preview only, so it
+ * no longer has to stay open long enough to be entered with the pointer.
+ *
+ * Uses newsForChartDay() — the same resolver the chart pins use — so a pin
+ * snapped off a SET holiday lists the news it was actually built from.
+ */
+function openNewsDetailModal(ymd) {
+  const m = $('newsDetailModal');
+  if (!m || !ymd) return;
+
+  // Dismiss the skim preview — it lives in the chart container and would
+  // otherwise sit over the modal, and a preview competing with the detail view
+  // is just noise. Cancel its pending hide timer too, or that timer would fire
+  // later and fight whatever state the tooltip is in by then.
+  const tip = document.getElementById('dashChartTooltip');
+  if (tip) {
+    if (tip._cancelHide) tip._cancelHide();
+    tip.style.display = 'none';
+  }
+
+  const items = newsForChartDay(ymd).sort((a, b) => {
+    const sev = (x) => (x.severity === 'high' ? 0 : x.severity === 'medium' ? 1 : 2);
+    return sev(a) - sev(b);
+  });
+
+  $('newsDetailTitle').textContent = 'ข่าว ' + fmtThaiDate(ymd);
+
+  // Sub-line: the day's price + change, so the modal answers "what moved?"
+  const row = DATA.find(r => r.date === ymd);
+  const bits = [];
+  if (row && row.close != null) bits.push('฿' + fmtNum(row.close));
+  if (row && row.change != null) bits.push(fmtPct(row.change));
+  bits.push(items.length + ' ข่าว');
+  $('newsDetailSub').textContent = bits.join('  ·  ');
+
+  const list = $('newsDetailList');
+  if (!items.length) {
+    list.innerHTML = '<div class="nd-empty th">ไม่มีข่าวในวันนี้</div>';
+  } else {
+    list.innerHTML = items.map(n => {
+      const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+      const u = safeUrl(n.source_url);
+      const sevColor = n.severity === 'high' ? '#c0392b' : n.severity === 'medium' ? '#b35c00' : '#7a7a7a';
+      const sevPill = n.severity
+        ? `<span class="nd-sev" style="background:${sevColor}1a;color:${sevColor};">${escapeHtml(n.severity)}</span>`
+        : '';
+      // A pin's own date and the day it was drawn on differ when the news fell
+      // on a non-trading day — show the real publication date when they do.
+      const realDate = (n.date || '').slice(0, 10);
+      const dateNote = realDate && realDate !== ymd ? ' · ' + fmtThaiShort(realDate) : '';
+      const inner = `
+        <div class="nd-head">
+          <span class="tag th" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+          ${sevPill}
+        </div>
+        <div class="nd-title th">${escapeHtml(n.title || '')}</div>
+        ${n.summary ? `<div class="nd-summary th">${escapeHtml(n.summary)}</div>` : ''}
+        <div class="nd-meta th">${escapeHtml(n.source_label || '')}${dateNote}${u ? ' · เปิดลิงก์ข่าว →' : ' · ไม่มีลิงก์'}</div>`;
+      // Anchor when there is a real http(s) target, plain div otherwise — the
+      // same safeUrl gate the tooltip and sidebar use.
+      return u
+        ? `<a class="nd-item" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+        : `<div class="nd-item nd-nolink">${inner}</div>`;
+    }).join('');
+  }
+
+  m.classList.add('show');
+  m.setAttribute('aria-hidden', 'false');
+}
+
+function closeNewsDetailModal() {
+  const m = $('newsDetailModal');
+  if (!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden', 'true');
+}
+
 // Submit handler. Validates title + http(s) URL client-side, calls addNews,
 // then reloads the feed so the new card lands in its date group. Duplicate
 // (same title+link) is reported via a toast, not an error.
@@ -3526,8 +3621,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
       STATE.focusedDate = ymd;
       renderDashNews(filterByRange(DATA, STATE.range));
+      // Open the detail modal only when the day actually has news. Clicking a
+      // bare stretch of the price line keeps its old behaviour (focus the date,
+      // update the sidebar) instead of popping an empty dialog.
+      if (newsForChartDay(ymd).length) openNewsDetailModal(ymd);
     });
   }
+  // News-detail modal: ปิด button, backdrop click, Esc — same three exits the
+  // other modals offer.
+  const newsDetailCloseBtn = $('newsDetailClose');
+  if (newsDetailCloseBtn) newsDetailCloseBtn.addEventListener('click', closeNewsDetailModal);
+  const newsDetailModal = $('newsDetailModal');
+  if (newsDetailModal) {
+    newsDetailModal.addEventListener('click', (e) => {
+      if (e.target === newsDetailModal) closeNewsDetailModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && newsDetailModal.classList.contains('show')) closeNewsDetailModal();
+    });
+  }
+
   const addNewsCancel = $('addNewsCancel');
   if (addNewsCancel) addNewsCancel.addEventListener('click', closeAddNewsModal);
   const addNewsForm = $('addNewsForm');
