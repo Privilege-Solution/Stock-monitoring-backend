@@ -170,7 +170,11 @@ for (const q of QUARTERS) {
         pipeline: 'gemini-historical',
         impact: null,
         severity: item.impact === 'HIGH' ? 'high' : item.impact === 'LOW' ? 'low' : 'medium',
-        show_pin: false,
+        // show_pin deliberately omitted. writeNewsItems derives it as
+        // `show_pin != null ? show_pin : severity === 'high'`, so passing an
+        // explicit false here suppressed the derivation — every high-severity
+        // row this script wrote landed with show_pin=false and never appeared
+        // on the chart. 105 such rows had accumulated by 2026-08.
         summary: null,
       });
       n++;

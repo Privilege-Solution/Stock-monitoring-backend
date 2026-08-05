@@ -212,7 +212,9 @@ async function main() {
         pipeline: 'gemini-historical',
         impact: null,
         severity: item.category === 'COMPANY' ? 'high' : 'medium',
-        show_pin: false,
+        // show_pin deliberately omitted — writeNewsItems derives it from
+        // severity. An explicit false suppressed that and hid every
+        // high-severity row this script wrote from the chart.
         summary: null,
       });
       totalInserted++;
