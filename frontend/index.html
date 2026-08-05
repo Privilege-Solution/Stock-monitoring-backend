@@ -1548,6 +1548,88 @@ function nearestPinDay(evt) {
   return bestDist <= PIN_HIT_RADIUS ? best : null;
 }
 
+// Most pins to draw at once. Beyond this the chart stops reading as a timeline
+// and becomes a band of dots: on the ALL range the last eight months alone
+// carry ~57 pins inside roughly 130px, which is a pin every 2px.
+const PIN_DENSITY_TARGET = 50;
+
+// How much a day's pin is worth when only one per bucket survives thinning.
+// Severity dominates, display_priority breaks ties within a severity, and a
+// day carrying more news edges out a day carrying one item.
+function pinDayWeight(items) {
+  let best = 0;
+  for (const n of items) {
+    const sev = n.severity === 'high' ? 300 : n.severity === 'medium' ? 200 : 100;
+    const w = sev + (Number(n.display_priority) || 0);
+    if (w > best) best = w;
+  }
+  return best + items.length;
+}
+
+// Thin a day → items map to at most PIN_DENSITY_TARGET entries, spread evenly
+// across the visible span.
+//
+// The pin set is wildly uneven in time: 2026 alone holds more pins than
+// 2021-2024 combined, because the live pipelines run five times a day while the
+// early years come from a one-off backfill. Drawing every pin therefore paints
+// the recent months solid while the IPO era looks empty — the opposite of what
+// the chart is for.
+//
+// Bucketing by TIME (not by rank) and keeping the heaviest day in each bucket
+// gives every period the same share of dots, so a quiet 2022 keeps its pins
+// instead of being outvoted by a busy 2026. Nothing is lost: zooming shortens
+// the span, which raises the per-bucket resolution until every pin is drawn
+// again — at 3M or narrower the set is normally under the target anyway and
+// this returns the map untouched.
+function thinPinDays(byTargetDay) {
+  if (byTargetDay.size <= PIN_DENSITY_TARGET) return byTargetDay;
+
+  const days = [...byTargetDay.keys()].sort((a, b) => a.localeCompare(b));
+  const firstMs = new Date(days[0] + 'T00:00:00').getTime();
+  const lastMs = new Date(days[days.length - 1] + 'T00:00:00').getTime();
+  const span = Math.max(1, lastMs - firstMs);
+
+  const winners = new Map();   // bucket index → {day, weight}
+  for (const [day, items] of byTargetDay) {
+    const ms = new Date(day + 'T00:00:00').getTime();
+    const bucket = Math.min(
+      PIN_DENSITY_TARGET - 1,
+      Math.floor(((ms - firstMs) / span) * PIN_DENSITY_TARGET)
+    );
+    const weight = pinDayWeight(items);
+    const cur = winners.get(bucket);
+    if (!cur || weight > cur.weight) winners.set(bucket, { day, weight });
+  }
+
+  const keep = new Set([...winners.values()].map(v => v.day));
+
+  // Buckets are fixed-width in time, so a cluster crowds into one bucket and
+  // leaves its neighbours empty — a 1Y view filled only 28 of 50 slots that
+  // way, drawing fewer pins than a 3M view of the same data. Spend the
+  // remainder on the heaviest days not yet chosen, enforcing a minimum gap of
+  // half a bucket so the fill cannot rebuild the clump it just thinned.
+  if (keep.size < PIN_DENSITY_TARGET) {
+    const minGap = span / PIN_DENSITY_TARGET / 2;
+    const keptMs = [...keep].map(d => new Date(d + 'T00:00:00').getTime());
+    const rest = [...byTargetDay.entries()]
+      .filter(([d]) => !keep.has(d))
+      .map(([d, items]) => ({ d, ms: new Date(d + 'T00:00:00').getTime(), w: pinDayWeight(items) }))
+      .sort((a, b) => b.w - a.w);
+    for (const cand of rest) {
+      if (keep.size >= PIN_DENSITY_TARGET) break;
+      if (keptMs.some(ms => Math.abs(ms - cand.ms) < minGap)) continue;
+      keep.add(cand.d);
+      keptMs.push(cand.ms);
+    }
+  }
+
+  const out = new Map();
+  // Iterate the original map so insertion order (and therefore pin numbering)
+  // stays stable across renders.
+  for (const [day, items] of byTargetDay) if (keep.has(day)) out.set(day, items);
+  return out;
+}
+
 function buildMarkAnnotations(filtered) {
   const ann = {};
   // newsForChart() — not NEWS_DATA — so historical pins survive the feed's
@@ -1582,18 +1664,11 @@ function buildMarkAnnotations(filtered) {
     byTargetDay.get(day).push(n);
   }
 
-  // Publish the day → news mapping the pins were built from. The tooltip and
-  // sidebar cannot rederive it: a pin whose news date is a SET holiday (e.g.
-  // 2025-05-01 Labour Day, 2026-04-15 Songkran) has no price row, so it is
-  // snapped above onto the nearest trading day. Looking news up by the chart
-  // point's own date then matches nothing and the pin renders with a price box
-  // and zero headlines — a pin with no news. newsForChartDay() reads this.
-  PIN_NEWS_BY_DAY = byTargetDay;
-
-  let i = 0;
+  // Drop days that cannot carry a pin BEFORE thinning — otherwise a density
+  // bucket could spend its single slot on a day that is then discarded, leaving
+  // an avoidable hole in the timeline.
   for (const [day, items] of byTargetDay) {
-    // No price point to sit on → no pin. Drop the mapping too, so
-    // PIN_NEWS_BY_DAY stays exactly "days that actually carry a pin".
+    // No price point to sit on → no pin.
     const row = byDate.get(day);
     if (!row || row.close == null) { byTargetDay.delete(day); continue; }
     // Never draw a pin with nothing behind it — if there is no news to show,
@@ -1606,6 +1681,23 @@ function buildMarkAnnotations(filtered) {
     // still lists a day's link-less headlines once a pin exists for another
     // reason; this only decides whether the dot is drawn at all.
     if (!items.some(n => safeUrl(n.source_url))) { byTargetDay.delete(day); continue; }
+  }
+
+  const visible = thinPinDays(byTargetDay);
+
+  // Publish the day → news mapping the pins were built from. The tooltip and
+  // sidebar cannot rederive it: a pin whose news date is a SET holiday (e.g.
+  // 2025-05-01 Labour Day, 2026-04-15 Songkran) has no price row, so it is
+  // snapped above onto the nearest trading day. Looking news up by the chart
+  // point's own date then matches nothing and the pin renders with a price box
+  // and zero headlines — a pin with no news. newsForChartDay() reads this, and
+  // nearestPinDay() hit-tests clicks against it, so it must hold exactly the
+  // days that ended up drawn — hence the post-thinning assignment.
+  PIN_NEWS_BY_DAY = visible;
+
+  let i = 0;
+  for (const [day, items] of visible) {
+    const row = byDate.get(day);
     // Use the highest-priority category's colour for this date's pin
     const CAT_PRIORITY = { COMPANY: 0, COMPETITOR: 1, RATES: 2, GOV_POLICY: 3, INDUSTRY: 4, MACRO: 5, POLITICS: 6 };
     const sorted = [...items].sort((a, b) => (CAT_PRIORITY[a.category] ?? 9) - (CAT_PRIORITY[b.category] ?? 9));

@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 import { createHash } from 'node:crypto';
-import { normalizeHeadline, normalizeDateYear, bingNewsRssUrl, extractPublisherUrl } from '../backend/lib/fetchers/news-rss-helpers.mjs';
+import {
+  normalizeHeadline, normalizeDateYear, bingNewsRssUrl, extractPublisherUrl,
+  isHomepageUrl, deepenHomepageUrl, mapLimit,
+} from '../backend/lib/fetchers/news-rss-helpers.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -147,6 +150,25 @@ for (const q of Q) {
 }
 
 if (all.length) {
+  // Deepen publisher-homepage URLs into real article links before writing, the
+  // same step gemini-search.mjs and the RSS fetchers run. Without it this
+  // script stores `https://www.<publisher>/` links that load but never show the
+  // story — and since the chart only pins a day whose news has a usable article
+  // URL, those rows would be dead weight: fetched, stored, never surfaced.
+  const homepages = all.filter(i => isHomepageUrl(i.source_url));
+  if (homepages.length) {
+    process.stdout.write(`\ndeepening ${homepages.length} homepage URL(s)...`);
+    await mapLimit(homepages, 4, async (i) => {
+      const deep = await deepenHomepageUrl(i.title, i.source_label);
+      if (deep) i.source_url = deep;
+    });
+    const stillHome = all.filter(i => isHomepageUrl(i.source_url)).length;
+    process.stdout.write(` ${homepages.length - stillHome} resolved, ${stillHome} cleared to no-url\n`);
+    // Keep the headline (this backfill values coverage for old news) but drop
+    // the misleading link, so the row cannot masquerade as clickable.
+    for (const i of all) if (isHomepageUrl(i.source_url)) i.source_url = '';
+  }
+
   const { inserted } = await db.writeNewsItems(all);
   const withUrl = all.filter(i => i.source_url).length;
   process.stdout.write(`\nDONE: ${inserted} inserted, ${withUrl}/${all.length} with URLs (${Math.round(withUrl/all.length*100)}%)\n`);
