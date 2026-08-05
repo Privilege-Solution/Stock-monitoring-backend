@@ -1530,6 +1530,13 @@ function buildMarkAnnotations(filtered) {
     // Never draw a pin with nothing behind it — if there is no news to show,
     // there is no reason for the dot to be on the chart.
     if (!items.length) { byTargetDay.delete(day); continue; }
+    // Every pin must lead somewhere. The gemini-historical backfill stored 338
+    // rows with source_url = '' (it kept the headline when no link could be
+    // resolved), and a pin over those is a dot the user can hover but never
+    // click through — so it does not earn a place on the chart. The tooltip
+    // still lists a day's link-less headlines once a pin exists for another
+    // reason; this only decides whether the dot is drawn at all.
+    if (!items.some(n => safeUrl(n.source_url))) { byTargetDay.delete(day); continue; }
     // Use the highest-priority category's colour for this date's pin
     const CAT_PRIORITY = { COMPANY: 0, COMPETITOR: 1, RATES: 2, GOV_POLICY: 3, INDUSTRY: 4, MACRO: 5, POLITICS: 6 };
     const sorted = [...items].sort((a, b) => (CAT_PRIORITY[a.category] ?? 9) - (CAT_PRIORITY[b.category] ?? 9));
