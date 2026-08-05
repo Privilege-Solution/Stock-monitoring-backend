@@ -693,16 +693,33 @@ async function writePeers(tickers, names, peers) {
   return { rows };
 }
 
+// Latest available price PER TICKER — not "every row on the newest date".
+//
+// The old shape took a single global MAX(date) and returned only rows matching
+// it exactly, so any ticker lagging by even one day disappeared from the payload
+// and rendered as "—" in the peer table. That is not an edge case: during the
+// morning session Yahoo publishes a bar for some SET tickers before others, and
+// writePeers() skips writing a row at all when close is null. Observed
+// 2026-08-05 10:35 ICT — 14 tickers had a row for that day while ASW.BK,
+// SPALI.BK and FPT.BK were still on 2026-08-04, so ASW (the subject of the whole
+// dashboard) showed no price while its peers did.
+//
+// DISTINCT ON gives each ticker its most recent row independently. `date` rides
+// along per row so the client can flag one that trails the others rather than
+// silently presenting a stale price as current.
 async function readLatestPeers() {
   const p = getPool();
-  const latest = await p.query('SELECT MAX(date) AS d FROM peer_prices');
-  const d = latest.rows[0]?.d;
-  if (!d) return { date: null, rows: [] };
-  const r = await p.query(
-    'SELECT ticker, name, close, "change" AS "change" FROM peer_prices WHERE date = $1 ORDER BY ticker ASC',
-    [d]
-  );
-  return { date: d, rows: r.rows };
+  const r = await p.query(`
+    SELECT DISTINCT ON (ticker)
+           ticker, name, close, "change" AS "change", date
+      FROM peer_prices
+     WHERE close IS NOT NULL
+     ORDER BY ticker ASC, date DESC
+  `);
+  // The headline date stays the newest across all tickers, so the card still
+  // reads "as of <latest session>".
+  const date = r.rows.reduce((max, row) => (!max || row.date > max ? row.date : max), null);
+  return { date, rows: r.rows };
 }
 
 // ── news_feed ──────────────────────────────────────────────────────────────

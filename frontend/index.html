@@ -2515,6 +2515,11 @@ async function buildPeerSnapshot() {
   // pinned just below the sticky <thead> so it stays visible while the other
   // 19 peers scroll under it (sticky is applied per-<td> in the row builder
   // below — a collapsed table won't paint a sticky <tr> background).
+  // /api/peers now returns each ticker's latest row independently, so a ticker
+  // whose session bar has not landed yet still carries a price — it is just
+  // dated a day back. Keep that date so the row can say so instead of quietly
+  // passing yesterday's close off as today's.
+  const snapshotDate = PEER_CACHE.date || null;
   const peerRows = THAI_RE_PEERS.map(p => {
     const live = peerByTicker.get(p.ticker);
     const isASW = p.ticker === 'ASW';
@@ -2523,6 +2528,8 @@ async function buildPeerSnapshot() {
       name: live?.name || p.name,
       close: live?.close ?? null,
       change: live?.change ?? null,
+      asOf: live?.date || null,
+      stale: !!(live?.date && snapshotDate && live.date < snapshotDate),
       isASW,
     };
   });
@@ -2532,7 +2539,12 @@ async function buildPeerSnapshot() {
     const hasData = r.close != null && chg != null;
     const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '- ' : '─ ';
     const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">ASW</span>' : '';
-    const closeText = hasData ? `฿${r.close.toFixed(2)}` : '—';
+    // A trailing ticker shows its real price with the date it belongs to, so a
+    // one-session lag reads as a lag rather than as today's number.
+    const staleMark = (hasData && r.stale)
+      ? `<span class="muted th" style="font-size:10px;margin-left:4px;" title="ราคาล่าสุดที่มี (${escapeHtml(r.asOf)})">${escapeHtml(fmtThaiShort(r.asOf))}</span>`
+      : '';
+    const closeText = hasData ? `฿${r.close.toFixed(2)}${staleMark}` : '—';
     const colorStyle = !hasData
       ? 'color:var(--muted)'
       : chg > 0.05 ? 'color:var(--positive)' : chg < -0.05 ? 'color:var(--negative)' : 'color:var(--muted)';
