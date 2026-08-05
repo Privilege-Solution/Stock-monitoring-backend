@@ -21,9 +21,16 @@
 import { createHash } from 'crypto';
 import db from '../../db.js';
 import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
-import { normalizeHeadline, normalizeDateYear } from './news-rss-helpers.mjs';
+import {
+  normalizeHeadline, normalizeDateYear,
+  isHomepageUrl, deepenHomepageUrl, mapLimit,
+} from './news-rss-helpers.mjs';
 
 const MODEL = 'gemini-2.5-flash';
+// Matches rss-property/rss-extended — each deepen is up to 2 Bing requests and
+// Bing throttles an unbounded fan-out silently (a throttled response just looks
+// like "no article found").
+const BING_CONCURRENCY = 4;
 const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
@@ -682,6 +689,43 @@ function normalizeForNewsFeed(it) {
   };
 }
 
+// Normalize → deepen → drop → write. The single path from parsed Gemini items
+// to news_feed rows, used by all three feed pipelines.
+//
+// WHY THE DEEPEN STEP: resolveGroundedUrl() falls back to
+// `https://www.<publisher>/` whenever the grounding chunk identifies only a
+// hostname (see step 2 there — it calls that "a stable homepage URL"). Such a
+// link loads fine but never shows the story, so the reader clicks through to
+// nothing. By 2026-08 that had put 113 homepage-only rows in news_feed, all
+// from sector/macro/company — and zero from rss-property/rss-extended, which
+// have always run headlines through deepenHomepageUrl() and dropped whatever
+// could not be resolved. This brings the Gemini pipelines to the same standard.
+//
+// Dropping (rather than keeping the homepage, or keeping an empty URL) is
+// deliberate and matches the RSS fetchers: better to lose one row than to show
+// a headline the reader cannot actually open.
+async function writeFeedItems(items, tag) {
+  const rows = items.map(normalizeForNewsFeed);
+
+  const homepages = rows.filter(r => isHomepageUrl(r.source_url));
+  if (homepages.length) {
+    console.log(`[${tag}] deepening ${homepages.length} homepage URL(s)...`);
+    await mapLimit(homepages, BING_CONCURRENCY, async (r) => {
+      const deep = await deepenHomepageUrl(r.title, r.source_label);
+      if (deep) r.source_url = deep;
+    });
+  }
+
+  const keep = rows.filter(r => !isHomepageUrl(r.source_url));
+  const dropped = rows.length - keep.length;
+  if (dropped) {
+    console.log(`[${tag}] dropped ${dropped} item(s) — publisher homepage, no article URL found`);
+  }
+
+  const { inserted } = await db.writeNewsItems(keep);
+  return { inserted, dropped };
+}
+
 // Extract a multi-line section from the morning brief (LAST_WEEK: /
 // THIS_WEEK_WATCH:). The spec puts each section's value on multiple lines,
 // indented with "- " bullets — we preserve them as a single newline-separated
@@ -771,7 +815,7 @@ async function runCompany(sinceDate) {
     category: top.category,
     text: top.headline,
   });
-  const { inserted } = await db.writeNewsItems(items.map(normalizeForNewsFeed));
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-company');
 
   return {
     ok: true,
@@ -780,6 +824,7 @@ async function runCompany(sinceDate) {
     text: top.headline,
     sourceTitles: items.map(it => it.source ? `${it.source}: ${it.headline}` : it.headline),
     inserted,
+    dropped,
   };
 }
 
@@ -789,9 +834,9 @@ async function runSector(sinceDate) {
   const td = todayThai();
   const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td));
   const items = parseAIResult(text, 'sector', grounding);
-  const { inserted } = await db.writeNewsItems(items.map(normalizeForNewsFeed));
-  console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted}`);
-  return { ok: true, fetched: items.length, inserted };
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-sector');
+  console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped}`);
+  return { ok: true, fetched: items.length, inserted, dropped };
 }
 
 // (3) MACRO — news feed for all items. severity=high items ALSO append to
@@ -800,7 +845,7 @@ async function runMacro(sinceDate) {
   const td = todayThai();
   const { text, grounding } = await geminiSearch(PROMPT_MACRO(td));
   const items = parseAIResult(text, 'macro', grounding);
-  const { inserted } = await db.writeNewsItems(items.map(normalizeForNewsFeed));
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-macro');
 
   // The first severity=high item gets appended as a pin. We use
   // appendRemarkPin so the company pin from runCompany (above) is preserved.
@@ -810,8 +855,8 @@ async function runMacro(sinceDate) {
     await db.appendRemarkPin(todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
   }
   const highCount = items.filter(i => i.severity === 'high').length;
-  console.log(`[gemini-macro] ${td} → fetched=${items.length} inserted=${inserted} high=${highCount}`);
-  return { ok: true, fetched: items.length, inserted, high: highCount };
+  console.log(`[gemini-macro] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
+  return { ok: true, fetched: items.length, inserted, dropped, high: highCount };
 }
 
 // (4) MORNING BRIEF — Monday-only weekly summary, lands in daily.{morning_*}.

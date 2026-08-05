@@ -725,6 +725,37 @@ function priorityForItem(it) {
   return sev + imp + pin;
 }
 
+// Last line of defence on source_url, applied to every row on the way into
+// news_feed regardless of which pipeline produced it.
+//
+// Only the NEVER-VALID cases are handled here, and only synchronously — the DB
+// layer does no network I/O, so it cannot tell a live article from a 404 or
+// turn a publisher homepage into an article link. That resolution belongs in
+// the fetchers, where deepenHomepageUrl() can make the Bing round trip.
+//
+// What this catches:
+//   - '' / null / the literal 'NONE' Gemini emits when it finds no source
+//   - non-http(s) schemes — `javascript:` reached the frontend before safeUrl()
+//     was added there, and the pipelines never validated the scheme at all
+//   - Google grounding redirects (vertexaisearch.cloud.google.com /
+//     grounding-api-redirect). resolveGroundedUrl() rejects these, but 97 rows
+//     from the gemini-historical backfill still got through, and by 2026-08
+//     more than half already returned 404 — Google expires them. They are an
+//     internal indirection, never a durable article URL.
+//
+// Returns '' rather than dropping the row: the headline still carries value in
+// the feed, and an empty url is already the shape the UI treats as unclickable.
+function sanitizeSourceUrl(raw) {
+  const s = (typeof raw === 'string' ? raw.trim() : '');
+  if (!s || s.toUpperCase() === 'NONE') return '';
+  let u;
+  try { u = new URL(s); } catch { return ''; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  if (/vertexaisearch|grounding-api-redirect/i.test(s)) return '';
+  if (u.hostname === 'vertexaisearch.cloud.google.com') return '';
+  return s;
+}
+
 // Multi-row INSERT with ON CONFLICT (title_hash) DO NOTHING. The unique index
 // on title_hash is the second line of dedup; the in-memory Set in
 // gemini-search.mjs is the first. The 14 columns mirror ensureSchema()'s
@@ -744,7 +775,7 @@ async function writeNewsItems(items) {
       it.title,
       normalizeDateYear(it.date),
       it.category,
-      it.source_url,
+      sanitizeSourceUrl(it.source_url),
       it.source_label,
       it.title_hash,
       it.pipeline     ?? null,
