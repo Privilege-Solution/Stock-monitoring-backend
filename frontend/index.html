@@ -1687,9 +1687,28 @@ function updateChartPeriodLabel(rows) {
   el.textContent = `${thaiMonths[f.getMonth()]} ${f.getFullYear() + 543} – ${thaiMonths[l.getMonth()]} ${l.getFullYear() + 543}`;
 }
 
-// Is the x-axis currently showing less than the preset's full span?
+// Is the x-axis showing less than the current range preset's full span?
+//
+// NOT chart.getZoomLevel(): buildDashChart pins explicit scales.x.min/max (to
+// crop trailing empty space), and against those the plugin reports a zoom level
+// of exactly 1 even after a drag-zoom — so the reset button never appeared and
+// a drag-zoom became a one-way trip. Verified live: dragging into 2022 changed
+// the axis window to 2022-01-01 → 2022-12-30 while getZoomLevel() stayed 1.
+//
+// Comparing spans is stateless, so it stays correct for drag-zoom, ⌘/Ctrl+wheel,
+// pinch, pan, and focusDashOnDate's ±30d window alike.
 function isChartZoomed() {
-  return !!(DASH_CHART && typeof DASH_CHART.getZoomLevel === 'function' && DASH_CHART.getZoomLevel() > 1.01);
+  if (!DASH_CHART) return false;
+  const sx = DASH_CHART.scales.x;
+  if (!sx || sx.min == null || sx.max == null) return false;
+  const base = filterByRange(DATA, STATE.range).filter(r => r.close != null);
+  if (base.length < 2) return false;
+  const baseSpan = new Date(base[base.length - 1].date + 'T00:00:00').getTime()
+                 - new Date(base[0].date + 'T00:00:00').getTime();
+  if (baseSpan <= 0) return false;
+  // Unzoomed, the axis carries ±7 days of padding, so it is always WIDER than
+  // baseSpan; 0.98 keeps rounding noise from tripping this.
+  return (sx.max - sx.min) < baseSpan * 0.98;
 }
 
 function updateZoomResetBtn() {
@@ -1698,9 +1717,18 @@ function updateZoomResetBtn() {
 }
 
 function resetChartZoom() {
-  if (!DASH_CHART || typeof DASH_CHART.resetZoom !== 'function') return;
-  DASH_CHART.resetZoom();
-  onChartViewChanged();
+  if (!DASH_CHART) return;
+  // Rebuild rather than call resetZoom(): the axis can be narrowed by TWO
+  // different mechanisms — the zoom plugin, and focusDashOnDate() writing
+  // scales.x.min/max directly — and resetZoom() only undoes the first. A
+  // rebuild restores the preset's bounds whatever narrowed them, and re-thins
+  // the pins for the restored span on the way through.
+  STATE.focusedDate = null;
+  const filtered = filterByRange(DATA, STATE.range);
+  buildDashChart(filtered);
+  renderDashNews(filtered);
+  updateChartPeriodLabel(filtered);
+  updateZoomResetBtn();
 }
 
 function buildMarkAnnotations(filtered) {
