@@ -522,10 +522,15 @@
     @apply relative;
     height: 360px;
   }
+  /* The dashboard chart. `flex: 1 1 0` never actually grew here — the parent
+     card has no fixed height, so the container sat at its min-height forever
+     and the plot area rendered 939x82px, an 11.4:1 sliver holding five years
+     of price history. 360px matches .chart-container (the Price History chart)
+     and leaves ~300px of plot once the axes are drawn. */
   .chart-container-tall {
     @apply relative;
     flex: 1 1 0;
-    min-height: 150px;
+    min-height: 360px;
   }
   .chart-toolbar {
     @apply flex items-center justify-between mb-2 gap-2 flex-wrap;

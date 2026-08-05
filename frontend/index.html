@@ -10,6 +10,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<!-- Zoom/pan on the dashboard chart. Hammer.js MUST load first — the zoom
+     plugin only wires up pinch gestures if it finds Hammer at registration
+     time; wheel and drag work without it, touch pinch does not. -->
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 <link rel="stylesheet" href="dist/styles.css">
 <style>
   /* CSS variables only — consumed by both Tailwind utilities (var(--*)) and runtime JS getComputedStyle() */
@@ -305,6 +310,11 @@
             <div class="row">
               <h3 class="th" style="font-size:13px;">กราฟราคา + Event Pins</h3>
               <span class="muted th" id="chartPeriodLabel" style="font-size:11px;">—</span>
+              <!-- Only rendered while the axis is actually zoomed; without an
+                   explicit way out, a drag-zoom is a one-way trip. -->
+              <button type="button" id="zoomResetBtn" class="pill th"
+                      style="display:none;font-size:11px;padding:2px 8px;"
+                      title="กลับไปดูช่วงเต็ม (Esc)">↺ รีเซ็ตซูม</button>
             </div>
             <div class="row" style="gap:6px;">
               <div class="pill-row" id="overlayPills">
@@ -1630,6 +1640,69 @@ function thinPinDays(byTargetDay) {
   return out;
 }
 
+/* ============== Chart viewport (zoom / pan) ==============
+ * Pin thinning is computed from the VISIBLE span, so the annotation set has to
+ * be rebuilt whenever the x-axis window moves. Without this, zooming into 2022
+ * would keep showing the 50 pins chosen to represent the whole five-year span —
+ * and earning more detail is the entire point of zooming in. focusDashOnDate()
+ * had this same staleness before zoom existed; it now routes through here too.
+ */
+function visibleDataWindow() {
+  if (!DASH_CHART) return DATA;
+  const sx = DASH_CHART.scales.x;
+  if (!sx || sx.min == null || sx.max == null) return DATA;
+  // Compare timestamps rather than date strings: the axis bounds are epoch ms
+  // and the data was parsed as LOCAL midnight, so a UTC-based toISOString()
+  // comparison would clip a day at each edge in Bangkok's +07.
+  return DATA.filter(r => {
+    const t = new Date(r.date + 'T00:00:00').getTime();
+    return t >= sx.min && t <= sx.max;
+  });
+}
+
+function onChartViewChanged() {
+  if (!DASH_CHART) return;
+  const win = visibleDataWindow();
+  if (win.length) {
+    DASH_CHART.options.plugins.annotation.annotations = buildMarkAnnotations(win);
+    // 'none' — repaint without animation so the gesture stays crisp.
+    DASH_CHART.update('none');
+  }
+  updateChartPeriodLabel(win);
+  updateZoomResetBtn();
+}
+
+// The header period label must track the VISIBLE window, not the range preset.
+// It read "เม.ย. 2564 – ส.ค. 2569" straight from the preset, so the moment you
+// zoomed it stated a range you were no longer looking at.
+function updateChartPeriodLabel(rows) {
+  const el = $('chartPeriodLabel');
+  if (!el) return;
+  const list = (rows && rows.length) ? rows : filterByRange(DATA, STATE.range);
+  if (!list.length) { el.textContent = '—'; return; }
+  const f = new Date(list[0].date + 'T00:00:00');
+  const l = new Date(list[list.length - 1].date + 'T00:00:00');
+  // thaiMonths is the file's existing short-month table (declared near the
+  // other formatters) — no need for a second copy.
+  el.textContent = `${thaiMonths[f.getMonth()]} ${f.getFullYear() + 543} – ${thaiMonths[l.getMonth()]} ${l.getFullYear() + 543}`;
+}
+
+// Is the x-axis currently showing less than the preset's full span?
+function isChartZoomed() {
+  return !!(DASH_CHART && typeof DASH_CHART.getZoomLevel === 'function' && DASH_CHART.getZoomLevel() > 1.01);
+}
+
+function updateZoomResetBtn() {
+  const btn = $('zoomResetBtn');
+  if (btn) btn.style.display = isChartZoomed() ? '' : 'none';
+}
+
+function resetChartZoom() {
+  if (!DASH_CHART || typeof DASH_CHART.resetZoom !== 'function') return;
+  DASH_CHART.resetZoom();
+  onChartViewChanged();
+}
+
 function buildMarkAnnotations(filtered) {
   const ann = {};
   // newsForChart() — not NEWS_DATA — so historical pins survive the feed's
@@ -1879,7 +1952,33 @@ function buildDashChart(filtered) {
             el.style.top = top + 'px';
           }
         },
-        annotation: { annotations }
+        annotation: { annotations },
+        // Drag a region to zoom into it; ⌘/Ctrl+wheel to zoom (a trackpad
+        // pinch arrives as ctrl+wheel, so that gesture works for free);
+        // shift+drag to pan; two-finger pinch on touch.
+        //
+        // Bare wheel is deliberately NOT bound. The chart sits mid-page, and a
+        // plain-wheel binding swallows the scroll of anyone passing over it.
+        zoom: {
+          limits: {
+            // Never zoom past roughly one trading week, and never pan beyond
+            // the data itself.
+            x: { min: 'original', max: 'original', minRange: 7 * 24 * 60 * 60 * 1000 },
+          },
+          pan: { enabled: true, mode: 'x', modifierKey: 'shift', onPanComplete: onChartViewChanged },
+          zoom: {
+            drag: {
+              enabled: true,
+              backgroundColor: 'rgba(59,139,212,0.12)',
+              borderColor: 'rgba(59,139,212,0.55)',
+              borderWidth: 1,
+            },
+            wheel: { enabled: true, modifierKey: 'ctrl', speed: 0.08 },
+            pinch: { enabled: true },
+            mode: 'x',
+            onZoomComplete: onChartViewChanged,
+          },
+        },
       },
       scales: {
         x: {
@@ -1926,6 +2025,9 @@ function focusDashOnDate(dateStr) {
   DASH_CHART.options.scales.x.min = start.toISOString();
   DASH_CHART.options.scales.x.max = end.toISOString();
   DASH_CHART.update();
+  // Re-thin pins for the ±30d window this just created, and refresh the period
+  // label — otherwise both still describe the range preset we zoomed away from.
+  onChartViewChanged();
 }
 
 /* ============== News Lists ==============
@@ -3480,13 +3582,10 @@ function refreshDashboard() {
   document.querySelectorAll('#overlayPills .pill').forEach(b => {
     b.classList.toggle('active', b.dataset.overlay === STATE.overlay);
   });
-  // Update chart period label
-  if (filtered.length) {
-    const first = new Date(filtered[0].date + 'T00:00:00');
-    const last = new Date(filtered[filtered.length-1].date + 'T00:00:00');
-    $('chartPeriodLabel').textContent = thaiMonths[first.getMonth()] + ' ' + (first.getFullYear() + 543) +
-      ' – ' + thaiMonths[last.getMonth()] + ' ' + (last.getFullYear() + 543);
-  }
+  // Period label + zoom affordance. A fresh chart is never zoomed, so this
+  // also clears a stale reset button left over from the previous range.
+  updateChartPeriodLabel(filtered);
+  updateZoomResetBtn();
 }
 
 function refreshPrice() {
@@ -3588,6 +3687,52 @@ document.addEventListener('DOMContentLoaded', async () => {
       STATE.overlay = b.dataset.overlay;
       refreshDashboard();
     });
+  });
+
+  // Zoom reset. The range pills already clear zoom implicitly (refreshDashboard
+  // destroys and rebuilds the chart), but a drag-zoom needs its own way back.
+  const zoomResetBtn = $('zoomResetBtn');
+  if (zoomResetBtn) zoomResetBtn.addEventListener('click', resetChartZoom);
+
+  // Keyboard: ←/→ walk the pins (same as the sidebar's prev/next arrows),
+  // Enter opens the focused one, Esc unzooms. Reviewing news chronologically is
+  // the main thing this dashboard is for, and doing it by mouse means hunting
+  // 5px dots.
+  document.addEventListener('keydown', (e) => {
+    if (STATE.view !== 'dashboard') return;
+    // Never steal keys from a text field, and let an open dialog have Esc.
+    const tag = ((e.target && e.target.tagName) || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+    if (e.target && e.target.isContentEditable) return;
+    if (document.querySelector('.modal-overlay.show')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'Escape') {
+      if (isChartZoomed()) { e.preventDefault(); resetChartZoom(); }
+      return;
+    }
+
+    const days = [...PIN_NEWS_BY_DAY.keys()].sort((a, b) => a.localeCompare(b));
+    if (!days.length) return;
+
+    if (e.key === 'Enter') {
+      if (STATE.focusedDate && newsForChartDay(STATE.focusedDate).length) {
+        e.preventDefault();
+        openNewsDetailModal(STATE.focusedDate);
+      }
+      return;
+    }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+    const cur = days.indexOf(STATE.focusedDate);
+    const next = cur === -1
+      ? (e.key === 'ArrowRight' ? 0 : days.length - 1)
+      : (e.key === 'ArrowRight' ? Math.min(cur + 1, days.length - 1) : Math.max(cur - 1, 0));
+    if (next === cur) return;
+    e.preventDefault();
+    STATE.focusedDate = days[next];
+    focusDashOnDate(days[next]);
+    renderDashNews(filterByRange(DATA, STATE.range));
   });
   // News search
   const dns = $('dashNewsSearch');
