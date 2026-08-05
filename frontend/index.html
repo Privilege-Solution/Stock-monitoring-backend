@@ -1665,12 +1665,56 @@ function onChartViewChanged() {
   const win = visibleDataWindow();
   if (win.length) {
     DASH_CHART.options.plugins.annotation.annotations = buildMarkAnnotations(win);
+    DASH_CHART.$pinWindowKey = DASH_CHART.scales.x.min + ':' + DASH_CHART.scales.x.max;
     // 'none' — repaint without animation so the gesture stays crisp.
     DASH_CHART.update('none');
   }
   updateChartPeriodLabel(win);
   updateZoomResetBtn();
 }
+
+/* Re-thin pins whenever the visible x-window moves, from ANY cause.
+ *
+ * chartjs-plugin-zoom's own callbacks cannot be trusted for this. Verified on
+ * the live chart: a ⌘/Ctrl+wheel zoom moved the axis from 2021-12-31→2022-12-30
+ * to 2022-01-14→2022-12-15 while onZoomComplete fired ZERO times — not late,
+ * not debounced, never. The pin set then stayed as it was until something else
+ * forced a rebuild, which is exactly the "pins don't appear until you zoom
+ * again" symptom.
+ *
+ * Chart.js runs afterUpdate on EVERY update, including the ones the zoom plugin
+ * drives internally, so watching the axis here covers wheel, drag, pinch, pan
+ * and focusDashOnDate uniformly — and updates pins mid-pan rather than only at
+ * gesture end.
+ *
+ * Re-entrancy: the work is deferred to the next frame (calling chart.update()
+ * from inside an update cycle is ignored or recurses), and the window key is
+ * re-stamped before that update so the resulting afterUpdate exits immediately.
+ */
+const pinWindowWatcher = {
+  id: 'pinWindowWatcher',
+  afterUpdate(chart) {
+    if (chart !== DASH_CHART) return;
+    const sx = chart.scales && chart.scales.x;
+    if (!sx || sx.min == null || sx.max == null) return;
+    const key = sx.min + ':' + sx.max;
+    if (key === chart.$pinWindowKey) return;
+    chart.$pinWindowKey = key;
+    if (chart.$pinRefreshQueued) return;
+    chart.$pinRefreshQueued = true;
+    requestAnimationFrame(() => {
+      chart.$pinRefreshQueued = false;
+      if (chart !== DASH_CHART || !chart.scales || !chart.scales.x) return;
+      const win = visibleDataWindow();
+      if (!win.length) return;
+      chart.options.plugins.annotation.annotations = buildMarkAnnotations(win);
+      chart.$pinWindowKey = chart.scales.x.min + ':' + chart.scales.x.max;
+      chart.update('none');
+      updateChartPeriodLabel(win);
+      updateZoomResetBtn();
+    });
+  },
+};
 
 // The header period label must track the VISIBLE window, not the range preset.
 // It read "เม.ย. 2564 – ส.ค. 2569" straight from the preset, so the moment you
@@ -1833,8 +1877,15 @@ function buildDashChart(filtered) {
   const yMin = Math.max(0, pMin - pad);
   const yMax = pMax + pad;
 
-  // Tighten x-axis to where we actually have price data (avoid large empty trailing space)
-  let xMinIso = null, xMaxIso = null;
+  // Tighten x-axis to where we actually have price data (avoid large empty
+  // trailing space).
+  //
+  // These are epoch MILLISECONDS, not ISO strings. The zoom plugin resolves
+  // `limits.x.min/max: 'original'` from scale.options.min/max, and with strings
+  // there its numeric clamp silently does nothing — which is how the axis could
+  // be zoomed out to 2018–2029 with the real data (2021–2026) squeezed into the
+  // middle. The time scale accepts timestamps directly.
+  let xMinMs = null, xMaxMs = null;
   const firstWithClose = priceData.find(p => p.y != null);
   const lastWithClose = [...priceData].reverse().find(p => p.y != null);
   if (firstWithClose && lastWithClose) {
@@ -1843,8 +1894,8 @@ function buildDashChart(filtered) {
     const xPadDays = 7;
     xMinDate.setDate(xMinDate.getDate() - xPadDays);
     xMaxDate.setDate(xMaxDate.getDate() + xPadDays);
-    xMinIso = xMinDate.toISOString();
-    xMaxIso = xMaxDate.toISOString();
+    xMinMs = xMinDate.getTime();
+    xMaxMs = xMaxDate.getTime();
   }
 
   const datasets = [{
@@ -1875,6 +1926,9 @@ function buildDashChart(filtered) {
   DASH_CHART = new Chart(ctx, {
     type: 'line',
     data: { datasets },
+    // Chart-local plugin: keeps the pin set in step with the visible window.
+    // Registered here rather than globally so it only ever touches this chart.
+    plugins: [pinWindowWatcher],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -1989,9 +2043,17 @@ function buildDashChart(filtered) {
         // plain-wheel binding swallows the scroll of anyone passing over it.
         zoom: {
           limits: {
-            // Never zoom past roughly one trading week, and never pan beyond
-            // the data itself.
-            x: { min: 'original', max: 'original', minRange: 7 * 24 * 60 * 60 * 1000 },
+            // Hard bounds in epoch ms rather than 'original'. The axis edges
+            // cannot leave the data (so you can never zoom or pan out into
+            // empty years), and minRange stops you diving below ~one trading
+            // week. maxRange caps zoom-OUT explicitly: clamping the edges alone
+            // still let the span grow when both edges moved together.
+            x: {
+              min: xMinMs != null ? xMinMs : 'original',
+              max: xMaxMs != null ? xMaxMs : 'original',
+              minRange: 7 * 24 * 60 * 60 * 1000,
+              ...(xMinMs != null && xMaxMs != null ? { maxRange: xMaxMs - xMinMs } : {}),
+            },
           },
           pan: { enabled: true, mode: 'x', modifierKey: 'shift', onPanComplete: onChartViewChanged },
           zoom: {
@@ -2012,7 +2074,7 @@ function buildDashChart(filtered) {
         x: {
           type: 'time',
           time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
-          min: xMinIso, max: xMaxIso,
+          min: xMinMs, max: xMaxMs,
           grid: { color: 'rgba(0,0,0,0.04)' },
           ticks: { color: getCSS('--muted'), font: { size: 13 } }
         },
