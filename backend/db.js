@@ -780,8 +780,22 @@ function sanitizeSourceUrl(raw) {
 // title_hash, pipeline, impact, severity, show_pin, fetched_at,
 // display_priority, summary, impact_level.
 async function writeNewsItems(items) {
-  if (!items || !items.length) return { inserted: 0 };
+  if (!items || !items.length) return { inserted: 0, deduped: 0 };
   const p = getPool();
+
+  // Content-level dedup BEFORE the insert. ON CONFLICT (title_hash) only stops
+  // byte-identical normalized headlines, so the same story worded differently by
+  // two outlets — or truncated to a different length by the same outlet — sails
+  // through as a separate row. See lib/news-dedup.mjs for the measurements.
+  const { kept, deduped } = await filterSemanticDuplicates(items);
+  if (deduped.length) {
+    for (const d of deduped) {
+      console.log(`[dedup] skip "${String(d.item.title).slice(0, 58)}" ≈ "${String(d.against).slice(0, 58)}" (${d.reason} ${d.score.toFixed(2)}${d.sameBatch ? ', same batch' : ''})`);
+    }
+  }
+  items = kept;
+  if (!items.length) return { inserted: 0, deduped: deduped.length };
+
   const now = new Date().toISOString();
   const values = [];
   const params = [];
@@ -821,7 +835,81 @@ async function writeNewsItems(items) {
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
-  return { inserted: r.rowCount };
+  return { inserted: r.rowCount, deduped: deduped.length };
+}
+
+// Drop items whose CONTENT already exists — either in news_feed within the
+// dedup window, or earlier in this same batch (a single Gemini/RSS pull often
+// returns the same story from three outlets at once, and those would otherwise
+// all insert together before any of them was queryable).
+//
+// Lazily imports the ESM dedup module: db.js is CommonJS.
+let _dedupMod = null;
+async function loadDedup() {
+  if (!_dedupMod) _dedupMod = await import('./lib/news-dedup.mjs');
+  return _dedupMod;
+}
+
+async function filterSemanticDuplicates(items) {
+  const kept = [], deduped = [];
+  let D;
+  try {
+    D = await loadDedup();
+  } catch (e) {
+    // Never let a dedup failure block ingestion — worst case we keep the old
+    // exact-hash behaviour and a duplicate slips through.
+    console.error('[dedup] module load failed, skipping content dedup:', e.message || e);
+    return { kept: items, deduped };
+  }
+
+  // Pull the comparison set once: every non-hidden row whose date is inside the
+  // window of ANY incoming item. One query rather than one per item.
+  const dates = items.map(it => normalizeDateYear(it.date)).filter(Boolean).sort();
+  let recent = [];
+  if (dates.length) {
+    const pad = Math.ceil(D.DEDUP_WINDOW_HOURS / 24);
+    const lo = new Date(new Date(dates[0] + 'T00:00:00').getTime() - pad * 864e5).toISOString().slice(0, 10);
+    const hi = new Date(new Date(dates[dates.length - 1] + 'T00:00:00').getTime() + pad * 864e5).toISOString().slice(0, 10);
+    try {
+      const r = await getPool().query(
+        `SELECT id, title, date FROM news_feed
+          WHERE hidden = FALSE AND date >= $1 AND date <= $2
+          ORDER BY date DESC, id DESC
+          LIMIT 800`,
+        [lo, hi]
+      );
+      recent = r.rows.map(row => ({ ...row, prepared: D.prepareForDedup(row.title) }));
+    } catch (e) {
+      console.error('[dedup] could not read comparison window:', e.message || e);
+      return { kept: items, deduped };
+    }
+  }
+
+  for (const it of items) {
+    const date = normalizeDateYear(it.date);
+    const candidate = { title: it.title, date, prepared: D.prepareForDedup(it.title) };
+
+    const hit = D.findDuplicate(candidate, recent);
+    if (hit) {
+      deduped.push({ item: it, against: hit.match.title, reason: hit.score.reason,
+                     score: hit.score.reason === 'jaccard' ? hit.score.jaccard : hit.score.containment,
+                     sameBatch: false });
+      continue;
+    }
+    // Compare against what we have already accepted from THIS batch.
+    const batchHit = D.findDuplicate(candidate, kept.map(k => k.__dedup));
+    if (batchHit) {
+      deduped.push({ item: it, against: batchHit.match.title, reason: batchHit.score.reason,
+                     score: batchHit.score.reason === 'jaccard' ? batchHit.score.jaccard : batchHit.score.containment,
+                     sameBatch: true });
+      continue;
+    }
+    it.__dedup = candidate;
+    kept.push(it);
+  }
+  // __dedup is scratch state; strip it so it never reaches the INSERT mapping.
+  for (const k of kept) delete k.__dedup;
+  return { kept, deduped };
 }
 
 // Read recent news items, sorted severity-first then newest-first. Optional

@@ -72,7 +72,44 @@ const todayISO = () =>
 
 const CATEGORY_OPTIONS = TAXONOMY_CATEGORIES.join(' | ');
 
-const PROMPT_COMPANY = (today) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
+// Date discipline, appended to every news prompt.
+//
+// The failure this exists to stop: an outlet republishes or recaps an OLD event
+// today, Gemini returns it as today's news, and the feed shows a months-old
+// cabinet resolution as breaking. The tell is that the article's publish date is
+// today while the event inside it is not, so the model is asked to separate the
+// two explicitly and judge on the EVENT date.
+//
+// Thai-language cues matter here: "ก่อนหน้านี้", "เมื่อเดือนที่แล้ว" and
+// "มีผลตั้งแต่วันที่ <past date>" in the body are reliable signals that a
+// present-tense headline ("ต่ออายุ", "ขยายเวลา") is describing an approval that
+// already happened. Four outlets covering the same ครม. transfer-fee extension
+// on different days is exactly this pattern.
+const DATE_DISCIPLINE = (today, todayIso) => `
+
+=== กฎการตรวจสอบวันที่ (สำคัญมาก ห้ามข้าม) ===
+เอาเฉพาะข่าวที่ "เหตุการณ์จริง" เกิดขึ้นใน${today} (${todayIso}) หรือถูกประกาศ/รายงานอย่างเป็นทางการครั้งแรกในวันนี้เท่านั้น
+ห้ามเอาข่าวเก่าที่ถูกนำมาเผยแพร่ซ้ำ อ้างอิงถึง หรือสรุปย้อนหลัง
+
+สำหรับทุกข่าว ต้องแยกวันที่ออกเป็น 2 อย่าง:
+- EVENT_DATE  = วันที่เหตุการณ์เกิดขึ้นจริง (เช่น วันที่ ครม. มีมติ, วันที่ประกาศงบ)
+- PUBLISH_DATE = วันที่บทความถูกเผยแพร่หรือแก้ไขล่าสุด
+
+เกณฑ์ตัดสิน: ถ้า EVENT_DATE ไม่ใช่ ${todayIso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็นวันนี้ก็ตาม
+
+ระวังรูปแบบข่าวเก่าที่ถูกทำให้ดูเหมือนใหม่:
+1. มีคำว่า "ก่อนหน้านี้" / "เมื่อเดือนที่แล้ว" / "มีผลตั้งแต่วันที่ <วันที่ในอดีต>" → เหตุการณ์เป็นของเก่า
+2. หลายสำนักข่าวรายงานมติรัฐ/ประกาศเดียวกัน โดยในเนื้อข่าวระบุวันมีผลเดียวกัน → ให้ดูวันที่มีมติในเนื้อข่าว ไม่ใช่แค่พาดหัว
+3. พาดหัวใช้รูปปัจจุบัน/อนาคต ("ต่ออายุ", "ขยายเวลา") แต่เนื้อข่าวบอกว่า ครม. อนุมัติไปแล้วหลายสัปดาห์/เดือน → EVENT_DATE คือวันอนุมัติเดิม ไม่ใช่วันนี้
+
+ถ้าไม่แน่ใจว่าเป็นข่าวใหม่จริงหรือข่าวเก่าโผล่ซ้ำ ให้ใส่ CONFIDENCE: low และคงข้อมูลไว้ ห้ามใส่เงียบ ๆ โดยไม่ระบุ
+
+เพิ่ม 3 บรรทัดนี้ต่อท้ายทุกข่าว:
+EVENT_DATE: [YYYY-MM-DD]
+PUBLISH_DATE: [YYYY-MM-DD]
+CONFIDENCE: [high | medium | low]`;
+
+const PROMPT_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
 ที่เกิดขึ้นใน${today}
 
 ค้นหาเฉพาะข่าวที่เกี่ยวกับ:
@@ -109,9 +146,9 @@ HEADLINE: ASW รายงาน Presale 9 เดือน 79% ของเป�
 SUMMARY: ยอด Presale 9 เดือนแตะ 1.6 หมื่นล้านบาท ใกล้เป้าทั้งปี 2 หมื่นล้าน แนวโน้ม Q4 เร่งเปิดโครงการใหม่หนุนรายได้
 IMPACT_LEVEL: HIGH
 SOURCE: SET
-URL: https://...`;
+URL: https://...${DATE_DISCIPLINE(today, todayIso)}`;
 
-const PROMPT_SECTOR = (today) => `คุณเป็น analyst หุ้นอสังหาริมทรัพย์ไทย ค้นหาข่าวอสังหาฯ ไทย
+const PROMPT_SECTOR = (today, todayIso) => `คุณเป็น analyst หุ้นอสังหาริมทรัพย์ไทย ค้นหาข่าวอสังหาฯ ไทย
 ที่เกิดขึ้นใน${today}
 
 ค้นหาข่าวที่เกี่ยวกับหัวข้อเหล่านี้:
@@ -163,9 +200,9 @@ SUMMARY: มติ ครม. ต่ออายุมาตรการกร�
 IMPACT_LEVEL: HIGH
 SOURCE: กรุงเทพธุรกิจ
 URL: https://...
----`;
+---${DATE_DISCIPLINE(today, todayIso)}`;
 
-const PROMPT_MACRO = (today) => `คุณเป็น analyst เศรษฐกิจไทย ค้นหาข่าวสำคัญ
+const PROMPT_MACRO = (today, todayIso) => `คุณเป็น analyst เศรษฐกิจไทย ค้นหาข่าวสำคัญ
 ที่เกิดขึ้นใน${today}
 
 ค้นหาเฉพาะเหตุการณ์ที่อาจกระทบตลาดหุ้นไทย ได้แก่:
@@ -217,7 +254,7 @@ SUMMARY: คณะกรรมการ กนง. มีมติเป็น�
 IMPACT_LEVEL: HIGH
 SOURCE: กรุงเทพธุรกิจ
 URL: https://...
----`;
+---${DATE_DISCIPLINE(today, todayIso)}`;
 
 const PROMPT_BRIEF = () => `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปสถานการณ์ให้ผู้บริหาร
 
@@ -506,8 +543,21 @@ function parseAIResult(text, pipeline, grounding) {
     const resolvedUrl = grounding
       ? resolveGroundedUrl(statedUrl, { start, end }, grounding, trustedHosts)
       : statedUrl;
+    // Date discipline (see DATE_DISCIPLINE): the model reports when the EVENT
+    // happened separately from when the ARTICLE was published, so a months-old
+    // cabinet resolution republished today can be told apart from real news.
+    // Both are optional — an older model response without them simply falls
+    // back to the previous behaviour rather than dropping everything.
+    const eventDateRaw = normalizeDateYear(get('EVENT_DATE') || '');
+    const publishDateRaw = normalizeDateYear(get('PUBLISH_DATE') || '');
+    const isIso = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const confidence = (get('CONFIDENCE') || '').trim().toLowerCase() || null;
+
     return {
       date,                                      // Gemini's DATE: if valid (BE→CE normalized), else ICT today
+      event_date:   isIso(eventDateRaw) ? eventDateRaw : null,
+      publish_date: isIso(publishDateRaw) ? publishDateRaw : null,
+      confidence:   ['high', 'medium', 'low'].includes(confidence) ? confidence : null,
       pipeline,
       category,                                  // taxonomy-v2: COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO
       headline:  get('HEADLINE'),
@@ -705,6 +755,36 @@ function normalizeForNewsFeed(it) {
 // deliberate and matches the RSS fetchers: better to lose one row than to show
 // a headline the reader cannot actually open.
 async function writeFeedItems(items, tag) {
+  // Date discipline gate. Keep only stories whose EVENT happened today — an
+  // article published today about a cabinet resolution from June is a recap,
+  // not news, and putting it in the feed dated today misrepresents when the
+  // market actually moved.
+  //
+  // Items the model marked CONFIDENCE: low are kept but logged, per the spec:
+  // it must flag rather than silently include, and a human can then judge.
+  // Items with no EVENT_DATE at all (older prompt shape, or a truncated
+  // response) pass through — this gate must not become a silent blackhole.
+  const today = todayISO();
+  const stale = [];
+  items = items.filter(it => {
+    if (!it.event_date) return true;
+    if (it.event_date === today) return true;
+    stale.push(it);
+    return false;
+  });
+  if (stale.length) {
+    console.log(`[${tag}] dropped ${stale.length} recap(s) — event predates today (${today}):`);
+    for (const s of stale) {
+      console.log(`   event=${s.event_date} published=${s.publish_date || '?'} conf=${s.confidence || '?'}  ${String(s.headline).slice(0, 56)}`);
+    }
+  }
+  const lowConf = items.filter(it => it.confidence === 'low');
+  if (lowConf.length) {
+    console.log(`[${tag}] ${lowConf.length} item(s) flagged CONFIDENCE: low — kept, verify manually:`);
+    for (const l of lowConf) console.log(`   ${String(l.headline).slice(0, 70)}`);
+  }
+  if (!items.length) return { inserted: 0, dropped: 0, staleDropped: stale.length, deduped: 0 };
+
   const rows = items.map(normalizeForNewsFeed);
 
   const homepages = rows.filter(r => isHomepageUrl(r.source_url));
@@ -722,8 +802,10 @@ async function writeFeedItems(items, tag) {
     console.log(`[${tag}] dropped ${dropped} item(s) — publisher homepage, no article URL found`);
   }
 
-  const { inserted } = await db.writeNewsItems(keep);
-  return { inserted, dropped };
+  // writeNewsItems applies content-level dedup against the last 48h and within
+  // this batch, and reports how many it collapsed.
+  const { inserted, deduped } = await db.writeNewsItems(keep);
+  return { inserted, dropped, staleDropped: stale.length, deduped: deduped || 0 };
 }
 
 // Extract a multi-line section from the morning brief (LAST_WEEK: /
@@ -801,7 +883,7 @@ function normalizeBullets(raw) {
 // land in news_feed so the dashboard news sidebar can link to sources.
 async function runCompany(sinceDate) {
   const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_COMPANY(td));
+  const { text, grounding } = await geminiSearch(PROMPT_COMPANY(td, todayISO()));
   const items = parseAIResult(text, 'company', grounding);
   if (!items.length) {
     console.log(`[gemini-company] ${td} → no items`);
@@ -832,7 +914,7 @@ async function runCompany(sinceDate) {
 // on its own).
 async function runSector(sinceDate) {
   const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td));
+  const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td, todayISO()));
   const items = parseAIResult(text, 'sector', grounding);
   const { inserted, dropped } = await writeFeedItems(items, 'gemini-sector');
   console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped}`);
@@ -843,7 +925,7 @@ async function runSector(sinceDate) {
 // daily.remark so they show up as event pins (macro that moves the market).
 async function runMacro(sinceDate) {
   const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_MACRO(td));
+  const { text, grounding } = await geminiSearch(PROMPT_MACRO(td, todayISO()));
   const items = parseAIResult(text, 'macro', grounding);
   const { inserted, dropped } = await writeFeedItems(items, 'gemini-macro');
 
