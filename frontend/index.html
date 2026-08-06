@@ -417,58 +417,65 @@
     <!-- ====================== Price History View ====================== -->
     <section class="view" id="view-price">
       <h2 class="view-title th">ราคาย้อนหลัง</h2>
-      <div class="view-sub th">กราฟราคา OHLC + Volume + Event Pins พร้อมสถิติช่วงเวลา</div>
+      <div class="view-sub th" id="priceViewSub">เลือกช่วงเวลาเพื่อดูราคา ปริมาณซื้อขาย และข่าวที่เกิดขึ้นในช่วงนั้น</div>
 
-      <div class="grid-2 mb-12">
-        <div class="card">
-          <div class="chart-toolbar">
-            <div class="row" style="gap:6px;">
-              <div class="pill-row" id="priceRangePills">
-                <button class="pill" data-prange="1W">1W</button>
-                <button class="pill" data-prange="1M">1M</button>
-                <button class="pill" data-prange="3M">3M</button>
-                <button class="pill" data-prange="6M">6M</button>
-                <button class="pill" data-prange="1Y">1Y</button>
-                <button class="pill" data-prange="ALL">All</button>
-              </div>
-              <div class="pill-row">
-                <button class="pill active" data-chartmode="line">Line</button>
-                <button class="pill" data-chartmode="candle">Candle</button>
-              </div>
+      <!-- Period summary. Was an 8-row list in a half-width card that left 374px
+           of empty space; as a strip it uses the full width, reads at a glance,
+           and matches how the Dashboard opens. Every figure is scoped to the
+           SELECTED range, so it answers the page's actual question. -->
+      <div class="price-kpis" id="priceKpis"></div>
+
+      <!-- Chart gets the full width. It was sharing a 1fr 1fr grid with the
+           stats list, so the main object of the page rendered at 519px. -->
+      <div class="card mb-12">
+        <div class="price-toolbar">
+          <div class="row" style="gap:6px; flex-wrap:wrap;">
+            <div class="pill-row" id="priceRangePills">
+              <button class="pill" data-prange="1W">1W</button>
+              <button class="pill" data-prange="1M">1M</button>
+              <button class="pill" data-prange="3M">3M</button>
+              <button class="pill" data-prange="6M">6M</button>
+              <button class="pill" data-prange="1Y">1Y</button>
+              <button class="pill" data-prange="ALL">ทั้งหมด</button>
             </div>
-            <div class="row" style="gap:8px;">
-              <label class="row th" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleEvents" checked> Events</label>
-              <label class="row" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleSet" checked> SET</label>
-              <label class="row" style="font-size:11px; color:var(--muted);"><input type="checkbox" id="toggleProp" checked> PROP</label>
+            <div class="date-range-group">
+              <input type="date" id="priceStart" aria-label="วันเริ่มต้น" />
+              <span class="drg-sep" aria-hidden="true">→</span>
+              <input type="date" id="priceEnd" aria-label="วันสิ้นสุด" />
+              <button type="button" id="priceRangeReset" class="drg-reset th" title="ล้างช่วงวันที่ที่เลือกเอง">ล้าง</button>
             </div>
           </div>
-          <div class="chart-container" style="height:360px;">
-            <canvas id="priceMainChart"></canvas>
-          </div>
-          <div class="chart-container mt-12" style="height:140px;">
-            <canvas id="volumeChart"></canvas>
+          <div class="row" style="gap:6px; flex-wrap:wrap;">
+            <div class="pill-row">
+              <button class="pill active" data-chartmode="line">เส้น</button>
+              <button class="pill" data-chartmode="candle">แท่งเทียน</button>
+            </div>
+            <!-- Overlay toggles were bare checkboxes sitting next to styled
+                 pills. Same control, same idiom as everything else here. -->
+            <div class="pill-row" id="priceOverlayPills">
+              <button class="pill active" data-ptoggle="events">ข่าว</button>
+              <button class="pill active" data-ptoggle="set">SET</button>
+              <button class="pill active" data-ptoggle="prop">PROP</button>
+            </div>
           </div>
         </div>
-        <div class="card">
-          <h3 class="th mb-12" style="font-size:13px;">สถิติช่วงเวลา</h3>
-          <div class="form-row">
-            <div class="form-field">
-              <label class="th">วันเริ่มต้น</label>
-              <input type="date" id="priceStart" />
-            </div>
-            <div class="form-field">
-              <label class="th">วันสิ้นสุด</label>
-              <input type="date" id="priceEnd" />
-            </div>
+        <div class="chart-container" style="height:380px;">
+          <canvas id="priceMainChart"></canvas>
+        </div>
+        <!-- Volume shares the price chart's x-axis, so it reads as one object
+             rather than a second detached chart. -->
+        <div class="volume-panel">
+          <span class="volume-label th">ปริมาณซื้อขาย</span>
+          <div class="chart-container" style="height:120px;">
+            <canvas id="volumeChart"></canvas>
           </div>
-          <div class="stat-list" id="priceStats"></div>
         </div>
       </div>
 
       <div class="card">
         <div class="row-between mb-8">
           <h3 class="th row" style="font-size:13px; gap:8px; align-items:baseline;">
-            ตารางรายละเอียด
+            ราคารายวัน
             <span class="muted th" id="priceTableCount" style="font-size:11px; font-weight:400;">—</span>
           </h3>
         </div>
@@ -2813,9 +2820,12 @@ function focusPriceOnDate(dateStr) {
 }
 
 function renderPriceStats(filtered) {
+  const host = $('priceKpis');
+  if (!host) return;
   const withPrice = filtered.filter(r => r.close != null);
   if (!withPrice.length) {
-    $('priceStats').innerHTML = '<div class="muted th">ไม่มีข้อมูล</div>';
+    // An empty state should say what to do, not just report emptiness.
+    host.innerHTML = '<div class="card muted th" style="grid-column:1/-1;">ไม่มีราคาในช่วงที่เลือก — ลองขยายช่วงเวลา หรือกด "ทั้งหมด"</div>';
     return;
   }
   const closes = withPrice.map(r => r.close);
@@ -2833,19 +2843,50 @@ function renderPriceStats(filtered) {
   const vols = filtered.filter(r => r.volume != null).map(r => r.volume);
   const avgVol = vols.length ? vols.reduce((a,b) => a+b, 0) / vols.length : 0;
   const events = filtered.reduce((n, r) => n + eachRemark(r).length, 0);
-  $('priceStats').innerHTML = `
-    <div class="stat-row"><span class="label th">ผลตอบแทน (%)</span>
-      <span class="val ${ret > 0 ? 'text-pos' : ret < 0 ? 'text-neg' : ''}">${fmtPct(ret)}</span></div>
-    <div class="stat-row"><span class="label th">IPO</span>
-      <span class="val">฿${ipoRow ? fmtNum(ipoRow.close) : '—'} (${fmtThaiShort(IPO_DATE)})</span></div>
-    <div class="stat-row"><span class="label th">ผลตอบแทนตั้งแต่ IPO</span>
-      <span class="val ${ipoRet > 0 ? 'text-pos' : ipoRet < 0 ? 'text-neg' : ''}">${ipoRet == null ? '—' : fmtPct(ipoRet)}</span></div>
-    <div class="stat-row"><span class="label th">ราคาสูงสุด</span><span class="val">฿${fmtNum(hi)}</span></div>
-    <div class="stat-row"><span class="label th">ราคาต่ำสุด</span><span class="val">฿${fmtNum(lo)}</span></div>
-    <div class="stat-row"><span class="label th">ปริมาณเฉลี่ย</span><span class="val">${fmtBigNum(avgVol)} พันหุ้น</span></div>
-    <div class="stat-row"><span class="label th">จำนวน Events</span><span class="val">${events}</span></div>
-    <div class="stat-row"><span class="label th">วันที่</span><span class="val">${fmtThaiShort(filtered[0].date)}   ${fmtThaiShort(filtered[filtered.length-1].date)}</span></div>
+  // Where the period's last close sits between its own low and high. The
+  // Dashboard already uses this bar for the 52-week range, so the reader has
+  // seen the idiom; here it is scoped to the selected window and turns two
+  // isolated numbers into one shape you can read instantly.
+  const span = hi - lo;
+  const pos = span > 0 ? ((last - lo) / span) * 100 : 50;
+
+  const periodLabel = `${fmtThaiShort(filtered[0].date)} – ${fmtThaiShort(filtered[filtered.length - 1].date)}`;
+  const cls = (v) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'muted');
+
+  host.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label th">ผลตอบแทนช่วงนี้</div>
+      <div class="kpi-value ${cls(ret)}">${fmtPct(ret)}</div>
+      <div class="price-kpi-sub th">฿${fmtNum(first)} → ฿${fmtNum(last)}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label th">ช่วงราคา</div>
+      <div class="kpi-value">฿${fmtNum(last)}</div>
+      <div class="range-bar">
+        <div class="range-bar-fill" style="width:${Math.max(0, Math.min(100, pos)).toFixed(1)}%"></div>
+        <div class="range-bar-marker" style="left:calc(${Math.max(0, Math.min(100, pos)).toFixed(1)}% - 2px)"></div>
+      </div>
+      <div class="range-bar-labels th"><span>฿${fmtNum(lo)}</span><span>฿${fmtNum(hi)}</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label th">ปริมาณเฉลี่ยต่อวัน</div>
+      <div class="kpi-value">${fmtBigNum(avgVol)}<span class="kpi-unit th">พันหุ้น</span></div>
+      <div class="price-kpi-sub th">${withPrice.length} วันทำการ · ${periodLabel}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label th">ตั้งแต่ IPO</div>
+      <div class="kpi-value ${ipoRet == null ? 'muted' : cls(ipoRet)}">${ipoRet == null ? '—' : fmtPct(ipoRet)}</div>
+      <div class="price-kpi-sub th">IPO ฿${ipoRow ? fmtNum(ipoRow.close) : '—'} · ${fmtThaiShort(IPO_DATE)}</div>
+    </div>
   `;
+
+  // The chart toolbar owns the period, so the subtitle reports what is on
+  // screen — including how many news events fall inside it, which is the reason
+  // this page and the news feed share a date axis at all.
+  const sub = $('priceViewSub');
+  if (sub) {
+    sub.textContent = `${periodLabel} · ${withPrice.length} วันทำการ` + (events ? ` · ${events} ข่าวบนกราฟ` : '');
+  }
 }
 
 /* ============== News Feed (Stream B) ==============
@@ -3693,8 +3734,18 @@ function refreshDashboard() {
 function refreshPrice() {
   buildPriceChart();
   renderPriceTable();
+  // A hand-picked date range means NO preset is in effect — light a pill then
+  // and the toolbar contradicts the chart. The reset button is the way back.
+  const custom = !!(STATE.priceFilter && STATE.priceFilter.start && STATE.priceFilter.end);
   document.querySelectorAll('#priceRangePills .pill').forEach(b => {
-    b.classList.toggle('active', b.dataset.prange === STATE.priceRange);
+    b.classList.toggle('active', !custom && b.dataset.prange === STATE.priceRange);
+  });
+  const reset = $('priceRangeReset');
+  if (reset) reset.style.display = custom ? '' : 'none';
+  // Keep the overlay pills honest if state was changed from elsewhere.
+  document.querySelectorAll('#priceOverlayPills .pill').forEach(b => {
+    const key = { events: 'priceShowEvents', set: 'priceShowSet', prop: 'priceShowProp' }[b.dataset.ptoggle];
+    if (key) b.classList.toggle('active', !!STATE[key]);
   });
 }
 
@@ -3869,15 +3920,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       refreshPrice();
     });
   });
-  $('toggleEvents').addEventListener('change', (e) => { STATE.priceShowEvents = e.target.checked; refreshPrice(); });
-  $('toggleSet').addEventListener('change', (e) => { STATE.priceShowSet = e.target.checked; refreshPrice(); });
-  $('toggleProp').addEventListener('change', (e) => { STATE.priceShowProp = e.target.checked; refreshPrice(); });
-  $('priceStart').addEventListener('change', () => {
-    STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
-    refreshPrice();
+  // Overlay toggles. Same three switches as the old checkboxes, now pills that
+  // carry their own on/off state in the class the rest of the app already uses.
+  const PRICE_TOGGLE_STATE = { events: 'priceShowEvents', set: 'priceShowSet', prop: 'priceShowProp' };
+  document.querySelectorAll('#priceOverlayPills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      const key = PRICE_TOGGLE_STATE[b.dataset.ptoggle];
+      if (!key) return;
+      STATE[key] = !STATE[key];
+      b.classList.toggle('active', STATE[key]);
+      b.setAttribute('aria-pressed', String(STATE[key]));
+      refreshPrice();
+    });
   });
-  $('priceEnd').addEventListener('change', () => {
-    STATE.priceFilter = { start: $('priceStart').value, end: $('priceEnd').value };
+
+  // Typing a custom range overrides the preset pills, so clear their active
+  // state — leaving "6M" lit while showing a hand-picked window is a lie.
+  const applyCustomRange = () => {
+    const start = $('priceStart').value, end = $('priceEnd').value;
+    if (!start || !end) return;
+    STATE.priceFilter = start <= end ? { start, end } : { start: end, end: start };
+    document.querySelectorAll('#priceRangePills .pill').forEach(x => x.classList.remove('active'));
+    refreshPrice();
+  };
+  $('priceStart').addEventListener('change', applyCustomRange);
+  $('priceEnd').addEventListener('change', applyCustomRange);
+  const priceRangeReset = $('priceRangeReset');
+  if (priceRangeReset) priceRangeReset.addEventListener('click', () => {
+    STATE.priceFilter = null;
     refreshPrice();
   });
   // Click any price-table row   highlight that date on the price chart.

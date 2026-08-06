@@ -517,6 +517,60 @@
     @apply flex justify-between text-[11px] text-muted mt-1;
   }
 
+  /* === Price History view === */
+
+  /* Period summary strip. Mirrors .kpi-grid on the Dashboard so the two pages
+     open the same way, but sized for 4 tiles and allowed to wrap on narrow
+     viewports instead of squeezing to unreadable columns. */
+  .price-kpis {
+    @apply grid gap-2.5 mb-3;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  @media (max-width: 900px) {
+    .price-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 520px) {
+    .price-kpis { grid-template-columns: 1fr; }
+  }
+  .price-kpi-sub {
+    @apply text-[11px] text-muted mt-1;
+  }
+
+  /* Two control clusters — "which period" on the left, "what to draw" on the
+     right — instead of one crowded row plus a stray line of checkboxes. */
+  .price-toolbar {
+    @apply flex items-center justify-between gap-2 flex-wrap mb-3;
+  }
+
+  /* Date inputs read as ONE range control, not two unrelated fields. */
+  .date-range-group {
+    @apply inline-flex items-center gap-1.5 border border-border rounded-md bg-surface px-2 py-1;
+  }
+  .date-range-group input[type="date"] {
+    @apply bg-transparent border-0 text-[12px] text-text p-0;
+    font-family: inherit;
+    color-scheme: light;
+  }
+  .date-range-group input[type="date"]:focus {
+    @apply outline-none;
+  }
+  .drg-sep {
+    @apply text-[12px] text-muted select-none;
+  }
+  .drg-reset {
+    @apply text-[11px] text-muted border-0 bg-transparent px-1 cursor-pointer;
+  }
+  .drg-reset:hover { @apply text-text; }
+
+  /* Volume sits under the price chart sharing its x-axis, so it is presented as
+     a labelled sub-panel of the same object rather than a second chart. */
+  .volume-panel {
+    @apply mt-2 pt-2 border-t border-border;
+  }
+  .volume-label {
+    @apply block text-[11px] text-muted mb-1;
+  }
+
   /* === Chart container === */
   .chart-container {
     @apply relative;
