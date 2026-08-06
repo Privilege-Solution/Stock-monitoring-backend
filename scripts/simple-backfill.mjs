@@ -94,7 +94,8 @@ for (const q of Q) {
       const imp = (get('IMPACT')||get('IMPACT_LEVEL')||'MEDIUM').toUpperCase();
       let d = get('DATE')||'';
       if (/^\d{4}-\d{2}$/.test(d)) d+='-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) d=`${q.ce}-${mm[q.m]||'06'}-15`;
+      // Skip rather than invent a quarter-midpoint date — see full-backfill.mjs.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
       d = normalizeDateYear(d);
       // Get URL from Bing
       const url = await bingUrl(h);

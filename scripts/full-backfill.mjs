@@ -119,7 +119,15 @@ for (const q of Q) {
       const imp = (get('IMPACT_LEVEL') || 'MEDIUM').toUpperCase();
       let d = get('DATE') || '';
       if (/^\d{4}-\d{2}$/.test(d)) d += '-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) d = `${q.ce}-${mm[q.m]||'06'}-15`;
+      // No usable date → SKIP the item. This used to invent
+      // `${year}-${quarterMiddleMonth}-15`, which put 470 rows on a date no
+      // outlet ever published on (Feb/May/Aug/Nov the 15th, ~35% of the feed)
+      // and dropped them on the wrong day of the chart. A headline with an
+      // unknown date is worth less than the damage a fabricated one does.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        process.stdout.write('·');   // counted in the per-quarter tally below
+        continue;
+      }
       d = normalizeDateYear(d);
 
       // Try to get URL: 1) Gemini's stated URL 2) Bing match 3) grounding chunk

@@ -154,7 +154,11 @@ for (const q of QUARTERS) {
       }
       // Determine date — use item date or middle of quarter
       const monthMap = { 'มกราคม-มีนาคม': '02', 'เมษายน-มิถุนายน': '05', 'กรกฎาคม-กันยายน': '08', 'ตุลาคม-ธันวาคม': '11' };
-      const date = item.date || `${q.ce}-${monthMap[q.m] || '06'}-15`;
+      // Skip rather than invent. A `${year}-${quarterMiddleMonth}-15` fallback
+      // stamps the row with a date no publisher used, which misplaces it on the
+      // chart and in the feed's day grouping.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(item.date || ''))) continue;
+      const date = item.date;
 
       const hash = sha1(normalizeHeadline(item.headline) || item.headline);
       if (seen.has(hash)) continue;
