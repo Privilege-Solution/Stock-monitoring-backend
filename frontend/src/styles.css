@@ -617,7 +617,12 @@
   .hp-span-meta { @apply flex gap-4 flex-wrap mt-1.5 text-[11px] text-muted; }
   .hp-span-cta  { @apply text-[11px] text-primary bg-transparent border-0 p-0 mt-1.5 cursor-pointer; }
 
-  /* Day detail drawer */
+  /* Day detail drawer.
+     NOTE the [hidden] rules below: any author-set `display` beats the UA
+     stylesheet's `[hidden] { display: none }`, so a flex/grid element with the
+     hidden attribute stays on screen. Without these the drawer rendered over
+     EVERY view — empty, and with a close button that appeared to do nothing
+     because `hidden = true` had no visual effect. */
   .hp-drawer-scrim {
     @apply fixed inset-0 z-40;
     background: rgba(26,26,24,0.28);
@@ -626,6 +631,11 @@
     @apply fixed top-0 right-0 h-full bg-card border-l border-border z-50 flex flex-col;
     width: min(400px, 92vw);
     box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+  }
+  .hp-drawer[hidden],
+  .hp-drawer-scrim[hidden],
+  .hp-spans[hidden] {
+    display: none !important;
   }
   .hp-drawer-head {
     @apply flex items-center justify-between gap-2 px-4 py-3 border-b border-border;

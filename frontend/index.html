@@ -3859,6 +3859,9 @@ function renderSettingsInfo() {
 function setView(view) {
   STATE.view = view;
   STATE.focusedDate = null;
+  // The day drawer is a fixed overlay living outside the view sections, so it
+  // does not disappear on its own when the active view changes.
+  if (typeof hpCloseDrawer === 'function') hpCloseDrawer();
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
   $('view-' + view).classList.add('active');
   document.querySelectorAll('.sidebar-item').forEach(el => {
