@@ -517,30 +517,136 @@
     @apply flex justify-between text-[11px] text-muted mt-1;
   }
 
-  /* === Price History view === */
+  /* === Price History view ===
+     This page investigates rather than monitors, so it deliberately avoids the
+     Dashboard's big-KPI vocabulary: one summary block, small insight tiles, and
+     a table that is the main event. */
 
-  /* Period summary strip. Mirrors .kpi-grid on the Dashboard so the two pages
-     open the same way, but sized for 4 tiles and allowed to wrap on narrow
-     viewports instead of squeezing to unreadable columns. */
-  .price-kpis {
+  .hp-periodbar {
+    @apply flex items-center gap-2 flex-wrap mb-3;
+  }
+
+  /* Period summary. A single container, with the start → end movement as the
+     one large thing on the page. */
+  .hp-summary {
+    @apply mb-3;
+  }
+  .hp-move {
+    @apply flex items-center gap-4 flex-wrap;
+  }
+  .hp-move-price {
+    @apply flex flex-col;
+  }
+  .hp-move-label {
+    @apply text-[11px] text-muted;
+  }
+  .hp-move-value {
+    @apply text-[20px] font-semibold leading-tight;
+  }
+  .hp-move-arrow {
+    @apply text-[18px] text-muted;
+  }
+  .hp-move-change {
+    @apply text-[26px] font-bold leading-none ml-1;
+  }
+  .hp-move-days {
+    @apply text-[11px] text-muted ml-auto;
+  }
+  /* Secondary stats sit on one hairline-separated row — present, but clearly
+     subordinate to the movement above them. */
+  .hp-substats {
+    @apply flex gap-6 flex-wrap mt-3 pt-3 border-t border-border;
+  }
+  .hp-substat {
+    @apply flex flex-col gap-0.5;
+  }
+  .hp-substat .k { @apply text-[11px] text-muted; }
+  .hp-substat .v { @apply text-[13px] font-medium; }
+
+  .hp-section-title {
+    @apply text-[13px] font-semibold mb-2 mt-1;
+  }
+
+  /* Insight tiles — compact and clickable; each one is a jump to a date. */
+  .hp-insights {
     @apply grid gap-2.5 mb-3;
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  @media (max-width: 900px) {
-    .price-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .hp-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .hp-insights { grid-template-columns: 1fr; } }
+  .hp-insight {
+    @apply bg-card border border-border rounded-md px-3 py-2.5 text-left cursor-pointer transition-colors;
   }
-  @media (max-width: 520px) {
-    .price-kpis { grid-template-columns: 1fr; }
-  }
-  .price-kpi-sub {
-    @apply text-[11px] text-muted mt-1;
-  }
+  .hp-insight:hover { @apply border-primary; }
+  .hp-insight:focus-visible { @apply outline-none border-primary; }
+  .hp-insight .i-label { @apply text-[11px] text-muted flex items-center gap-1; }
+  .hp-insight .i-value { @apply text-[17px] font-bold leading-tight mt-0.5; }
+  .hp-insight .i-date  { @apply text-[11px] text-text mt-0.5; }
+  .hp-insight .i-sub   { @apply text-[11px] text-muted; }
 
-  /* Two control clusters — "which period" on the left, "what to draw" on the
-     right — instead of one crowded row plus a stray line of checkboxes. */
-  .price-toolbar {
-    @apply flex items-center justify-between gap-2 flex-wrap mb-3;
+  /* Table header row: title left, search + filters + export right. */
+  .hp-table-head {
+    @apply flex items-start justify-between gap-2 flex-wrap mb-2;
   }
+  .hp-search {
+    @apply border border-border rounded-md bg-surface px-2 py-1 text-[12px] text-text;
+    width: 140px;
+  }
+  .hp-search:focus { @apply outline-none border-primary; }
+
+  .hp-row-clickable { @apply cursor-pointer; }
+  .hp-row-clickable:hover { @apply bg-surface; }
+  .hp-row-active { @apply bg-surface; }
+  .hp-news-link { @apply text-primary; }
+  /* Volume noticeably above its own trailing average — the "unusual" signal
+     this page exists to surface. */
+  .hp-vol-hot { @apply font-semibold text-text; }
+
+  /* Interesting periods: compact, must not compete with the table. */
+  .hp-spans {
+    @apply grid gap-2.5 mb-3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 760px) { .hp-spans { grid-template-columns: 1fr; } }
+  .hp-span {
+    @apply bg-card border border-border rounded-md px-3 py-2.5;
+  }
+  .hp-span-head { @apply flex items-baseline justify-between gap-2; }
+  .hp-span-date { @apply text-[12px] font-semibold; }
+  .hp-span-move { @apply text-[15px] font-bold; }
+  .hp-span-meta { @apply flex gap-4 flex-wrap mt-1.5 text-[11px] text-muted; }
+  .hp-span-cta  { @apply text-[11px] text-primary bg-transparent border-0 p-0 mt-1.5 cursor-pointer; }
+
+  /* Day detail drawer */
+  .hp-drawer-scrim {
+    @apply fixed inset-0 z-40;
+    background: rgba(26,26,24,0.28);
+  }
+  .hp-drawer {
+    @apply fixed top-0 right-0 h-full bg-card border-l border-border z-50 flex flex-col;
+    width: min(400px, 92vw);
+    box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+  }
+  .hp-drawer-head {
+    @apply flex items-center justify-between gap-2 px-4 py-3 border-b border-border;
+  }
+  .hp-drawer-head h3 { @apply text-[14px] font-semibold; }
+  .hp-drawer-close {
+    @apply bg-transparent border-0 text-muted cursor-pointer text-[14px] leading-none p-1;
+  }
+  .hp-drawer-close:hover { @apply text-text; }
+  .hp-drawer-body { @apply overflow-y-auto px-4 py-3; }
+  .hp-dgrid { @apply grid grid-cols-2 gap-3; }
+  .hp-dstat .k { @apply text-[11px] text-muted; }
+  .hp-dstat .v { @apply text-[16px] font-semibold; }
+  .hp-dsection { @apply mt-4 pt-3 border-t border-border; }
+  .hp-dsection h4 { @apply text-[12px] font-semibold mb-2; }
+  .hp-cmp-row { @apply flex items-center justify-between py-1 text-[12px]; }
+  .hp-cmp-row .n { @apply text-muted; }
+  .hp-outperf { @apply mt-2 pt-2 border-t border-border text-[12px]; }
+  .hp-dnews { @apply block py-1.5 text-[12px] leading-snug border-b border-border no-underline; }
+  .hp-dnews:last-child { @apply border-b-0; }
+  a.hp-dnews:hover { @apply underline; }
 
   /* Date inputs read as ONE range control, not two unrelated fields. */
   .date-range-group {

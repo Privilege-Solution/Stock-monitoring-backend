@@ -417,86 +417,104 @@
     <!-- ====================== Price History View ====================== -->
     <section class="view" id="view-price">
       <h2 class="view-title th">ราคาย้อนหลัง</h2>
-      <div class="view-sub th" id="priceViewSub">เลือกช่วงเวลาเพื่อดูราคา ปริมาณซื้อขาย และข่าวที่เกิดขึ้นในช่วงนั้น</div>
+      <div class="view-sub th">ค้นหาและวิเคราะห์การเคลื่อนไหวของราคาในอดีต</div>
 
-      <!-- Period summary. Was an 8-row list in a half-width card that left 374px
-           of empty space; as a strip it uses the full width, reads at a glance,
-           and matches how the Dashboard opens. Every figure is scoped to the
-           SELECTED range, so it answers the page's actual question. -->
-      <div class="price-kpis" id="priceKpis"></div>
+      <!-- Period controls. This page is driven entirely by "which stretch of
+           time am I looking at", so the control sits directly under the title
+           rather than buried in a chart toolbar. -->
+      <div class="hp-periodbar">
+        <div class="pill-row" id="priceRangePills">
+          <button class="pill" data-prange="1M">1M</button>
+          <button class="pill" data-prange="3M">3M</button>
+          <button class="pill" data-prange="6M">6M</button>
+          <button class="pill" data-prange="1Y">1Y</button>
+          <button class="pill" data-prange="ALL">ทั้งหมด</button>
+        </div>
+        <div class="date-range-group">
+          <input type="date" id="priceStart" aria-label="วันเริ่มต้น" />
+          <span class="drg-sep" aria-hidden="true">→</span>
+          <input type="date" id="priceEnd" aria-label="วันสิ้นสุด" />
+          <button type="button" id="priceRangeReset" class="drg-reset th" title="กลับไปใช้ช่วงสำเร็จรูป">ล้าง</button>
+        </div>
+      </div>
 
-      <!-- Chart gets the full width. It was sharing a 1fr 1fr grid with the
-           stats list, so the main object of the page rendered at 519px. -->
+      <!-- Period summary: one container, not a row of Dashboard KPI cards. The
+           movement start → end is the headline; everything else is secondary. -->
+      <div class="card hp-summary" id="priceSummary"></div>
+
+      <h3 class="hp-section-title th">เหตุการณ์สำคัญในช่วงนี้</h3>
+      <div class="hp-insights" id="priceInsights"></div>
+
       <div class="card mb-12">
-        <div class="price-toolbar">
-          <div class="row" style="gap:6px; flex-wrap:wrap;">
-            <div class="pill-row" id="priceRangePills">
-              <button class="pill" data-prange="1W">1W</button>
-              <button class="pill" data-prange="1M">1M</button>
-              <button class="pill" data-prange="3M">3M</button>
-              <button class="pill" data-prange="6M">6M</button>
-              <button class="pill" data-prange="1Y">1Y</button>
-              <button class="pill" data-prange="ALL">ทั้งหมด</button>
-            </div>
-            <div class="date-range-group">
-              <input type="date" id="priceStart" aria-label="วันเริ่มต้น" />
-              <span class="drg-sep" aria-hidden="true">→</span>
-              <input type="date" id="priceEnd" aria-label="วันสิ้นสุด" />
-              <button type="button" id="priceRangeReset" class="drg-reset th" title="ล้างช่วงวันที่ที่เลือกเอง">ล้าง</button>
-            </div>
-          </div>
-          <div class="row" style="gap:6px; flex-wrap:wrap;">
-            <div class="pill-row">
-              <button class="pill active" data-chartmode="line">เส้น</button>
-              <button class="pill" data-chartmode="candle">แท่งเทียน</button>
-            </div>
-            <!-- Overlay toggles were bare checkboxes sitting next to styled
-                 pills. Same control, same idiom as everything else here. -->
-            <div class="pill-row" id="priceOverlayPills">
-              <button class="pill active" data-ptoggle="events">ข่าว</button>
-              <button class="pill active" data-ptoggle="set">SET</button>
-              <button class="pill active" data-ptoggle="prop">PROP</button>
-            </div>
-          </div>
+        <div class="row-between mb-8">
+          <h3 class="th" style="font-size:13px;">การเปลี่ยนแปลงรายวัน</h3>
+          <span class="muted th" style="font-size:11px;">% เปลี่ยนแปลงเทียบวันก่อนหน้า</span>
         </div>
-        <div class="chart-container" style="height:380px;">
-          <canvas id="priceMainChart"></canvas>
+        <div class="chart-container" style="height:200px;">
+          <canvas id="priceChangeChart"></canvas>
         </div>
-        <!-- Volume shares the price chart's x-axis, so it reads as one object
-             rather than a second detached chart. -->
         <div class="volume-panel">
           <span class="volume-label th">ปริมาณซื้อขาย</span>
-          <div class="chart-container" style="height:120px;">
+          <div class="chart-container" style="height:96px;">
             <canvas id="volumeChart"></canvas>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <div class="row-between mb-8">
+        <div class="hp-table-head">
           <h3 class="th row" style="font-size:13px; gap:8px; align-items:baseline;">
-            ราคารายวัน
+            ประวัติราคา
             <span class="muted th" id="priceTableCount" style="font-size:11px; font-weight:400;">—</span>
           </h3>
+          <div class="row" style="gap:6px; flex-wrap:wrap;">
+            <input type="search" id="priceSearch" class="hp-search th" placeholder="ค้นหาวันที่" aria-label="ค้นหาวันที่" />
+            <div class="pill-row" id="priceFilterPills">
+              <button class="pill active" data-pfilter="all">ทั้งหมด</button>
+              <button class="pill" data-pfilter="up">ราคาขึ้น</button>
+              <button class="pill" data-pfilter="down">ราคาลง</button>
+              <button class="pill" data-pfilter="vol">Volume ผิดปกติ</button>
+              <button class="pill" data-pfilter="news">มีข่าว</button>
+            </div>
+            <button type="button" id="priceCsvBtn" class="btn th" title="ดาวน์โหลดตารางนี้เป็น CSV">ดาวน์โหลด CSV</button>
+          </div>
         </div>
-        <div class="data-table-wrap" style="max-height:420px;">
+        <div class="data-table-wrap" style="max-height:520px;">
           <table class="data-table" id="priceTable">
             <thead>
               <tr>
                 <th class="th">วันที่</th>
                 <th class="num th">ราคาปิด</th>
-                <th class="num th">%เปลี่ยนแปลง</th>
-                <th class="num th">ปริมาณ</th>
-                <th class="num th">มูลค่า</th>
-                <th class="num">SET</th>
-                <th class="num">PROP</th>
+                <th class="num th">เปลี่ยนแปลง</th>
+                <th class="num th">Volume</th>
+                <th class="num th">เทียบค่าเฉลี่ย</th>
+                <th class="th">เหตุการณ์</th>
               </tr>
             </thead>
             <tbody id="priceTableBody"></tbody>
           </table>
         </div>
+        <div class="row-between mt-12" id="priceTablePager">
+          <button class="btn th" id="priceTablePrev">ก่อนหน้า</button>
+          <span class="muted th" id="priceTablePageInfo" style="font-size:11px;"></span>
+          <button class="btn th" id="priceTableNext">ถัดไป</button>
+        </div>
       </div>
+
+      <h3 class="hp-section-title th" id="priceSpansTitle">ช่วงที่น่าสนใจ</h3>
+      <div class="hp-spans" id="priceSpans"></div>
     </section>
+
+    <!-- Day detail drawer. Opens over the page so investigating a date never
+         costs you your scroll position or the filters you set up. -->
+    <div class="hp-drawer-scrim" id="dayDrawerScrim" hidden></div>
+    <aside class="hp-drawer" id="dayDrawer" hidden aria-labelledby="dayDrawerTitle" role="dialog" aria-modal="true">
+      <div class="hp-drawer-head">
+        <h3 class="th" id="dayDrawerTitle">—</h3>
+        <button type="button" class="hp-drawer-close" id="dayDrawerClose" aria-label="ปิด">✕</button>
+      </div>
+      <div class="hp-drawer-body" id="dayDrawerBody"></div>
+    </aside>
 
     <!-- ====================== News View (redesigned) ====================== -->
     <section class="view" id="view-news">
@@ -879,10 +897,8 @@ const STATE = {
   range: '6M',
   overlay: 'price',
   priceRange: '6M',
-  priceChartMode: 'line',
-  priceShowEvents: true,
-  priceShowSet: true,
-  priceShowProp: true,
+  // Price History table filter: all | up | down | vol | news
+  priceTableFilter: 'all',
   tablePage: 0,
   tableSort: { key: 'date', dir: 'desc' },
   priceTableSort: { key: 'date', dir: 'desc' },
@@ -2427,46 +2443,8 @@ function renderDataTable() {
   }).join('');
 }
 
-function renderPriceTable() {
-  let filtered = DATA;
-  if (STATE.priceFilter) {
-    filtered = filterByDateRange(filtered, STATE.priceFilter.start, STATE.priceFilter.end);
-  } else {
-    filtered = filterByRange(filtered, STATE.priceRange);
-  }
-
-  const sortKey = STATE.priceTableSort.key;
-  const dir = STATE.priceTableSort.dir === 'asc' ? 1 : -1;
-  const sorted = [...filtered].sort((a, b) => {
-    let av = a[sortKey], bv = b[sortKey];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    if (typeof av === 'number') return (av - bv) * dir;
-    return String(av).localeCompare(String(bv)) * dir;
-  });
-
-  const body = $('priceTableBody');
-  body.innerHTML = sorted.map(r => {
-    const chg = r.change;
-    const chgCls = chg > 0 ? 'pos' : chg < 0 ? 'neg' : '';
-    // Build the Remark cell body: Gemini badge first (if any), then the
-    // user's personal note on a separate line. The cell is wrapped in a
-    // clickable role="button" so the user can open the popover (migrate-v7).
-    return `<tr data-date="${escapeHtml(r.date)}" title="คลิกเพื่อไฮไลต์จุดนี้บนกราฟ">
-      <td class="th nowrap">${fmtThaiShort(r.date)}</td>
-      <td class="num">${r.close != null ? fmtNum(r.close) : '—'}</td>
-      <td class="num ${chgCls}">${chg != null ? fmtPct(chg) : '—'}</td>
-      <td class="num">${r.volume != null ? fmtBigNum(r.volume) : '—'}</td>
-      <td class="num">${r.value != null ? r.value.toFixed(2) : '—'}</td>
-      <td class="num">${r.setIdx != null ? fmtNum(r.setIdx) : '—'}</td>
-      <td class="num">${r.propIdx != null ? fmtNum(r.propIdx) : '—'}</td>
-    </tr>`;
-  }).join('');
-  const countEl = $('priceTableCount');
-  if (countEl) countEl.textContent = sorted.length.toLocaleString('en-US') + ' แถว';
-  if (!sorted.length) body.innerHTML = '<tr><td colspan="7" class="empty-state th">ไม่พบข้อมูล</td></tr>';
-}
+// Kept as a shim: other code still calls renderPriceTable().
+function renderPriceTable() { hpRenderTable(hpPeriodRows()); }
 
 /* ============== Thai Real-Estate Peer Snapshot ============== */
 // Real peer prices come from /api/peers (populated by db.writePeers from the Yahoo fetcher).
@@ -2595,297 +2573,482 @@ function pearson(a, b) {
   return den === 0 ? null : num / den;
 }
 
-/* ============== Price History View ============== */
-function buildPriceChart() {
+/* ============== Price History View — investigate, not monitor ==============
+ * The Dashboard answers "how is the stock right now". This page answers "which
+ * day or stretch did something unusual, and what happened then". So the shapes
+ * here are deliberately different: no absolute-price trend line (the Dashboard
+ * owns that), a daily %-change distribution instead, and a table that is the
+ * main event rather than an appendix.
+ */
+
+// date -> derived metrics. Computed over the FULL series, not the visible
+// window, so a trailing volume average is still meaningful for the first row on
+// screen instead of comparing against a handful of neighbours.
+let HP_METRICS = new Map();
+let HP_NEWS_BY_DATE = new Map();
+let HP_SELECTED_DATE = null;
+let HP_TABLE_PAGE = 0;
+const HP_PAGE_SIZE = 40;
+const HP_VOL_HOT = 1.5;      // ×trailing average that counts as "ผิดปกติ"
+const HP_VOL_WINDOW = 30;
+
+function hpBuildNewsIndex() {
+  HP_NEWS_BY_DATE = new Map();
+  for (const n of newsForChart()) {
+    const d = (n.date || '').slice(0, 10);
+    if (!d) continue;
+    if (!HP_NEWS_BY_DATE.has(d)) HP_NEWS_BY_DATE.set(d, []);
+    HP_NEWS_BY_DATE.get(d).push(n);
+  }
+}
+
+function hpNewsFor(date) {
+  return HP_NEWS_BY_DATE.get(date) || [];
+}
+
+function hpComputeMetrics() {
+  hpBuildNewsIndex();
+  HP_METRICS = new Map();
+  const rows = DATA.filter(r => r.close != null);
+  const vols = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], prev = rows[i - 1];
+    // Prefer the stored change, but fall back to the closes — `change` is null
+    // on 7 of the last 125 rows and those would otherwise read as flat days.
+    let pct = r.change;
+    if (pct == null && prev && prev.close) pct = ((r.close - prev.close) / prev.close) * 100;
+
+    // Trailing average EXCLUDING today, so "1.5×" reads as "half again the
+    // recent norm" rather than being damped by the very day it describes.
+    const windowVols = vols.slice(-HP_VOL_WINDOW).filter(v => v != null);
+    const volAvg = windowVols.length ? windowVols.reduce((a, b) => a + b, 0) / windowVols.length : null;
+
+    HP_METRICS.set(r.date, {
+      row: r,
+      prevClose: prev ? prev.close : null,
+      pct: pct == null ? null : pct,
+      volume: r.volume,
+      volAvg,
+      volRatio: (volAvg && r.volume != null && volAvg > 0) ? r.volume / volAvg : null,
+      newsCount: hpNewsFor(r.date).length,
+      setIdx: r.setIdx,
+      propIdx: r.propIdx,
+      prevSetIdx: prev ? prev.setIdx : null,
+      prevPropIdx: prev ? prev.propIdx : null,
+    });
+    if (r.volume != null) vols.push(r.volume);
+  }
+}
+
+// Rows for the selected period, newest last.
+function hpPeriodRows() {
   let filtered;
-  if (STATE.priceFilter) {
+  if (STATE.priceFilter && STATE.priceFilter.start && STATE.priceFilter.end) {
     filtered = filterByDateRange(DATA, STATE.priceFilter.start, STATE.priceFilter.end);
   } else {
     filtered = filterByRange(DATA, STATE.priceRange);
   }
-  const ctx = $('priceMainChart').getContext('2d');
-  const setData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.setIdx }));
-  const propData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.propIdx }));
-  const priceData = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.close }));
+  return filtered.filter(r => r.close != null);
+}
 
-  // Tighten price-axis range + x-axis to actual data range
-  const priceVals = priceData.map(p => p.y).filter(v => v != null);
-  const pMin = priceVals.length ? Math.min(...priceVals) : 0;
-  const pMax = priceVals.length ? Math.max(...priceVals) : 1;
-  const pad = (pMax - pMin) * 0.15 || 0.5;
-  const yMin = Math.max(0, pMin - pad);
-  const yMax = pMax + pad;
+const hpPctCls = (v) => (v == null ? 'muted' : v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'muted');
+const hpSignPct = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`);
 
-  let xMinIso = null, xMaxIso = null;
-  const firstWithClose = priceData.find(p => p.y != null);
-  const lastWithClose = [...priceData].reverse().find(p => p.y != null);
-  if (firstWithClose && lastWithClose) {
-    const xMinDate = new Date(firstWithClose.x);
-    const xMaxDate = new Date(lastWithClose.x);
-    const xPadDays = 7;
-    xMinDate.setDate(xMinDate.getDate() - xPadDays);
-    xMaxDate.setDate(xMaxDate.getDate() + xPadDays);
-    xMinIso = xMinDate.toISOString();
-    xMaxIso = xMaxDate.toISOString();
+/* ---------- Period summary ---------- */
+function hpRenderSummary(rows) {
+  const host = $('priceSummary');
+  if (!host) return;
+  if (!rows.length) {
+    host.innerHTML = '<div class="muted th">ไม่มีราคาในช่วงที่เลือก — ลองขยายช่วงเวลา หรือกด "ทั้งหมด"</div>';
+    return;
   }
+  const first = rows[0], last = rows[rows.length - 1];
+  const closes = rows.map(r => r.close);
+  const lo = Math.min(...closes), hi = Math.max(...closes);
+  const avg = closes.reduce((a, b) => a + b, 0) / closes.length;
+  const vols = rows.map(r => r.volume).filter(v => v != null);
+  const avgVol = vols.length ? vols.reduce((a, b) => a + b, 0) / vols.length : null;
+  const chg = first.close ? ((last.close - first.close) / first.close) * 100 : null;
 
-  // Use the SAME pin source as the Dashboard chart — news_feed items
-  // that the user marked (chart_marked=TRUE), NOT the legacy digest
-  // remark pins. This keeps both charts in sync.
-  const annotations = STATE.priceShowEvents ? buildMarkAnnotations(filtered) : {};
-  // IPO vertical line — only when the IPO date is inside the visible range
-  // (All), so it doesn't clutter short windows (1W/1M/3M/1Y).
-  if (filtered.length && filtered[0].date <= IPO_DATE && IPO_DATE <= filtered[filtered.length - 1].date) {
-    annotations.ipoLine = {
-      type: 'line',
-      xMin: IPO_DATE + 'T00:00:00',
-      xMax: IPO_DATE + 'T00:00:00',
-      borderColor: '#f59e0b',
-      borderWidth: 2,
-      borderDash: [6, 4],
-      label: {
-        content: 'IPO', display: true, position: 'start',
-        backgroundColor: 'rgba(245,158,11,0.9)', color: '#fff',
-        font: { size: 10, weight: '600' },
-      },
-    };
-  }
-  const datasets = [];
-  if (STATE.priceChartMode === 'line') {
-    datasets.push({
-      label: 'ASW Close', data: priceData,
-      borderColor: getCSS('--primary'),
-      backgroundColor: 'rgba(59,139,212,0.06)',
-      borderWidth: 3, pointRadius: 0, pointHoverRadius: 4,
-      spanGaps: true, tension: 0.18, fill: true,
-      yAxisID: 'yPrice',
-    });
-  } else {
-    // Candlestick (synthetic OHLC from close — approximated using ±change%)
-    datasets.push({
-      label: 'ASW Candle', data: priceData,
-      borderColor: getCSS('--primary'),
-      borderWidth: 2, pointRadius: 0,
-      yAxisID: 'yPrice',
-    });
-  }
-  if (STATE.priceShowSet) datasets.push({
-    label: 'SET', data: setData,
-    borderColor: getCSS('--muted'), borderDash: [4, 4],
-    borderWidth: 1.5, pointRadius: 0, yAxisID: 'yIdx',
+  host.innerHTML = `
+    <div class="hp-move">
+      <div class="hp-move-price">
+        <span class="hp-move-label th">ราคาเริ่มต้น</span>
+        <span class="hp-move-value">฿${fmtNum(first.close)}</span>
+      </div>
+      <span class="hp-move-arrow" aria-hidden="true">→</span>
+      <div class="hp-move-price">
+        <span class="hp-move-label th">ราคาสิ้นสุด</span>
+        <span class="hp-move-value">฿${fmtNum(last.close)}</span>
+      </div>
+      <div class="hp-move-price">
+        <span class="hp-move-label th">เปลี่ยนแปลง</span>
+        <span class="hp-move-change ${hpPctCls(chg)}">${hpSignPct(chg)}</span>
+      </div>
+      <span class="hp-move-days th">${fmtThaiShort(first.date)} – ${fmtThaiShort(last.date)} · ${rows.length} วันทำการ</span>
+    </div>
+    <div class="hp-substats">
+      <div class="hp-substat"><span class="k th">ต่ำสุด</span><span class="v">฿${fmtNum(lo)}</span></div>
+      <div class="hp-substat"><span class="k th">สูงสุด</span><span class="v">฿${fmtNum(hi)}</span></div>
+      <div class="hp-substat"><span class="k th">ราคาเฉลี่ย</span><span class="v">฿${fmtNum(avg)}</span></div>
+      <div class="hp-substat"><span class="k th">Volume เฉลี่ย</span><span class="v">${avgVol == null ? '—' : fmtBigNum(avgVol)}</span></div>
+    </div>`;
+}
+
+/* ---------- เหตุการณ์สำคัญในช่วงนี้ ---------- */
+function hpRenderInsights(rows) {
+  const host = $('priceInsights');
+  if (!host) return;
+  const m = rows.map(r => HP_METRICS.get(r.date)).filter(Boolean);
+  if (!m.length) { host.innerHTML = ''; return; }
+
+  const withPct = m.filter(x => x.pct != null);
+  const up = withPct.length ? withPct.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+  const down = withPct.length ? withPct.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
+  const withVol = m.filter(x => x.volume != null);
+  const vol = withVol.length ? withVol.reduce((a, b) => (b.volume > a.volume ? b : a)) : null;
+  const withNews = m.filter(x => x.newsCount > 0);
+  const news = withNews.length ? withNews.reduce((a, b) => (b.newsCount > a.newsCount ? b : a)) : null;
+
+  const tile = (cls, label, value, date, sub) => `
+    <button type="button" class="hp-insight" data-hpdate="${date}">
+      <span class="i-label th">${label}</span>
+      <span class="i-value ${cls}">${value}</span>
+      <span class="i-date th">${fmtThaiShort(date)}</span>
+      <span class="i-sub th">${sub}</span>
+    </button>`;
+
+  const parts = [];
+  if (up) parts.push(tile('text-pos', '▲ ขึ้นมากที่สุด', hpSignPct(up.pct), up.row.date,
+    up.prevClose ? `฿${fmtNum(up.prevClose)} → ฿${fmtNum(up.row.close)}` : ''));
+  if (down) parts.push(tile('text-neg', '▼ ลงมากที่สุด', hpSignPct(down.pct), down.row.date,
+    down.prevClose ? `฿${fmtNum(down.prevClose)} → ฿${fmtNum(down.row.close)}` : ''));
+  if (vol) parts.push(tile('', 'Volume สูงสุด', fmtBigNum(vol.volume), vol.row.date,
+    vol.volRatio ? `${vol.volRatio.toFixed(1)}× เทียบค่าเฉลี่ย` : ''));
+  if (news) parts.push(tile('', '● ข่าวมากที่สุด', `${news.newsCount} ข่าว`, news.row.date, 'ดูข่าว →'));
+  host.innerHTML = parts.join('');
+}
+
+/* ---------- การเปลี่ยนแปลงรายวัน ---------- */
+// Daily % change as bars around a zero baseline. An outlier day is a spike here
+// but an unremarkable kink on an absolute-price line, which is exactly why this
+// page does not reuse the Dashboard's chart.
+function hpBuildChangeChart(rows) {
+  const el = $('priceChangeChart');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  const pts = rows.map(r => {
+    const m = HP_METRICS.get(r.date);
+    return { x: r.date + 'T00:00:00', y: m && m.pct != null ? m.pct : null, d: r.date };
   });
-  if (STATE.priceShowProp) datasets.push({
-    label: 'PROP', data: propData,
-    borderColor: getCSS('--teal'), borderDash: [3, 3],
-    borderWidth: 1.5, pointRadius: 0, yAxisID: 'yIdx',
-  });
+  const pos = getCSS('--positive') || '#1a7f37';
+  const neg = getCSS('--negative') || '#c0392b';
 
   if (PRICE_CHART) PRICE_CHART.destroy();
   PRICE_CHART = new Chart(ctx, {
-    type: 'line',
-    data: { datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      animation: { duration: 200 },
-      plugins: {
-        legend: { display: false },
-        tooltip: { backgroundColor: 'rgba(255,255,255,0.98)',
-          borderColor: getCSS('--border'), borderWidth: 1,
-          titleColor: getCSS('--text'), bodyColor: getCSS('--text'),
-          callbacks: {
-            title: (items) => {
-              if (!items.length) return '';
-              return new Date(items[0].parsed.x).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
-            },
-            label: (item) => {
-              const v = item.parsed.y;
-              return item.dataset.label + ': ' + (v != null ? v.toFixed(2) : '—');
-            },
-            afterBody: (items) => {
-              if (!items.length) return '';
-              const dt = new Date(items[0].parsed.x);
-              // LOCAL parts, not toISOString() — see the dashboard tooltip above.
-              const ymd = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-              // Same tooltip format as dashboard — show price change + news.
-              const rowIdx = DATA.findIndex(r => r.date === ymd);
-              const prevRow = rowIdx > 0 ? DATA[rowIdx - 1] : null;
-              const curClose = DATA[rowIdx]?.close;
-              const prevClose = prevRow?.close;
-              const chg = (curClose != null && prevClose != null)
-                ? ((curClose - prevClose) / prevClose) * 100 : null;
-              const news = (window.NEWS_DATA || [])
-                .filter(n => (n.date || '').slice(0,10) === ymd)
-                .sort((a, b) => {
-                  const sa = a.severity === 'high' ? 0 : a.severity === 'medium' ? 1 : 2;
-                  const sb = b.severity === 'high' ? 0 : b.severity === 'medium' ? 1 : 2;
-                  return sa - sb;
-                })
-                .slice(0, 4);
-              if (!news.length && chg == null) return '';
-              const lines = [''];
-              if (chg != null) {
-                const arrow = chg > 0.1 ? '+' : chg < -0.1 ? '-' : '~';
-                const sign = chg >= 0 ? '+' : '';
-                lines.push(arrow + ' ' + sign + chg.toFixed(2) + '%');
-              }
-              if (news.length) {
-                lines.push(news.length + ' ข่าว:');
-                for (const n of news) {
-                  const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-                  const sev = n.severity === 'high' ? '' : '';
-                  lines.push('  ' + sev + '[' + badge.label + '] ' + (n.title || '').slice(0, 35));
-                }
-              }
-              return lines;
-            }
-          }
-        },
-        annotation: { annotations },
-      },
-      scales: {
-        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
-          min: xMinIso, max: xMaxIso,
-          grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { color: getCSS('--muted'), font: { size: 12 } } },
-        yPrice: { position: 'left', grid: { color: 'rgba(0,0,0,0.04)' },
-          min: yMin, max: yMax,
-          ticks: { color: getCSS('--primary'), font: { size: 12, weight: '500' },
-            callback: (v) => '฿' + v.toFixed(2) } },
-        yIdx: { position: 'right', grid: { display: false },
-          ticks: { color: getCSS('--muted'), font: { size: 11 } } },
-      }
-    }
-  });
-
-  // Update date inputs
-  if (!STATE.priceFilter && filtered.length) {
-    $('priceStart').value = filtered[0].date;
-    $('priceEnd').value = filtered[filtered.length - 1].date;
-  }
-
-  // Volume chart
-  buildVolumeChart(filtered);
-  // Stats
-  renderPriceStats(filtered);
-}
-
-function buildVolumeChart(filtered) {
-  const ctx = $('volumeChart').getContext('2d');
-  const data = filtered.map(r => ({ x: r.date + 'T00:00:00', y: r.volume }));
-  if (VOL_CHART) VOL_CHART.destroy();
-  VOL_CHART = new Chart(ctx, {
     type: 'bar',
     data: {
       datasets: [{
-        label: 'Volume', data,
-        backgroundColor: (ctx) => {
-          const i = ctx.dataIndex;
-          if (i === 0) return getCSS('--surface');
-          const prev = data[i-1].y;
-          const cur = data[i].y;
-          if (prev == null || cur == null) return getCSS('--surface');
-          return cur >= prev ? 'rgba(59,109,17,0.5)' : 'rgba(163,45,45,0.5)';
-        },
+        label: '% เปลี่ยนแปลง',
+        data: pts,
+        backgroundColor: pts.map(p => (p.y == null ? 'transparent' : p.y >= 0 ? pos : neg)),
         borderWidth: 0,
-      }]
+        barPercentage: 1, categoryPercentage: 0.9,
+      }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       animation: { duration: 200 },
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      onClick: (e, els) => {
+        if (!els.length) return;
+        const p = pts[els[0].index];
+        if (p) hpOpenDrawer(p.d);
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => fmtThaiDate(pts[items[0].dataIndex].d),
+            label: (item) => {
+              const m = HP_METRICS.get(pts[item.dataIndex].d);
+              if (!m) return '';
+              return [
+                `ราคาปิด: ฿${fmtNum(m.row.close)}`,
+                `% เปลี่ยนแปลง: ${hpSignPct(m.pct)}`,
+                `Volume: ${m.volume == null ? '—' : fmtBigNum(m.volume)}`,
+              ];
+            },
+          },
+        },
+      },
       scales: {
         x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
-          grid: { display: false }, ticks: { color: getCSS('--muted'), font: { size: 9 } } },
-        y: { grid: { color: 'rgba(0,0,0,0.04)' },
-          ticks: { color: getCSS('--muted'), font: { size: 9 },
-            callback: (v) => v >= 1000 ? (v/1000).toFixed(0) + 'K' : v } },
-      }
-    }
+             grid: { display: false }, ticks: { color: getCSS('--muted'), font: { size: 11 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' },
+             ticks: { color: getCSS('--muted'), font: { size: 11 }, callback: (v) => v + '%' } },
+      },
+    },
   });
 }
 
-/* Click a price-table row   highlight that date on the price chart
- * (active point + tooltip). Mirrors the dashboard's focusDashOnDate link,
- * but non-destructive: it doesn't re-zoom the axis, just pins the tooltip
- * so the table and graph stay visually connected. */
-function focusPriceOnDate(dateStr) {
-  if (!PRICE_CHART) return;
-  const ds = PRICE_CHART.data.datasets[0];
-  if (!ds || !ds.data) return;
-  const idx = ds.data.findIndex(p => String(p.x).slice(0, 10) === dateStr);
-  if (idx < 0) return;
-  PRICE_CHART.setActiveElements([{ datasetIndex: 0, index: idx }]);
-  PRICE_CHART.tooltip.setActiveElements([{ datasetIndex: 0, index: idx }], { x: 0, y: 0 });
-  PRICE_CHART.update();
+function hpBuildVolumeChart(rows) {
+  const el = $('volumeChart');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  const data = rows.map(r => ({ x: r.date + 'T00:00:00', y: r.volume }));
+  if (VOL_CHART) VOL_CHART.destroy();
+  VOL_CHART = new Chart(ctx, {
+    type: 'bar',
+    data: { datasets: [{ data, backgroundColor: 'rgba(59,139,212,0.45)', borderWidth: 0,
+                         barPercentage: 1, categoryPercentage: 0.9 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { title: (i) => fmtThaiDate(String(i[0].parsed.x && data[i[0].dataIndex].x).slice(0, 10)),
+                     label: (i) => `Volume: ${fmtBigNum(i.parsed.y)}` } } },
+      scales: {
+        x: { type: 'time', time: { unit: 'month', displayFormats: { month: 'MMM yy' } },
+             grid: { display: false }, ticks: { display: false } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' },
+             ticks: { color: getCSS('--muted'), font: { size: 10 }, maxTicksLimit: 3,
+                      callback: (v) => fmtBigNum(v) } },
+      },
+    },
+  });
 }
 
-function renderPriceStats(filtered) {
-  const host = $('priceKpis');
-  if (!host) return;
-  const withPrice = filtered.filter(r => r.close != null);
-  if (!withPrice.length) {
-    // An empty state should say what to do, not just report emptiness.
-    host.innerHTML = '<div class="card muted th" style="grid-column:1/-1;">ไม่มีราคาในช่วงที่เลือก — ลองขยายช่วงเวลา หรือกด "ทั้งหมด"</div>';
+/* ---------- ประวัติราคา ---------- */
+function hpFilteredTableRows(rows) {
+  const q = ($('priceSearch') && $('priceSearch').value || '').trim().toLowerCase();
+  const mode = STATE.priceTableFilter || 'all';
+  return rows.filter(r => {
+    const m = HP_METRICS.get(r.date);
+    if (!m) return false;
+    if (mode === 'up' && !(m.pct > 0)) return false;
+    if (mode === 'down' && !(m.pct < 0)) return false;
+    if (mode === 'vol' && !(m.volRatio != null && m.volRatio >= HP_VOL_HOT)) return false;
+    if (mode === 'news' && !m.newsCount) return false;
+    if (q) {
+      // Match both the ISO date and the Thai rendering, so "6 ส.ค." and
+      // "2026-08-06" both work.
+      const hay = `${r.date} ${fmtThaiShort(r.date)} ${fmtThaiDate(r.date)}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function hpRenderTable(rows) {
+  const body = $('priceTableBody');
+  if (!body) return;
+  const list = hpFilteredTableRows(rows).slice().reverse();   // newest first
+  const pages = Math.max(1, Math.ceil(list.length / HP_PAGE_SIZE));
+  if (HP_TABLE_PAGE >= pages) HP_TABLE_PAGE = pages - 1;
+  if (HP_TABLE_PAGE < 0) HP_TABLE_PAGE = 0;
+  const page = list.slice(HP_TABLE_PAGE * HP_PAGE_SIZE, (HP_TABLE_PAGE + 1) * HP_PAGE_SIZE);
+
+  const count = $('priceTableCount');
+  if (count) count.textContent = `${list.length} วันทำการ`;
+  const info = $('priceTablePageInfo');
+  if (info) info.textContent = `หน้า ${HP_TABLE_PAGE + 1} / ${pages}`;
+  const prev = $('priceTablePrev'), next = $('priceTableNext');
+  if (prev) prev.disabled = HP_TABLE_PAGE === 0;
+  if (next) next.disabled = HP_TABLE_PAGE >= pages - 1;
+
+  if (!page.length) {
+    body.innerHTML = '<tr><td colspan="6" class="empty-state th">ไม่พบวันที่ตรงกับเงื่อนไข</td></tr>';
     return;
   }
-  const closes = withPrice.map(r => r.close);
-  const lo = Math.min(...closes);
-  const hi = Math.max(...closes);
-  const first = withPrice[0].close;
-  const last = withPrice[withPrice.length-1].close;
-  const ret = ((last - first) / first) * 100;
-  // Return since IPO — anchored to the IPO close vs the latest available close,
-  // independent of the current filter window.
-  const ipoRow = DATA.find(r => r.date === IPO_DATE) || (DATA.length ? DATA[0] : null);
-  const latestRow = [...DATA].reverse().find(r => r.close != null);
-  let ipoRet = null;
-  if (ipoRow && latestRow && ipoRow.close) ipoRet = ((latestRow.close - ipoRow.close) / ipoRow.close) * 100;
-  const vols = filtered.filter(r => r.volume != null).map(r => r.volume);
-  const avgVol = vols.length ? vols.reduce((a,b) => a+b, 0) / vols.length : 0;
-  const events = filtered.reduce((n, r) => n + eachRemark(r).length, 0);
-  // Where the period's last close sits between its own low and high. The
-  // Dashboard already uses this bar for the 52-week range, so the reader has
-  // seen the idiom; here it is scoped to the selected window and turns two
-  // isolated numbers into one shape you can read instantly.
-  const span = hi - lo;
-  const pos = span > 0 ? ((last - lo) / span) * 100 : 50;
 
-  const periodLabel = `${fmtThaiShort(filtered[0].date)} – ${fmtThaiShort(filtered[filtered.length - 1].date)}`;
-  const cls = (v) => (v > 0 ? 'text-pos' : v < 0 ? 'text-neg' : 'muted');
+  body.innerHTML = page.map(r => {
+    const m = HP_METRICS.get(r.date);
+    const news = m.newsCount;
+    const ratio = m.volRatio;
+    const hot = ratio != null && ratio >= HP_VOL_HOT;
+    return `<tr class="hp-row-clickable${HP_SELECTED_DATE === r.date ? ' hp-row-active' : ''}" data-hpdate="${r.date}">
+      <td class="th nowrap">${fmtThaiShort(r.date)}</td>
+      <td class="num">฿${fmtNum(r.close)}</td>
+      <td class="num ${hpPctCls(m.pct)}">${hpSignPct(m.pct)}</td>
+      <td class="num">${m.volume == null ? '—' : fmtBigNum(m.volume)}</td>
+      <td class="num ${hot ? 'hp-vol-hot' : 'muted'}">${ratio == null ? '—' : ratio.toFixed(1) + '×'}</td>
+      <td class="th">${news ? `<span class="hp-news-link">${news} ข่าว →</span>` : '<span class="muted">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
 
-  host.innerHTML = `
-    <div class="kpi-card">
-      <div class="kpi-label th">ผลตอบแทนช่วงนี้</div>
-      <div class="kpi-value ${cls(ret)}">${fmtPct(ret)}</div>
-      <div class="price-kpi-sub th">฿${fmtNum(first)} → ฿${fmtNum(last)}</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label th">ช่วงราคา</div>
-      <div class="kpi-value">฿${fmtNum(last)}</div>
-      <div class="range-bar">
-        <div class="range-bar-fill" style="width:${Math.max(0, Math.min(100, pos)).toFixed(1)}%"></div>
-        <div class="range-bar-marker" style="left:calc(${Math.max(0, Math.min(100, pos)).toFixed(1)}% - 2px)"></div>
+function hpDownloadCsv(rows) {
+  const list = hpFilteredTableRows(rows).slice().reverse();
+  const head = ['วันที่', 'ราคาปิด', 'เปลี่ยนแปลง(%)', 'Volume', 'เทียบค่าเฉลี่ย', 'จำนวนข่าว'];
+  const lines = [head.join(',')];
+  for (const r of list) {
+    const m = HP_METRICS.get(r.date);
+    lines.push([r.date, r.close.toFixed(2), m.pct == null ? '' : m.pct.toFixed(2),
+                m.volume == null ? '' : Math.round(m.volume),
+                m.volRatio == null ? '' : m.volRatio.toFixed(2), m.newsCount].join(','));
+  }
+  // BOM so Excel opens the Thai header correctly instead of mojibake.
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `asw-price-${list.length ? list[list.length - 1].date : 'export'}-${list.length ? list[0].date : ''}.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+}
+
+/* ---------- ช่วงที่น่าสนใจ ---------- */
+// Contiguous stretches that actually moved. Walks the series accumulating while
+// direction holds (tolerating single-day noise), then keeps the largest moves.
+function hpFindSpans(rows) {
+  if (rows.length < 6) return [];
+  const spans = [];
+  let start = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const dir = Math.sign(rows[i].close - rows[i - 1].close);
+    const runDir = Math.sign(rows[i].close - rows[start].close);
+    // Close the run when the move reverses meaningfully against its own trend.
+    if (dir !== 0 && runDir !== 0 && dir !== runDir) {
+      const backtrack = Math.abs((rows[i].close - rows[i - 1].close) / rows[i - 1].close) * 100;
+      if (backtrack > 2 || i - start >= 4) {
+        if (i - start >= 3) spans.push({ a: start, b: i - 1 });
+        start = i - 1;
+      }
+    }
+  }
+  if (rows.length - 1 - start >= 3) spans.push({ a: start, b: rows.length - 1 });
+
+  return spans.map(({ a, b }) => {
+    const from = rows[a], to = rows[b];
+    const move = ((to.close - from.close) / from.close) * 100;
+    const slice = rows.slice(a, b + 1);
+    const vols = slice.map(r => HP_METRICS.get(r.date)).filter(m => m && m.volume != null);
+    const volRatios = vols.map(m => m.volRatio).filter(v => v != null);
+    const volX = volRatios.length ? volRatios.reduce((x, y) => x + y, 0) / volRatios.length : null;
+    const news = slice.reduce((n, r) => n + (HP_METRICS.get(r.date)?.newsCount || 0), 0);
+    const idxMove = (key) => {
+      const f = from[key], t = to[key];
+      return (f != null && t != null && f) ? ((t - f) / f) * 100 : null;
+    };
+    return { from, to, move, days: slice.length, volX, news,
+             setMove: idxMove('setIdx'), propMove: idxMove('propIdx') };
+  })
+  .filter(s => Math.abs(s.move) >= 5)
+  .sort((x, y) => Math.abs(y.move) - Math.abs(x.move))
+  .slice(0, 2);
+}
+
+function hpRenderSpans(rows) {
+  const host = $('priceSpans');
+  const title = $('priceSpansTitle');
+  if (!host || !title) return;
+  const spans = hpFindSpans(rows);
+  if (!spans.length) { host.innerHTML = ''; host.hidden = true; title.hidden = true; return; }
+  host.hidden = false; title.hidden = false;
+  host.innerHTML = spans.map(s => {
+    const rel = (s.propMove != null) ? s.move - s.propMove : null;
+    const bits = [];
+    if (s.volX != null) bits.push(`Volume ${s.volX.toFixed(1)}× ค่าเฉลี่ย`);
+    if (s.setMove != null) bits.push(`SET ${hpSignPct(s.setMove)}`);
+    if (s.propMove != null) bits.push(`PROP ${hpSignPct(s.propMove)}`);
+    if (s.news) bits.push(`${s.news} ข่าว`);
+    return `<div class="hp-span">
+      <div class="hp-span-head">
+        <span class="hp-span-date th">${fmtThaiShort(s.from.date)} – ${fmtThaiShort(s.to.date)}</span>
+        <span class="hp-span-move ${hpPctCls(s.move)}">${hpSignPct(s.move)}</span>
       </div>
-      <div class="range-bar-labels th"><span>฿${fmtNum(lo)}</span><span>฿${fmtNum(hi)}</span></div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label th">ปริมาณเฉลี่ยต่อวัน</div>
-      <div class="kpi-value">${fmtBigNum(avgVol)}<span class="kpi-unit th">พันหุ้น</span></div>
-      <div class="price-kpi-sub th">${withPrice.length} วันทำการ · ${periodLabel}</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label th">ตั้งแต่ IPO</div>
-      <div class="kpi-value ${ipoRet == null ? 'muted' : cls(ipoRet)}">${ipoRet == null ? '—' : fmtPct(ipoRet)}</div>
-      <div class="price-kpi-sub th">IPO ฿${ipoRow ? fmtNum(ipoRow.close) : '—'} · ${fmtThaiShort(IPO_DATE)}</div>
-    </div>
-  `;
+      <div class="i-sub th" style="font-size:11px;color:var(--muted);">
+        ฿${fmtNum(s.from.close)} → ฿${fmtNum(s.to.close)} · ${s.days} วันทำการ</div>
+      <div class="hp-span-meta th">${bits.map(b => `<span>${b}</span>`).join('')}</div>
+      ${rel != null ? `<div class="th" style="font-size:11px;margin-top:4px;" class="${hpPctCls(rel)}">ASW เทียบ PROP <span class="${hpPctCls(rel)}">${rel > 0 ? '+' : ''}${rel.toFixed(2)} pp</span></div>` : ''}
+      <button type="button" class="hp-span-cta th" data-hpspan="${s.from.date}|${s.to.date}">ดูช่วงนี้ →</button>
+    </div>`;
+  }).join('');
+}
 
-  // The chart toolbar owns the period, so the subtitle reports what is on
-  // screen — including how many news events fall inside it, which is the reason
-  // this page and the news feed share a date axis at all.
-  const sub = $('priceViewSub');
-  if (sub) {
-    sub.textContent = `${periodLabel} · ${withPrice.length} วันทำการ` + (events ? ` · ${events} ข่าวบนกราฟ` : '');
+/* ---------- Day detail drawer ---------- */
+function hpOpenDrawer(date) {
+  const m = HP_METRICS.get(date);
+  const drawer = $('dayDrawer'), scrim = $('dayDrawerScrim');
+  if (!m || !drawer || !scrim) return;
+  HP_SELECTED_DATE = date;
+
+  const pctOf = (cur, prev) => (cur != null && prev != null && prev) ? ((cur - prev) / prev) * 100 : null;
+  const setPct = pctOf(m.setIdx, m.prevSetIdx);
+  const propPct = pctOf(m.propIdx, m.prevPropIdx);
+  const news = hpNewsFor(date);
+
+  const cmpRows = [`<div class="hp-cmp-row"><span class="n th">ASW</span><span class="${hpPctCls(m.pct)}">${hpSignPct(m.pct)}</span></div>`];
+  // Only render an index row when that index actually has both days — SET is
+  // missing on ~15% of rows and a column of "—" teaches nothing.
+  if (setPct != null) cmpRows.push(`<div class="hp-cmp-row"><span class="n th">SET</span><span class="${hpPctCls(setPct)}">${hpSignPct(setPct)}</span></div>`);
+  if (propPct != null) cmpRows.push(`<div class="hp-cmp-row"><span class="n th">PROP</span><span class="${hpPctCls(propPct)}">${hpSignPct(propPct)}</span></div>`);
+  const rel = (m.pct != null && propPct != null) ? m.pct - propPct : null;
+
+  $('dayDrawerTitle').textContent = fmtThaiDate(date);
+  $('dayDrawerBody').innerHTML = `
+    <div class="hp-dgrid">
+      <div class="hp-dstat"><div class="k th">ราคาปิด</div><div class="v">฿${fmtNum(m.row.close)}</div></div>
+      <div class="hp-dstat"><div class="k th">เปลี่ยนแปลง</div><div class="v ${hpPctCls(m.pct)}">${hpSignPct(m.pct)}</div></div>
+      <div class="hp-dstat"><div class="k th">Volume</div><div class="v">${m.volume == null ? '—' : fmtBigNum(m.volume)}</div></div>
+      <div class="hp-dstat"><div class="k th">เทียบ 30D Avg</div><div class="v">${m.volRatio == null ? '—' : m.volRatio.toFixed(1) + '×'}</div></div>
+    </div>
+    ${cmpRows.length > 1 ? `<div class="hp-dsection">
+      <h4 class="th">เทียบตลาด</h4>
+      ${cmpRows.join('')}
+      ${rel != null ? `<div class="hp-outperf th">${rel >= 0 ? 'Outperform' : 'Underperform'} PROP
+        <strong class="${hpPctCls(rel)}">${rel > 0 ? '+' : ''}${rel.toFixed(2)} pp</strong></div>` : ''}
+    </div>` : ''}
+    <div class="hp-dsection">
+      <h4 class="th">ข่าวในวันนั้น${news.length ? ` (${news.length})` : ''}</h4>
+      ${news.length
+        ? news.slice(0, 8).map(n => {
+            const u = safeUrl(n.source_url);
+            const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
+            const inner = `<span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;">${escapeHtml(badge.label)}</span> ${escapeHtml(n.title || '')}`;
+            return u ? `<a class="hp-dnews th" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+                     : `<div class="hp-dnews th muted">${inner}</div>`;
+          }).join('')
+        : '<div class="muted th" style="font-size:12px;">ไม่มีข่าวในวันนี้</div>'}
+      ${news.length ? `<button type="button" class="hp-span-cta th" id="dayDrawerAllNews">ดูข่าวทั้งหมด →</button>` : ''}
+    </div>`;
+
+  drawer.hidden = false; scrim.hidden = false;
+  const allNews = $('dayDrawerAllNews');
+  if (allNews) allNews.addEventListener('click', () => {
+    hpCloseDrawer();
+    STATE.newsDateFrom = date; STATE.newsDateTo = date;
+    setView('news');
+  });
+  $('dayDrawerClose').focus();
+  hpRenderTable(hpPeriodRows());
+}
+
+function hpCloseDrawer() {
+  const drawer = $('dayDrawer'), scrim = $('dayDrawerScrim');
+  if (drawer) drawer.hidden = true;
+  if (scrim) scrim.hidden = true;
+}
+
+/* ---------- orchestrator ---------- */
+function refreshPrice() {
+  hpComputeMetrics();
+  const rows = hpPeriodRows();
+  hpRenderSummary(rows);
+  hpRenderInsights(rows);
+  hpBuildChangeChart(rows);
+  hpBuildVolumeChart(rows);
+  hpRenderTable(rows);
+  hpRenderSpans(rows);
+
+  const custom = !!(STATE.priceFilter && STATE.priceFilter.start && STATE.priceFilter.end);
+  document.querySelectorAll('#priceRangePills .pill').forEach(b => {
+    b.classList.toggle('active', !custom && b.dataset.prange === STATE.priceRange);
+  });
+  const reset = $('priceRangeReset');
+  if (reset) reset.style.display = custom ? '' : 'none';
+  if (rows.length) {
+    const s = $('priceStart'), e = $('priceEnd');
+    if (s && !custom) s.value = rows[0].date;
+    if (e && !custom) e.value = rows[rows.length - 1].date;
   }
 }
 
@@ -3731,23 +3894,8 @@ function refreshDashboard() {
   updateZoomResetBtn();
 }
 
-function refreshPrice() {
-  buildPriceChart();
-  renderPriceTable();
-  // A hand-picked date range means NO preset is in effect — light a pill then
-  // and the toolbar contradicts the chart. The reset button is the way back.
-  const custom = !!(STATE.priceFilter && STATE.priceFilter.start && STATE.priceFilter.end);
-  document.querySelectorAll('#priceRangePills .pill').forEach(b => {
-    b.classList.toggle('active', !custom && b.dataset.prange === STATE.priceRange);
-  });
-  const reset = $('priceRangeReset');
-  if (reset) reset.style.display = custom ? '' : 'none';
-  // Keep the overlay pills honest if state was changed from elsewhere.
-  document.querySelectorAll('#priceOverlayPills .pill').forEach(b => {
-    const key = { events: 'priceShowEvents', set: 'priceShowSet', prop: 'priceShowProp' }[b.dataset.ptoggle];
-    if (key) b.classList.toggle('active', !!STATE[key]);
-  });
-}
+// refreshPrice() for this view lives with the rest of the Price History code,
+// above — see "Price History View — investigate, not monitor".
 
 function refreshNews() {
   // Unified feed (migrate-v4): one scroll, severity-first sort, 5 buckets.
@@ -3905,42 +4053,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Price view
+  // === Price History view ===
   document.querySelectorAll('#priceRangePills .pill').forEach(b => {
     b.addEventListener('click', () => {
       STATE.priceRange = b.dataset.prange;
       STATE.priceFilter = null;
-      refreshPrice();
-    });
-  });
-  document.querySelectorAll('[data-chartmode]').forEach(b => {
-    b.addEventListener('click', () => {
-      STATE.priceChartMode = b.dataset.chartmode;
-      document.querySelectorAll('[data-chartmode]').forEach(x => x.classList.toggle('active', x === b));
-      refreshPrice();
-    });
-  });
-  // Overlay toggles. Same three switches as the old checkboxes, now pills that
-  // carry their own on/off state in the class the rest of the app already uses.
-  const PRICE_TOGGLE_STATE = { events: 'priceShowEvents', set: 'priceShowSet', prop: 'priceShowProp' };
-  document.querySelectorAll('#priceOverlayPills .pill').forEach(b => {
-    b.addEventListener('click', () => {
-      const key = PRICE_TOGGLE_STATE[b.dataset.ptoggle];
-      if (!key) return;
-      STATE[key] = !STATE[key];
-      b.classList.toggle('active', STATE[key]);
-      b.setAttribute('aria-pressed', String(STATE[key]));
+      HP_TABLE_PAGE = 0;
       refreshPrice();
     });
   });
 
-  // Typing a custom range overrides the preset pills, so clear their active
-  // state — leaving "6M" lit while showing a hand-picked window is a lie.
+  // A hand-picked range overrides the presets, so their active state is cleared
+  // — leaving "6M" lit while showing a custom window would misreport the page.
   const applyCustomRange = () => {
     const start = $('priceStart').value, end = $('priceEnd').value;
     if (!start || !end) return;
     STATE.priceFilter = start <= end ? { start, end } : { start: end, end: start };
-    document.querySelectorAll('#priceRangePills .pill').forEach(x => x.classList.remove('active'));
+    HP_TABLE_PAGE = 0;
     refreshPrice();
   };
   $('priceStart').addEventListener('change', applyCustomRange);
@@ -3948,20 +4077,66 @@ document.addEventListener('DOMContentLoaded', async () => {
   const priceRangeReset = $('priceRangeReset');
   if (priceRangeReset) priceRangeReset.addEventListener('click', () => {
     STATE.priceFilter = null;
+    HP_TABLE_PAGE = 0;
     refreshPrice();
   });
-  // Click any price-table row   highlight that date on the price chart.
+
+  // Table filters + search
+  document.querySelectorAll('#priceFilterPills .pill').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.priceTableFilter = b.dataset.pfilter;
+      document.querySelectorAll('#priceFilterPills .pill').forEach(x => x.classList.toggle('active', x === b));
+      HP_TABLE_PAGE = 0;
+      hpRenderTable(hpPeriodRows());
+    });
+  });
+  const priceSearch = $('priceSearch');
+  if (priceSearch) priceSearch.addEventListener('input', () => {
+    HP_TABLE_PAGE = 0;
+    hpRenderTable(hpPeriodRows());
+  });
+  const priceCsvBtn = $('priceCsvBtn');
+  if (priceCsvBtn) priceCsvBtn.addEventListener('click', () => hpDownloadCsv(hpPeriodRows()));
+
+  const priceTablePrev = $('priceTablePrev');
+  if (priceTablePrev) priceTablePrev.addEventListener('click', () => { HP_TABLE_PAGE--; hpRenderTable(hpPeriodRows()); });
+  const priceTableNext = $('priceTableNext');
+  if (priceTableNext) priceTableNext.addEventListener('click', () => { HP_TABLE_PAGE++; hpRenderTable(hpPeriodRows()); });
+
+  // Row click → day detail drawer. Delegated so it survives re-renders.
   const priceTableBody = $('priceTableBody');
-  if (priceTableBody && priceTableBody.dataset.focusBound !== '1') {
-    priceTableBody.dataset.focusBound = '1';
+  if (priceTableBody) {
     priceTableBody.addEventListener('click', (e) => {
-      const tr = e.target.closest('tr[data-date]');
-      if (!tr) return;
-      priceTableBody.querySelectorAll('tr.price-focused').forEach(x => x.classList.remove('price-focused'));
-      tr.classList.add('price-focused');
-      focusPriceOnDate(tr.dataset.date);
+      const tr = e.target.closest('tr[data-hpdate]');
+      if (tr) hpOpenDrawer(tr.dataset.hpdate);
     });
   }
+
+  // Insight tiles and span CTAs both jump to a date/period.
+  const priceInsights = $('priceInsights');
+  if (priceInsights) priceInsights.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hpdate]');
+    if (btn) hpOpenDrawer(btn.dataset.hpdate);
+  });
+  const priceSpans = $('priceSpans');
+  if (priceSpans) priceSpans.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hpspan]');
+    if (!btn) return;
+    const [start, end] = btn.dataset.hpspan.split('|');
+    STATE.priceFilter = { start, end };
+    HP_TABLE_PAGE = 0;
+    refreshPrice();
+    document.getElementById('priceSummary')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // Drawer dismissal: button, scrim, Esc.
+  const dayDrawerClose = $('dayDrawerClose');
+  if (dayDrawerClose) dayDrawerClose.addEventListener('click', hpCloseDrawer);
+  const dayDrawerScrim = $('dayDrawerScrim');
+  if (dayDrawerScrim) dayDrawerScrim.addEventListener('click', hpCloseDrawer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('dayDrawer') && !$('dayDrawer').hidden) hpCloseDrawer();
+  });
 
   // News view — unified feed (migrate-v4 rebuild)
   //   Search box, range pills, bucket toggles, refresh buttons all bind here.
