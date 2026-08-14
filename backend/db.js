@@ -184,6 +184,11 @@ async function ensureSchema() {
       impact_level  TEXT
     );
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS impact_level TEXT;
+    -- TRUE only when source_url was found by search AND matched to this exact
+    -- article. Distinguishes "we have no link" from "we have a link we trust",
+    -- which a bare empty string cannot: a row can legitimately carry full
+    -- content with no URL, and that must not read as a failed extraction.
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS url_verified BOOLEAN NOT NULL DEFAULT FALSE;
     -- User-pinned "mark" on the dashboard chart (replaces digest Event Pins
     -- there). Distinct from show_pin, which the pipeline uses to boost display
     -- priority — kept separate so the two never interact.
@@ -800,8 +805,8 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 14;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14})`);
+    const base = i * 15;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15})`);
     params.push(
       it.title,
       normalizeDateYear(it.date),
@@ -826,12 +831,19 @@ async function writeNewsItems(items) {
         : priorityForItem(it),
       it.summary      ?? null,
       it.impact_level ?? null,         // HIGH/MEDIUM/LOW impact magnitude
+      // Only a searched-and-matched article link counts as verified. Derived
+      // here when the caller did not say, so no pipeline can imply a link is
+      // trustworthy just by having one.
+      it.url_verified != null
+        ? !!it.url_verified
+        : /^https?:\/\//i.test(sanitizeSourceUrl(it.source_url) || ''),
     );
   });
   const r = await p.query(`
     INSERT INTO news_feed (title, date, category, source_url, source_label, title_hash,
                            pipeline, impact, severity, show_pin,
-                           fetched_at, display_priority, summary, impact_level)
+                           fetched_at, display_priority, summary, impact_level,
+                           url_verified)
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
@@ -930,7 +942,7 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   params.push(Math.max(1, Math.min(limit || 100, 500)));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
-                      impact_level, user_note, chart_marked
+                      impact_level, user_note, chart_marked, url_verified
                FROM news_feed
                WHERE ${where.join(' AND ')}
                ORDER BY display_priority DESC, date DESC, id DESC
@@ -964,7 +976,7 @@ async function readNewsPins({ since = null, until = null, limit = 5000 } = {}) {
   const r = await p.query(
     `SELECT id, title, date, category, source_url, source_label,
             pipeline, impact, severity, show_pin, display_priority, summary,
-            impact_level, user_note, chart_marked
+            impact_level, user_note, chart_marked, url_verified
      FROM news_feed
      WHERE ${where.join(' AND ')}
      ORDER BY date ASC, display_priority DESC, id ASC

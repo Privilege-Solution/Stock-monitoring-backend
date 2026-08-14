@@ -107,7 +107,17 @@ const DATE_DISCIPLINE = (today, todayIso) => `
 เพิ่ม 3 บรรทัดนี้ต่อท้ายทุกข่าว:
 EVENT_DATE: [YYYY-MM-DD]
 PUBLISH_DATE: [YYYY-MM-DD]
-CONFIDENCE: [high | medium | low]`;
+CONFIDENCE: [high | medium | low]
+
+=== กฎเรื่อง URL (แยกจากการดึงเนื้อหา) ===
+การหา URL กับการดึงเนื้อหาข่าว เป็นคนละงานกัน ความล้มเหลวของอย่างหนึ่ง ห้ามทำให้อีกอย่างหายไป
+
+- ต้องได้ URL จากการค้นหาจริงเท่านั้น ห้ามเดา ห้ามสร้างเอง ห้ามนึกจากความจำ ห้ามประกอบ URL ขึ้นเอง
+- URL ที่ใช้ได้ ต้องเป็นบทความชิ้นนั้นจริง ๆ (หัวข้อ/เนื้อหาตรงกัน) ไม่ใช่แค่โดเมนเดียวกัน และไม่ใช่หน้าแรกของเว็บ
+- ถ้าหา URL ที่ยืนยันได้ไม่เจอ ห้ามตัดข่าวนั้นทิ้ง ให้คงเนื้อหาทั้งหมดไว้ครบถ้วน แล้วตอบ URL: NONE
+- ห้ามให้การหา URL ไม่สำเร็จ ไปทำให้ HEADLINE, SUMMARY, SOURCE, วันที่, CATEGORY หรือ IMPACT_LEVEL สั้นลง ขาดหาย หรือถูกตัดออก
+  ข้อมูลเหล่านั้นมาจากตัวเนื้อข่าว ไม่ได้มาจาก URL
+- ข่าวที่มีเนื้อหาครบแต่ URL: NONE ถือว่าถูกต้อง ส่วนข่าวที่ใส่ URL มั่ว ๆ ให้พอมีค่า ถือว่าผิด`;
 
 const PROMPT_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
 ที่เกิดขึ้นใน${today}
@@ -787,25 +797,45 @@ async function writeFeedItems(items, tag) {
 
   const rows = items.map(normalizeForNewsFeed);
 
+  // URL resolution is a SEPARATE task from content extraction, and failing it
+  // must never cost us the story. A row arriving with a publisher homepage has
+  // no verified article link yet, so we search for one; if the search comes up
+  // empty the row is kept with an empty url and url_verified = false.
+  //
+  // This reverses the earlier drop-on-unresolvable behaviour. That policy threw
+  // away roughly a third of each Gemini pull — headline, summary, date,
+  // category and impact included — purely because a link could not be found,
+  // which is the most expensive possible response to the least important field.
+  // A null URL with full content is a correct row; a guessed URL is not.
   const homepages = rows.filter(r => isHomepageUrl(r.source_url));
   if (homepages.length) {
-    console.log(`[${tag}] deepening ${homepages.length} homepage URL(s)...`);
+    console.log(`[${tag}] searching for article URLs for ${homepages.length} item(s)...`);
     await mapLimit(homepages, BING_CONCURRENCY, async (r) => {
+      // deepenHomepageUrl searches Bing and only returns a hit whose headline
+      // tokens (and company aliases) match this story — never a same-domain or
+      // homepage consolation prize.
       const deep = await deepenHomepageUrl(r.title, r.source_label);
       if (deep) r.source_url = deep;
     });
   }
 
-  const keep = rows.filter(r => !isHomepageUrl(r.source_url));
-  const dropped = rows.length - keep.length;
-  if (dropped) {
-    console.log(`[${tag}] dropped ${dropped} item(s) — publisher homepage, no article URL found`);
+  // Verified means: this URL was found by search AND points at this article.
+  // A publisher homepage is neither, so it is cleared rather than stored as if
+  // it were the source.
+  let unresolved = 0;
+  for (const r of rows) {
+    if (isHomepageUrl(r.source_url)) { r.source_url = ''; }
+    r.url_verified = /^https?:\/\//i.test(r.source_url || '');
+    if (!r.url_verified) unresolved++;
+  }
+  if (unresolved) {
+    console.log(`[${tag}] ${unresolved} item(s) kept with no verified URL (content intact, url_verified=false)`);
   }
 
   // writeNewsItems applies content-level dedup against the last 48h and within
   // this batch, and reports how many it collapsed.
-  const { inserted, deduped } = await db.writeNewsItems(keep);
-  return { inserted, dropped, staleDropped: stale.length, deduped: deduped || 0 };
+  const { inserted, deduped } = await db.writeNewsItems(rows);
+  return { inserted, dropped: 0, unresolvedUrls: unresolved, staleDropped: stale.length, deduped: deduped || 0 };
 }
 
 // Extract a multi-line section from the morning brief (LAST_WEEK: /
