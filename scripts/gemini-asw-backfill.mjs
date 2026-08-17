@@ -186,10 +186,16 @@ async function main() {
 
     for (const item of result.items) {
       totalFound++;
-      let date = item.date || `${y.year}-06-01`;
-      if (/^\d{4}$/.test(date)) date = date + '-06-01';
-      if (/^\d{4}-\d{2}$/.test(date)) date = date + '-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = `${y.year}-06-01`;
+      // Skip rather than invent — same rule as gemini-all-category-backfill.
+      // A `${y.year}-06-01` fallback (and the `-01` day-padding for a
+      // month-only answer) stamps the row with a date no publisher used, which
+      // misplaces it on the chart and in the feed's day grouping. 478 rows in
+      // news_feed already sit on one of these fabricated days.
+      const date = String(item.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        console.log(`  – skip (no usable date: "${item.date || ''}")  "${String(item.headline).slice(0, 50)}"`);
+        continue;
+      }
 
       const ground = bestGroundUrl(item, result.chunks);
       let url = '';

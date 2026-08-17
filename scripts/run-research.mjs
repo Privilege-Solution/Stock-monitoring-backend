@@ -74,9 +74,9 @@ for (const q of QUARTERS) {
       const h = get('HEADLINE'); if (!h || h === 'NONE') continue;
       const key = sha1(normalizeHeadline(h));
       if (seen.has(key)) continue; seen.add(key);
-      let d = get('DATE') || `${q.ce}-06-01`;
-      if (/^\d{4}-\d{2}$/.test(d)) d += '-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) d = `${q.ce}-06-01`;
+      // Skip rather than invent — same rule as gemini-all-category-backfill.
+      const d = String(get('DATE') || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
       let url = null;
       for (const c of r.chunks) {
         const u = await resolve(c.web?.uri);

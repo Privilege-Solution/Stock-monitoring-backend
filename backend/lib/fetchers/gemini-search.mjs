@@ -21,6 +21,9 @@
 import { createHash } from 'crypto';
 import db from '../../db.js';
 import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
+// The recap gate in writeFeedItems() spans exactly this window — see the note
+// there on why the gate and the dedup must share one constant.
+import { DEDUP_WINDOW_HOURS } from '../news-dedup.mjs';
 import {
   normalizeHeadline, normalizeDateYear,
   isHomepageUrl, deepenHomepageUrl, mapLimit,
@@ -85,17 +88,24 @@ const CATEGORY_OPTIONS = TAXONOMY_CATEGORIES.join(' | ');
 // present-tense headline ("ต่ออายุ", "ขยายเวลา") is describing an approval that
 // already happened. Four outlets covering the same ครม. transfer-fee extension
 // on different days is exactly this pattern.
-const DATE_DISCIPLINE = (today, todayIso) => `
+// oldestIso is derived here, not threaded through every prompt, and comes from
+// the SAME DEDUP_WINDOW_HOURS the gate in writeFeedItems() uses — the prompt
+// and the gate have to agree on the window or one silently overrules the other.
+// (Asking Gemini for today-only while the gate accepts 48h just means the
+// widened gate never sees anything to admit.)
+const DATE_DISCIPLINE = (today, todayIso) => ((oldestIso) => `
 
 === กฎการตรวจสอบวันที่ (สำคัญมาก ห้ามข้าม) ===
-เอาเฉพาะข่าวที่ "เหตุการณ์จริง" เกิดขึ้นใน${today} (${todayIso}) หรือถูกประกาศ/รายงานอย่างเป็นทางการครั้งแรกในวันนี้เท่านั้น
-ห้ามเอาข่าวเก่าที่ถูกนำมาเผยแพร่ซ้ำ อ้างอิงถึง หรือสรุปย้อนหลัง
+เอาเฉพาะข่าวที่ "เหตุการณ์จริง" เกิดขึ้นระหว่างวันที่ ${oldestIso} ถึง ${todayIso} (${today}) เท่านั้น
+ห้ามเอาข่าวเก่ากว่านั้นที่ถูกนำมาเผยแพร่ซ้ำ อ้างอิงถึง หรือสรุปย้อนหลัง
 
 สำหรับทุกข่าว ต้องแยกวันที่ออกเป็น 2 อย่าง:
 - EVENT_DATE  = วันที่เหตุการณ์เกิดขึ้นจริง (เช่น วันที่ ครม. มีมติ, วันที่ประกาศงบ)
 - PUBLISH_DATE = วันที่บทความถูกเผยแพร่หรือแก้ไขล่าสุด
 
-เกณฑ์ตัดสิน: ถ้า EVENT_DATE ไม่ใช่ ${todayIso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็นวันนี้ก็ตาม
+เกณฑ์ตัดสิน: ถ้า EVENT_DATE อยู่นอกช่วง ${oldestIso} ถึง ${todayIso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็นวันนี้ก็ตาม
+EVENT_DATE ที่ถูกต้องสำคัญมาก เพราะระบบใช้ค่านี้เป็น "วันที่ของข่าว" บนกราฟราคา
+ข่าวของเมื่อวานที่ยังอยู่ในช่วง ให้ใส่มาได้ โดยระบุ EVENT_DATE เป็นวันที่เกิดเหตุจริง ห้ามแก้เป็นวันนี้
 
 ระวังรูปแบบข่าวเก่าที่ถูกทำให้ดูเหมือนใหม่:
 1. มีคำว่า "ก่อนหน้านี้" / "เมื่อเดือนที่แล้ว" / "มีผลตั้งแต่วันที่ <วันที่ในอดีต>" → เหตุการณ์เป็นของเก่า
@@ -117,7 +127,12 @@ CONFIDENCE: [high | medium | low]
 - ถ้าหา URL ที่ยืนยันได้ไม่เจอ ห้ามตัดข่าวนั้นทิ้ง ให้คงเนื้อหาทั้งหมดไว้ครบถ้วน แล้วตอบ URL: NONE
 - ห้ามให้การหา URL ไม่สำเร็จ ไปทำให้ HEADLINE, SUMMARY, SOURCE, วันที่, CATEGORY หรือ IMPACT_LEVEL สั้นลง ขาดหาย หรือถูกตัดออก
   ข้อมูลเหล่านั้นมาจากตัวเนื้อข่าว ไม่ได้มาจาก URL
-- ข่าวที่มีเนื้อหาครบแต่ URL: NONE ถือว่าถูกต้อง ส่วนข่าวที่ใส่ URL มั่ว ๆ ให้พอมีค่า ถือว่าผิด`;
+- ข่าวที่มีเนื้อหาครบแต่ URL: NONE ถือว่าถูกต้อง ส่วนข่าวที่ใส่ URL มั่ว ๆ ให้พอมีค่า ถือว่าผิด
+- บรรทัด URL: ต้องมี "ลิงก์เดียว" เท่านั้น ห้ามใส่ 2 ลิงก์ ห้ามคั่นด้วย , หรือ / และห้ามเขียนคำอธิบายต่อท้ายลิงก์
+  ผิด: URL: https://a.com/x , https://b.com/y (อ้างอิงจากข่าว)
+  ถูก: URL: https://a.com/x`)(
+  new Date(Date.now() + 7 * 3600 * 1000 - DEDUP_WINDOW_HOURS * 3600 * 1000)
+    .toISOString().slice(0, 10));
 
 const PROMPT_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
 ที่เกิดขึ้นใน${today}
@@ -343,6 +358,13 @@ REASON: ปัจจัยบวกจากโครงการใหม่แ
 // dashboard.
 const ALLOWED_IMPACT_LEVELS = new Set(['HIGH', 'MEDIUM', 'LOW']);
 
+// Every field name the prompts ask Gemini to emit. Used by get() below to find
+// where one field's value ends when the model puts several on the same line.
+// Matched with an optional leading space and an optional "[" (the prompts show
+// bracketed placeholders and Gemini echoes them), so both "... SUMMARY:x" and
+// "...] SUMMARY:[x" split correctly.
+const FIELD_MARKER = /\s*\[?\b(?:CATEGORY|HEADLINE|SUMMARY|IMPACT_LEVEL|SOURCE|URL|DATE|EVENT_DATE|PUBLISH_DATE|CONFIDENCE)\s*:/;
+
 // Normalize a raw enum value (CATEGORY / IMPACT_LEVEL) out of Gemini's text.
 //
 // WHY: the prompt templates literally show the placeholder syntax —
@@ -522,7 +544,15 @@ function parseAIResult(text, pipeline, grounding) {
   return blocks.map(({ text: block, start, end }) => {
     const get = (key) => {
       const m = block.match(new RegExp(`${key}:\\s*(.+)`));
-      return m ? m[1].trim() : null;
+      if (!m) return null;
+      // `(.+)` stops at the newline, which is only a field boundary while
+      // Gemini actually emits one field per line. When it runs the record
+      // together ("HEADLINE:... SUMMARY:... IMPACT_LEVEL:HIGH SOURCE:... URL:...")
+      // every field collapses into whichever one is read first: 126 rows in
+      // news_feed have the WHOLE record stored as the title, the longest 6,368
+      // characters, and the frontend renders that blob as the headline.
+      // Re-cut the captured text at the next field marker.
+      return m[1].split(FIELD_MARKER)[0].trim() || null;
     };
     // Bracket-tolerant enum parsing (see normalizeEnumValue). Coercions are
     // WARNED rather than applied silently so genuine format drift shows up in
@@ -545,8 +575,19 @@ function parseAIResult(text, pipeline, grounding) {
     // frontend renders as year 3112. normalizeDateYear() is the BE→CE safety
     // net; we only accept the result if it's a well-formed CE date.
     const statedDate = normalizeDateYear(get('DATE') || '');
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(statedDate) ? statedDate : todayISO();
-    const statedUrl = get('URL');
+    // `URL:` is answered with a LINE, not a token, and Gemini pads it: a second
+    // link ("<url> / <url>"), a comma-separated list, or Thai commentary
+    // ("<url> (อ้างอิงจากข่าว...)"). get() returns the whole line, so all of that
+    // used to be stored as part of the href — 87 rows in news_feed carry one,
+    // every one of them a 404. Take the first http(s) token instead of the line.
+    // db.sanitizeSourceUrl() re-applies the same cut at the write boundary, for
+    // the backfill scripts that never come through this parser.
+    // Brackets are excluded from the token because the prompt shows the value
+    // as a placeholder ("URL: [url จริงเท่านั้น...]") and Gemini echoes the
+    // brackets around a real link — "[https://a.co/x]" must not keep the "]".
+    // Parens are NOT excluded: they occur inside real article paths.
+    const statedUrl = (String(get('URL') || '').match(/https?:\/\/[^\s[\]]+/) || [])[0]
+      || get('URL');
     // Resolve the URL against grounding: keep Gemini's URL if its hostname
     // matches a grounded publisher, otherwise replace with the publisher
     // URL derived from the chunk that backs this headline.
@@ -562,11 +603,34 @@ function parseAIResult(text, pipeline, grounding) {
     const publishDateRaw = normalizeDateYear(get('PUBLISH_DATE') || '');
     const isIso = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
     const confidence = (get('CONFIDENCE') || '').trim().toLowerCase() || null;
+    const eventDate   = isIso(eventDateRaw)   ? eventDateRaw   : null;
+    const publishDate = isIso(publishDateRaw) ? publishDateRaw : null;
+
+    // The row's date is WHEN THE STORY HAPPENED, in this order of preference:
+    //   EVENT_DATE  — the model's own answer to "when did this occur"
+    //   PUBLISH_DATE— failing that, when the outlet published it
+    //   DATE        — a volunteered date line (rare; the prompts don't ask)
+    //   todayISO()  — last resort, and now genuinely last
+    //
+    // It used to be todayISO() unconditionally unless a DATE: line appeared,
+    // which no prompt asks for. So every Gemini row was stamped with the day
+    // the CRON RAN, and the EVENT_DATE the model had already worked out — and
+    // that this parser had already extracted, two lines up — was read once as a
+    // yes/no gate in writeFeedItems() and then thrown away. A story found by the
+    // 21:00 batch that broke two days earlier was filed under today.
+    //
+    // NOTE this only bites because writeFeedItems() no longer requires
+    // event_date === today. While that gate stood, every surviving row had
+    // event_date === today or null, so preferring event_date here returned
+    // today either way and changed nothing. The two are one fix, not two.
+    const date = eventDate
+      || publishDate
+      || (/^\d{4}-\d{2}-\d{2}$/.test(statedDate) ? statedDate : todayISO());
 
     return {
-      date,                                      // Gemini's DATE: if valid (BE→CE normalized), else ICT today
-      event_date:   isIso(eventDateRaw) ? eventDateRaw : null,
-      publish_date: isIso(publishDateRaw) ? publishDateRaw : null,
+      date,                                      // event > publish > stated > ICT today
+      event_date:   eventDate,
+      publish_date: publishDate,
       confidence:   ['high', 'medium', 'low'].includes(confidence) ? confidence : null,
       pipeline,
       category,                                  // taxonomy-v2: COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO
@@ -765,25 +829,39 @@ function normalizeForNewsFeed(it) {
 // deliberate and matches the RSS fetchers: better to lose one row than to show
 // a headline the reader cannot actually open.
 async function writeFeedItems(items, tag) {
-  // Date discipline gate. Keep only stories whose EVENT happened today — an
-  // article published today about a cabinet resolution from June is a recap,
-  // not news, and putting it in the feed dated today misrepresents when the
-  // market actually moved.
+  // Date discipline gate. Rejects recaps — an article published today about a
+  // cabinet resolution from June is not news, and filing it under today
+  // misrepresents when the market actually moved.
+  //
+  // The window is DEDUP_WINDOW_HOURS, deliberately the SAME constant the
+  // content-dedup uses, not a second independent number. It used to demand
+  // event_date === today, which threw away a genuine story that broke at 22:00
+  // yesterday — the news this product exists to catch — for being one day old.
+  // Widening it is what makes the event_date-based row date in parseAIResult()
+  // mean anything; under the old gate every survivor was already dated today.
+  //
+  // Why not wider: a row admitted outside the dedup window cannot be compared
+  // against the original coverage of the same story, so the same event would
+  // insert twice — once when it breaks, again when an outlet recaps it on day
+  // three. Gate window > dedup window manufactures duplicates. Keep them equal.
   //
   // Items the model marked CONFIDENCE: low are kept but logged, per the spec:
   // it must flag rather than silently include, and a human can then judge.
   // Items with no EVENT_DATE at all (older prompt shape, or a truncated
   // response) pass through — this gate must not become a silent blackhole.
   const today = todayISO();
+  const oldest = new Date(Date.now() + 7 * 3600 * 1000 - DEDUP_WINDOW_HOURS * 3600 * 1000)
+    .toISOString().slice(0, 10);
   const stale = [];
   items = items.filter(it => {
     if (!it.event_date) return true;
-    if (it.event_date === today) return true;
+    // Inside [oldest, today]. A future event_date is a model error, not news.
+    if (it.event_date >= oldest && it.event_date <= today) return true;
     stale.push(it);
     return false;
   });
   if (stale.length) {
-    console.log(`[${tag}] dropped ${stale.length} recap(s) — event predates today (${today}):`);
+    console.log(`[${tag}] dropped ${stale.length} recap(s) — event outside ${oldest}..${today}:`);
     for (const s of stale) {
       console.log(`   event=${s.event_date} published=${s.publish_date || '?'} conf=${s.confidence || '?'}  ${String(s.headline).slice(0, 56)}`);
     }

@@ -186,10 +186,14 @@ async function main() {
 
     for (const item of result.items) {
       totalFound++;
-      let date = item.date || '2023-06-01';
-      if (/^\d{4}$/.test(date)) date = date + '-06-01';
-      if (/^\d{4}-\d{2}$/.test(date)) date = date + '-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = '2023-06-01';
+      // Skip rather than invent — same rule as gemini-all-category-backfill.
+      // The old '2023-06-01' fallback was worse than the others: EVERY undated
+      // item landed on one arbitrary day, stacking unrelated stories there.
+      const date = String(item.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        console.log(`  – skip (no usable date: "${item.date || ''}")  "${String(item.headline).slice(0, 50)}"`);
+        continue;
+      }
 
       const ground = bestGroundUrl(item, result.chunks);
       let url = '';

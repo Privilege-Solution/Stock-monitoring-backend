@@ -10,5 +10,9 @@ backend/data/*.db-shm
 .env.*
 !.env.example
 test-*.js
+# Row snapshots written by scripts/repair-news-urls.mjs before each mutating
+# phase. Keep them locally to revert a repair; they are production data, not
+# source, so they stay out of the repo.
+scripts/backup-*.json
 frontend/debug.html
 frontend/asw-yfinance.html

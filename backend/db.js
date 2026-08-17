@@ -765,11 +765,33 @@ function priorityForItem(it) {
 //     more than half already returned 404 — Google expires them. They are an
 //     internal indirection, never a durable article URL.
 //
+//   - trailing junk glued onto the URL. Gemini answers `URL:` with a line, not
+//     a token, and it appends things: a second link ("<url> / <url>"), a
+//     comma-separated list, or Thai commentary ("<url> (อ้างอิงจากข่าว...)").
+//     87 stored rows carry one of these, and they 404 to a row.
+//
+//     new URL() does NOT reject them — it PERCENT-ENCODES the junk into the
+//     path and succeeds, so parse-then-keep is not a filter:
+//       new URL('https://x.co/a (อ้างอิง)').href
+//         -> 'https://x.co/a%20(%E0%B8%AD%E0%B8%B9...)'
+//     which is the same dead link, now unreadable. The cut therefore happens
+//     BEFORE parsing: keep the first whitespace-free run, then validate it.
+//
 // Returns '' rather than dropping the row: the headline still carries value in
 // the feed, and an empty url is already the shape the UI treats as unclickable.
 function sanitizeSourceUrl(raw) {
-  const s = (typeof raw === 'string' ? raw.trim() : '');
+  let s = (typeof raw === 'string' ? raw.trim() : '');
   if (!s || s.toUpperCase() === 'NONE') return '';
+  // First whitespace-delimited token only — drops " / <second url>" and any
+  // trailing prose. Then strip a list separator or sentence punctuation that
+  // ran up against the URL with no space ("...Detail/1169," / "...599958.").
+  s = s.split(/\s/)[0].replace(/[,;.]+$/, '');
+  // A trailing bracket is only junk when nothing opened it — Wikipedia-style
+  // paths ("/wiki/Foo_(bar)") end in a legitimate one and must survive.
+  for (const [open, close] of [['(', ')'], ['[', ']'], ['{', '}']]) {
+    while (s.endsWith(close) && !s.includes(open)) s = s.slice(0, -1);
+  }
+  if (!s) return '';
   let u;
   try { u = new URL(s); } catch { return ''; }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
@@ -1185,6 +1207,7 @@ module.exports = {
   readLatestPeers,
   // news_feed
   priorityForItem,      // derived priority, used by writeNewsItems
+  sanitizeSourceUrl,    // exported for the URL-hardening tests in __tests__/
   writeNewsItems,
   readNewsFeed,
   readNewsPins,         // GET /api/news/pins — chart pins, uncapped by the feed's 500

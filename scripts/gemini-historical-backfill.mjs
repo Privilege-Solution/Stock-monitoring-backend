@@ -176,11 +176,15 @@ async function main() {
 
     for (const item of result.items) {
       totalFound++;
-      // Resolve date — use YYYY-MM if full date not available
-      let date = item.date || `${y.year}-01-01`;
-      // Truncate to YYYY-MM-DD; if only YYYY-MM, pad to -01
-      if (/^\d{4}-\d{2}$/.test(date)) date = date + '-01';
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = `${y.year}-06-01`; // mid-year fallback
+      // Skip rather than invent — same rule as gemini-all-category-backfill.
+      // This script is where the damage came from: its `${y.year}-06-01`
+      // fallback and `-01` day-padding put 478 rows on a day no outlet
+      // published on, 44 of which draw a chart pin.
+      const date = String(item.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        console.log(`  – skip (no usable date: "${item.date || ''}")  "${String(item.headline).slice(0, 50)}"`);
+        continue;
+      }
 
       // Find URL from grounding chunks
       const ground = bestGroundUrl(item, result.chunks);
