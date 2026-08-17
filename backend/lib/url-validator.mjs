@@ -13,45 +13,100 @@
 //       fetches to separate a live article from a 404, a bot-block, and a
 //       soft-404. Costs a round trip, so callers rate-limit it.
 //
-// STATUS VOCABULARY (stored in news_feed.source_url_status):
-//   valid        fetched, 2xx, and the page looks like the article
-//   dead         404 / 410, or a confident soft-404
-//   blocked      401 / 403 — the site refuses BOTS. Says nothing about whether
-//                the article exists; a reader in a browser very likely sees it.
-//                Never conflate with dead.
-//   rate_limited 429 — we were throttled. Retry later, decide nothing now.
-//   homepage     resolves to a site root / section index, not an article
-//   mismatch     the link does not belong to the story or the stated publisher
-//   timeout      the request did not finish inside the budget
-//   unsafe       SSRF target, non-http(s) scheme, or a known redirector
-//   unknown      5xx, DNS/network error, or anything we cannot judge.
-//                THE DEFAULT ON DOUBT — a single network blip must never
-//                promote a link to `dead`.
+// STATUS VOCABULARY (stored in news_feed.source_url_status), grouped by what
+// the verdict lets you DO — which is the only distinction that matters
+// downstream:
+//
+//   The link is good
+//     valid                   2xx, article-shaped, right publisher, and the
+//                             page's own title matches the stored headline
+//
+//   Proof the link is wrong — safe to hide
+//     dead                    404 / 410
+//     soft_404                200, but the page's title says "not found"
+//     homepage                resolves to a site root or section index
+//     mismatch                hostname belongs to a different publisher than
+//                             source_label names
+//     title_mismatch_high     page loads, but it is a different story — no
+//                             shared entity, number or text. This is the ~350
+//                             rows nothing else could see.
+//     unsafe                  SSRF target, bad scheme, known redirector
+//
+//   We could not tell — MUST NOT drive an automated hide
+//     blocked                 401 / 403. The site refuses BOTS. Says nothing
+//                             about whether the article exists; one of these
+//                             was opened by hand and loaded correctly.
+//     rate_limited            429 — throttled, decide nothing now
+//     timeout                 no response inside the budget
+//     network_error           DNS / TLS / connection reset
+//     unknown                 5xx and anything else unjudgeable
+//     title_unknown           the page title is generic ("MSN", the site name)
+//     title_mismatch_medium   partial overlap. Thai publishers rewrite
+//                             headlines heavily, so this is as often a rewrite
+//                             as an error — report it, let a human decide.
+//     unchecked               never looked at
+//
+// The asymmetry is deliberate and load-bearing: "we could not check it" and
+// "we checked and it is wrong" are different facts, and only the second one
+// justifies taking a link away from a reader.
 //
 // Nothing here deletes or rewrites data. The validator reports; callers decide.
 // =============================================================================
 
 import { isIP } from 'node:net';
 import { labelMatchesHost, publisherForHost } from './publisher-hosts.mjs';
+import { extractPageTitle, compareHeadlineToTitle, TITLE_VERDICT } from './title-match.mjs';
 
 export const STATUS = Object.freeze({
   VALID: 'valid',
-  DEAD: 'dead',
-  BLOCKED: 'blocked',
-  RATE_LIMITED: 'rate_limited',
-  HOMEPAGE: 'homepage',
-  MISMATCH: 'mismatch',
+  DEAD: 'dead',                          // 404 / 410
+  SOFT_404: 'soft_404',                  // 200, but the page says "not found"
+  BLOCKED: 'blocked',                    // 401 / 403 — bot block, NOT proof of absence
+  RATE_LIMITED: 'rate_limited',          // 429
+  HOMEPAGE: 'homepage',                  // resolves to a root / section index
+  MISMATCH: 'mismatch',                  // wrong publisher for this source_label
+  TITLE_MISMATCH_HIGH: 'title_mismatch_high',      // page is a different story
+  TITLE_MISMATCH_MEDIUM: 'title_mismatch_medium',  // partial overlap — human call
+  TITLE_UNKNOWN: 'title_unknown',        // page title is generic ("MSN")
   TIMEOUT: 'timeout',
+  NETWORK_ERROR: 'network_error',        // DNS / TLS / reset — transient
   UNSAFE: 'unsafe',
-  UNKNOWN: 'unknown',
+  UNKNOWN: 'unknown',                    // 5xx and anything unjudgeable
   UNCHECKED: 'unchecked',
 });
 
-// Statuses a link may still be offered to the reader under. `blocked` is here
-// on purpose: the page exists, our crawler just is not welcome. See the note
-// in the STATUS block.
+// Statuses under which a link may still be offered to the reader.
+//
+// The membership rule is EVIDENCE, not confidence: a status is clickable
+// unless we have positive proof the link does not lead to this story.
+//   blocked / rate_limited / timeout / network_error / unknown
+//       → we could not look. 60 rows are bot-blocks and one was opened by hand
+//         in a real browser and loaded the correct article. Hiding these throws
+//         away working journalism.
+//   title_unknown
+//       → MSN and friends return their own name as the title. That is a fact
+//         about the page's markup, not about the link.
+//   title_mismatch_medium
+//       → partial overlap. Reported for a human to judge; not hidden, because
+//         Thai publishers rewrite headlines heavily and a medium verdict is as
+//         often a rewrite as an error.
 export const CLICKABLE_STATUSES = new Set([
-  STATUS.VALID, STATUS.BLOCKED, STATUS.RATE_LIMITED, STATUS.UNKNOWN, STATUS.UNCHECKED,
+  STATUS.VALID, STATUS.BLOCKED, STATUS.RATE_LIMITED, STATUS.TIMEOUT,
+  STATUS.NETWORK_ERROR, STATUS.UNKNOWN, STATUS.UNCHECKED,
+  STATUS.TITLE_UNKNOWN, STATUS.TITLE_MISMATCH_MEDIUM,
+]);
+
+// Statuses that PROVE the stored link is not this article. Only these may ever
+// drive an automated hide, and remediation gates title_mismatch_high behind an
+// extra flag on top of that.
+export const PROVEN_WRONG_STATUSES = new Set([
+  STATUS.DEAD, STATUS.SOFT_404, STATUS.HOMEPAGE, STATUS.MISMATCH,
+  STATUS.UNSAFE, STATUS.TITLE_MISMATCH_HIGH,
+]);
+
+// Failures worth retrying. A single blip must never be recorded as `dead`.
+export const TRANSIENT_STATUSES = new Set([
+  STATUS.TIMEOUT, STATUS.NETWORK_ERROR, STATUS.RATE_LIMITED, STATUS.UNKNOWN,
 ]);
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -239,6 +294,53 @@ export function isHomepageLike(url) {
   } catch { return false; }
 }
 
+// --- canonicalization ----------------------------------------------------------
+
+// Query parameters that identify the CAMPAIGN, not the article. Removing them
+// makes two links to one story compare equal.
+const TRACKING_PARAMS = [
+  /^utm_/i, /^fbclid$/i, /^gclid$/i, /^dclid$/i, /^msclkid$/i, /^igshid$/i,
+  /^mc_[ce]id$/i, /^_ga$/i, /^ref$/i, /^ref_src$/i, /^source$/i, /^spm$/i,
+  /^cmpid$/i, /^campaign$/i, /^si$/i, /^feature$/i, /^__twitter_impression$/i,
+];
+
+/**
+ * One canonical spelling per article, so duplicate detection and the per-run
+ * cache do not treat cosmetic variants as different links.
+ *
+ * Normalises: scheme + host case, default ports, the `#fragment` (never sent to
+ * the server and never part of an article's identity), tracking parameters,
+ * remaining query-parameter order, and a trailing slash.
+ *
+ * Deliberately does NOT drop `www.` — some publishers serve different content
+ * on the apex — nor rewrite http→https, which would assert a fact we have not
+ * checked. Returns the input unchanged when it cannot be parsed.
+ */
+export function canonicalizeUrl(raw) {
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  if (!s) return '';
+  let u;
+  try { u = new URL(s); } catch { return s; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return s;
+
+  u.hash = '';
+  u.hostname = u.hostname.toLowerCase();
+  if ((u.protocol === 'http:' && u.port === '80') || (u.protocol === 'https:' && u.port === '443')) u.port = '';
+
+  const keep = [];
+  for (const [k, v] of u.searchParams) if (!TRACKING_PARAMS.some(re => re.test(k))) keep.push([k, v]);
+  keep.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  u.search = '';
+  for (const [k, v] of keep) u.searchParams.append(k, v);
+
+  // Collapse duplicate slashes and drop the trailing one, except on the root
+  // where "/" IS the path.
+  u.pathname = u.pathname.replace(/\/{2,}/g, '/');
+  if (u.pathname.length > 1) u.pathname = u.pathname.replace(/\/+$/, '');
+
+  return u.toString();
+}
+
 // --- offline classification ---------------------------------------------------
 
 /**
@@ -299,6 +401,10 @@ const NOT_FOUND_PHRASES = [
   'no longer available', 'content unavailable', 'page removed',
   'ไม่พบหน้าที่ต้องการ', 'ไม่พบหน้าเว็บ', 'ไม่พบข้อมูล', 'ไม่พบบทความ',
   'ขออภัย ไม่พบ', 'หน้าที่คุณค้นหาไม่พบ', 'ไม่พบหน้านี้',
+  // Seen on สยามรัฐ in a live run, where it was reaching the title check and
+  // being reported as "a different story" — accurate but less useful than
+  // naming it a soft-404.
+  'ไม่พบเนื้อหา', 'ไม่พบรายการ', 'เนื้อหาไม่พร้อมใช้งาน',
 ];
 
 const stripTags = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -371,6 +477,7 @@ async function readCapped(res, maxBytes) {
  */
 export async function validateUrl(rawUrl, {
   sourceLabel = null,
+  headline = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxRedirects = DEFAULT_MAX_REDIRECTS,
   maxBytes = DEFAULT_MAX_BYTES,
@@ -398,8 +505,10 @@ export async function validateUrl(rawUrl, {
         return { ...base, status: STATUS.TIMEOUT, reason: `no response in ${timeoutMs}ms`, finalUrl: current, redirects };
       }
       // DNS failure, TLS error, connection reset. NOT dead — a transient
-      // network fault must never be recorded as a removed article.
-      return { ...base, status: STATUS.UNKNOWN, reason: `network error: ${String(e?.message || e).slice(0, 120)}`, finalUrl: current, redirects };
+      // network fault must never be recorded as a removed article. Kept
+      // separate from the 5xx `unknown` so the audit can retry exactly the
+      // failures that are worth retrying.
+      return { ...base, status: STATUS.NETWORK_ERROR, reason: `network error: ${String(e?.message || e).slice(0, 120)}`, finalUrl: current, redirects };
     }
 
     const code = res.status;
@@ -453,9 +562,10 @@ export async function validateUrl(rawUrl, {
     const soft = detectSoft404(html, finalUrl);
     if (soft.soft404) {
       // Landing on a site root after a redirect is the classic "article gone,
-      // bounced to home" shape. Report it as homepage rather than dead when the
-      // status line itself was fine — the distinction matters to the operator.
-      const st = isHomepageLike(finalUrl) ? STATUS.HOMEPAGE : STATUS.DEAD;
+      // bounced to home" shape. Report it as homepage rather than soft_404 when
+      // the status line itself was fine — the distinction matters to whoever
+      // decides what to do about it.
+      const st = isHomepageLike(finalUrl) ? STATUS.HOMEPAGE : STATUS.SOFT_404;
       return { ...base, status: st, reason: `soft-404: ${soft.reason}`, httpStatus: code, finalUrl, host: finalHost, redirects };
     }
 
@@ -470,8 +580,64 @@ export async function validateUrl(rawUrl, {
       }
     }
 
-    return { ...base, status: STATUS.VALID, reason: null, httpStatus: code, finalUrl, host: finalHost, redirects };
+    // Does the page carry THIS story? Everything above only establishes that
+    // something loaded from the right publisher; ~350 rows pass all of it while
+    // pointing at an unrelated article. Only runs when the caller supplies the
+    // headline — without one there is nothing to compare and the link stays
+    // `valid` on the strength of the earlier checks.
+    const { title: pageTitle, source: titleSource } = extractPageTitle(html);
+    if (headline) {
+      const cmp = compareHeadlineToTitle(headline, pageTitle, { host: finalHost });
+      const shared = { httpStatus: code, finalUrl, host: finalHost, redirects,
+                       pageTitle: cmp.pageTitle, titleSource, matchScore: cmp.score };
+      if (cmp.verdict === TITLE_VERDICT.MISMATCH_HIGH) {
+        return { ...base, ...shared, status: STATUS.TITLE_MISMATCH_HIGH, reason: cmp.reason };
+      }
+      if (cmp.verdict === TITLE_VERDICT.MISMATCH_MEDIUM) {
+        return { ...base, ...shared, status: STATUS.TITLE_MISMATCH_MEDIUM, reason: cmp.reason };
+      }
+      if (cmp.verdict === TITLE_VERDICT.UNKNOWN) {
+        return { ...base, ...shared, status: STATUS.TITLE_UNKNOWN, reason: cmp.reason };
+      }
+      return { ...base, ...shared, status: STATUS.VALID, reason: cmp.reason };
+    }
+
+    return { ...base, status: STATUS.VALID, reason: null, httpStatus: code, finalUrl,
+             host: finalHost, redirects, pageTitle, titleSource, matchScore: null };
   }
+}
+
+// --- retry ---------------------------------------------------------------------
+
+/**
+ * validateUrl, retrying only the failures that are worth retrying.
+ *
+ * A publisher that rate-limits us, or one TCP reset, must not end up recorded
+ * as a broken link — that is how a working article gets its link taken away.
+ * So `timeout`, `network_error`, `rate_limited` and `unknown` get another go
+ * with exponential backoff and jitter; every other verdict is returned
+ * immediately, because retrying a 404 only wastes the publisher's bandwidth.
+ *
+ * `attempts` is reported so the caller can persist it: a link that has failed
+ * transiently five times across five audits is a different thing from one that
+ * failed once, and only the operator should decide what to do about it.
+ *
+ * 429 is honoured politely — Retry-After is not parsed here (the response is
+ * gone by now), but the backoff floor is raised so we do not hammer.
+ */
+export async function validateUrlWithRetry(rawUrl, opts = {}) {
+  const { retries = 2, retryBaseMs = 700, ...rest } = opts;
+  let last = null;
+  for (let attempt = 1; attempt <= Math.max(1, retries + 1); attempt++) {
+    last = await validateUrl(rawUrl, rest);
+    last.attempts = attempt;
+    if (!TRANSIENT_STATUSES.has(last.status)) return last;
+    if (attempt > retries) break;
+    const floor = last.status === STATUS.RATE_LIMITED ? retryBaseMs * 3 : retryBaseMs;
+    const wait = floor * Math.pow(2, attempt - 1) * (0.5 + Math.random());
+    await new Promise(r => setTimeout(r, wait));
+  }
+  return last;
 }
 
 // --- per-run cache + concurrency ----------------------------------------------
@@ -514,6 +680,7 @@ export async function mapLimit(items, limit, fn) {
 }
 
 export default {
-  STATUS, CLICKABLE_STATUSES, validateUrl, classifyUrlOffline,
+  STATUS, CLICKABLE_STATUSES, PROVEN_WRONG_STATUSES, TRANSIENT_STATUSES,
+  validateUrl, validateUrlWithRetry, classifyUrlOffline, canonicalizeUrl,
   isHomepageLike, isUnsafeHost, detectSoft404, createValidationCache, mapLimit,
 };

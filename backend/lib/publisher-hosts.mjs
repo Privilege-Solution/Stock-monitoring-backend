@@ -62,6 +62,27 @@ export const HOST_ALIASES = {
   'aec10news.com':       ['AEC10News'],
   'thephuketnews.com':   ['The Phuket News'],
   'investing.com':       ['Investing.com', 'Investing'],
+  // Added from a live host census — every one of these appears in news_feed
+  // and had no entry, so labelMatchesHost() could only answer 'unknown' for
+  // them and isGenericTitle() could not recognise their name-only titles.
+  'banmuang.co.th':      ['บ้านเมือง', 'Banmuang'],
+  'thaipbs.or.th':       ['Thai PBS', 'ไทยพีบีเอส', 'Thai PBS News'],
+  'share2trade.com':     ['Share2Trade', 'แชร์ทูเทรด'],
+  'efinancethai.com':    ['eFinanceThai', 'อีไฟแนนซ์ไทย', 'สำนักข่าวอีไฟแนนซ์ไทย'],
+  'positioningmag.com':  ['Positioning', 'Positioning Magazine'],
+  'brandbuffet.in.th':   ['Brand Buffet', 'BrandBuffet'],
+  'innovestx.co.th':     ['InnovestX', 'InnovestX Research'],
+  'kasikornresearch.com':['KASIKORN RESEARCH CENTER', 'ศูนย์วิจัยกสิกรไทย', 'K-Research'],
+  'krungsri.com':        ['Krungsri', 'กรุงศรี', 'Krungsri The COACH'],
+  'pi.financial':        ['Pi Securities', 'Pi Financial'],
+  'bbc.com':             ['BBC', 'BBC News', 'บีบีซี'],
+  'workpointtoday.com':  ['workpointTODAY', 'Workpoint Today'],
+  'thaihometown.com':    ['Thaihometown'],
+  'aio.panphol.com':     ['AiO'],
+  'insiderscreener.com': ['InsiderScreener'],
+  'thebetter.co.th':     ['The Better'],
+  'innnews.co.th':       ['สำนักข่าว INN', 'INN News', 'ไอเอ็นเอ็น'],
+  'amarintv.com':        ['AmarinTV', 'อมรินทร์ทีวี'],
 };
 
 // Hosts that legitimately republish another outlet's article. On these, the
@@ -79,6 +100,7 @@ export const SYNDICATION_HOSTS = new Set([
   // on one of these hosts is correct by design, not a mispairing. Without this
   // the checker flags every central-bank and government release it ingests.
   'thaipr.net',
+  'today.line.me',
   'ryt9.com',
   'newswit.com',
   'prnewswire.com',

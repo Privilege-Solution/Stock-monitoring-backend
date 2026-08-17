@@ -9,8 +9,9 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import {
-  STATUS, validateUrl, classifyUrlOffline, isHomepageLike, isUnsafeHost,
-  detectSoft404, createValidationCache,
+  STATUS, validateUrl, validateUrlWithRetry, classifyUrlOffline, isHomepageLike,
+  isUnsafeHost, detectSoft404, createValidationCache, canonicalizeUrl,
+  PROVEN_WRONG_STATUSES, TRANSIENT_STATUSES, CLICKABLE_STATUSES,
 } from '../url-validator.mjs';
 import { labelMatchesHost } from '../publisher-hosts.mjs';
 
@@ -246,11 +247,14 @@ test('timeout → timeout, never dead', async () => {
   assert.notEqual(r.status, STATUS.DEAD);
 });
 
-test('a network error is unknown, never dead', async () => {
+test('a network error is network_error, never dead', async () => {
+  // Split out of `unknown` so the audit can retry exactly the failures worth
+  // retrying. The load-bearing assertion is the second one.
   const boom = () => Promise.reject(Object.assign(new Error('ECONNRESET'), { name: 'TypeError' }));
   const r = await validateUrl('https://a.co/news/1234567', { fetchImpl: boom });
-  assert.equal(r.status, STATUS.UNKNOWN);
+  assert.equal(r.status, STATUS.NETWORK_ERROR);
   assert.notEqual(r.status, STATUS.DEAD);
+  assert.ok(TRANSIENT_STATUSES.has(r.status), 'must be retryable');
 });
 
 // --- redirects ---------------------------------------------------------------
@@ -286,15 +290,18 @@ test('an article that bounces to the site root is homepage, not valid', async ()
 
 // --- soft-404 ----------------------------------------------------------------
 
-test('200 with a not-found title is a soft-404', async () => {
+test('200 with a not-found title is soft_404', async () => {
+  // Its own status now: a 200 that lies is operationally different from a
+  // publisher that correctly returns 404, even though both mean "gone".
   const r = await validateUrl(`${MOCK}/news/soft404-900001`, httpOpts());
-  assert.equal(r.status, STATUS.DEAD);
+  assert.equal(r.status, STATUS.SOFT_404);
   assert.match(r.reason, /soft-404/);
+  assert.ok(PROVEN_WRONG_STATUSES.has(r.status), 'still proof the link is wrong');
 });
 
-test('200 with a Thai not-found title is a soft-404', async () => {
+test('200 with a Thai not-found title is soft_404', async () => {
   const r = await validateUrl(`${MOCK}/news/softthai-900002`, httpOpts());
-  assert.equal(r.status, STATUS.DEAD);
+  assert.equal(r.status, STATUS.SOFT_404);
 });
 
 test('soft-404 detection does not fire on a real article', () => {

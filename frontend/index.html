@@ -2337,8 +2337,28 @@ function safeUrl(u) {
  * evidence the link does not lead to this story. Those never render as an
  * article link. The headline, summary, date and category still render — the
  * news item is not lost, only its (wrong) link. */
-const LINK_STATUS_CLICKABLE = new Set(['valid', 'unchecked', 'unknown', 'rate_limited', 'timeout', 'blocked', null, undefined, '']);
-const LINK_STATUS_UNVERIFIED = new Set(['blocked', 'rate_limited', 'timeout', 'unknown']);
+/* Mirrors CLICKABLE_STATUSES in backend/lib/url-validator.mjs. The split is by
+ * EVIDENCE, not confidence: a link is offered unless we have positive proof it
+ * does not lead to this story.
+ *
+ * Withheld  dead, soft_404, homepage, mismatch, title_mismatch_high, unsafe
+ *           — we checked, and the page is not this article.
+ * Offered   everything else, including the ones we could not check. */
+const LINK_STATUS_CLICKABLE = new Set([
+  'valid', 'unchecked', 'unknown', 'rate_limited', 'timeout', 'network_error',
+  'blocked', 'title_unknown', 'title_mismatch_medium', null, undefined, '',
+]);
+
+/* Offered, but with a marker — we could not confirm the page is the article.
+ * `blocked` is the big one: 60 rows are publisher bot-blocks and a spot-check
+ * opened one in a real browser onto the correct story. */
+const LINK_STATUS_UNVERIFIED = new Set([
+  'blocked', 'rate_limited', 'timeout', 'network_error', 'unknown', 'title_unknown',
+]);
+
+/* Offered, but the page's own title only partly matches ours. Distinct wording
+ * from the above because the doubt is about WHICH story, not about reachability. */
+const LINK_STATUS_WEAK_MATCH = new Set(['title_mismatch_medium']);
 
 // The URL to render as a clickable article link, or null.
 function articleHref(item) {
@@ -2349,9 +2369,14 @@ function articleHref(item) {
   return LINK_STATUS_CLICKABLE.has(st) ? u : null;
 }
 
-// True when we have a link but could not confirm it — show it, flag it.
-function linkUnverified(item) {
-  return !!item && LINK_STATUS_UNVERIFIED.has(item.source_url_status);
+// A short Thai caveat for a link we are offering but could not confirm, or
+// null when the link needs no caveat.
+function linkCaveat(item) {
+  if (!item) return null;
+  const st = item.source_url_status;
+  if (LINK_STATUS_WEAK_MATCH.has(st)) return 'เนื้อหาอาจไม่ตรงพาดหัว';
+  if (LINK_STATUS_UNVERIFIED.has(st)) return 'ตรวจสอบอัตโนมัติไม่ได้';
+  return null;
 }
 
 // Inline SVG icon helper (Feather-inspired, MIT).
@@ -3225,6 +3250,7 @@ function buildMergedNewsItems() {
     // migrate-v11 — carried through so the renderer can tell "we checked and
     // this link is wrong" from "we have not checked yet".
     source_url_status: n.source_url_status || null,
+    source_url_title: n.source_url_title || null,   // migrate-v12 — tooltip evidence
     sourceLabel: n.source_label,
     impact: n.impact,
     severity: n.severity,
@@ -3386,7 +3412,7 @@ function renderUnifiedNewsItem(item) {
   // against (dead / homepage / mismatch / unsafe). null => plain <span>, so the
   // headline, summary and date still render — a bad link never costs the item.
   const href = articleHref(item);
-  const unverified = href && linkUnverified(item);
+  const caveat = href ? linkCaveat(item) : null;
   const isManual = item.pipeline === 'manual';
   const manualBadge = isManual ? `<span class="news-manual-badge th">เพิ่มเอง</span>` : '';
   const delBtn = (item.id != null)
@@ -3405,7 +3431,7 @@ function renderUnifiedNewsItem(item) {
       </div>
       ${href
         ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>` +
-          (unverified ? `<span class="news-link-warn th" title="เปิดลิงก์ได้ แต่ระบบตรวจสอบอัตโนมัติไม่ได้ (เว็บบล็อกบอต)">ตรวจสอบอัตโนมัติไม่ได้</span>` : '')
+          (caveat ? `<span class="news-link-warn th" title="${escapeHtml(item.source_url_title ? 'หัวข้อหน้าเว็บ: ' + item.source_url_title : 'ระบบยืนยันหน้าปลายทางไม่ได้')}">${escapeHtml(caveat)}</span>` : '')
         : `<span class="news-card-title th" style="cursor:default">${escapeHtml(item.text)}</span>`
       }
       ${summaryHtml}

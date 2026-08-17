@@ -18,6 +18,13 @@ const { createHash } = require('node:crypto');
 // weekend or SET holiday (which would show as a price-less point on the chart).
 const { isTradingDay } = require('./lib/thai-trading-days');
 
+// Lazily loaded ESM: db.js is CommonJS. canonicalizeUrl is pure and has no
+// side effects, so a synchronous fallback to the raw string is safe until the
+// module resolves on first use.
+let _canon = null;
+import('./lib/url-validator.mjs').then(m => { _canon = m.canonicalizeUrl; }).catch(() => {});
+const canonicalizeUrl = (u) => (_canon ? _canon(u) : u);
+
 // Normalize a date string to ensure the year is CE, not BE.
 // Gemini backfill scripts sometimes return Buddhist-era years (e.g. 2568
 // instead of 2025). This function catches them at the DB boundary so
@@ -204,7 +211,18 @@ async function ensureSchema() {
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_http_status INTEGER;
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_final TEXT;
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_validation_reason TEXT;
+    -- migrate-v12: evidence for a title verdict. A link can be live, on the
+    -- right publisher, and still be a different story; source_url_title is the
+    -- title the page actually served and match_score the similarity to our
+    -- headline, so a "this is the wrong article" claim is checkable rather than
+    -- asserted. check_attempts separates "failed once" from "failed on five
+    -- separate audits" — a publisher having a bad afternoon must not look the
+    -- same as a genuinely broken link.
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_check_attempts INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_title TEXT;
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_match_score REAL;
     CREATE INDEX IF NOT EXISTS news_feed_url_status_idx ON news_feed (source_url_status) WHERE hidden = FALSE;
+    CREATE INDEX IF NOT EXISTS news_feed_url_recheck_idx ON news_feed (source_url_status, source_url_checked_at NULLS FIRST) WHERE hidden = FALSE;
     CREATE INDEX IF NOT EXISTS news_feed_url_checked_idx ON news_feed (source_url_checked_at NULLS FIRST) WHERE hidden = FALSE;
     CREATE UNIQUE INDEX IF NOT EXISTS news_feed_title_hash_idx ON news_feed (title_hash);
     CREATE INDEX IF NOT EXISTS news_feed_date_idx     ON news_feed (date DESC);
@@ -810,7 +828,10 @@ function sanitizeSourceUrl(raw) {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
   if (/vertexaisearch|grounding-api-redirect/i.test(s)) return '';
   if (u.hostname === 'vertexaisearch.cloud.google.com') return '';
-  return s;
+  // Canonical spelling — fragment, tracking params, host case and a trailing
+  // slash removed. Applied HERE so every ingestion path stores one form per
+  // article and the duplicate checks compare like with like.
+  return canonicalizeUrl(s);
 }
 
 // Multi-row INSERT with ON CONFLICT (title_hash) DO NOTHING. The unique index
@@ -840,8 +861,8 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 20;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17},$${base+18},$${base+19},$${base+20})`);
+    const base = i * 23;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17},$${base+18},$${base+19},$${base+20},$${base+21},$${base+22},$${base+23})`);
     params.push(
       it.title,
       normalizeDateYear(it.date),
@@ -879,6 +900,10 @@ async function writeNewsItems(items) {
       it.source_url_http_status ?? null,
       it.source_url_final ?? null,
       it.source_url_validation_reason ?? null,
+      // migrate-v12
+      it.source_url_check_attempts ?? 0,
+      it.source_url_title ?? null,
+      it.source_url_match_score ?? null,
     );
   });
   const r = await p.query(`
@@ -888,7 +913,9 @@ async function writeNewsItems(items) {
                            url_verified,
                            source_url_status, source_url_checked_at,
                            source_url_http_status, source_url_final,
-                           source_url_validation_reason)
+                           source_url_validation_reason,
+                           source_url_check_attempts, source_url_title,
+                           source_url_match_score)
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
@@ -988,7 +1015,8 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
                       impact_level, user_note, chart_marked, url_verified,
-                      source_url_status, source_url_final
+                      source_url_status, source_url_final,
+                      source_url_title, source_url_match_score
                FROM news_feed
                WHERE ${where.join(' AND ')}
                ORDER BY display_priority DESC, date DESC, id DESC

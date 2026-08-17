@@ -111,7 +111,10 @@ const DATE_DISCIPLINE = (today, todayIso) => ((oldestIso) => `
 
 สำหรับทุกข่าว ต้องแยกวันที่ออกเป็น 2 อย่าง:
 - EVENT_DATE  = วันที่เหตุการณ์เกิดขึ้นจริง (เช่น วันที่ ครม. มีมติ, วันที่ประกาศงบ)
-- PUBLISH_DATE = วันที่บทความถูกเผยแพร่หรือแก้ไขล่าสุด
+- PUBLISH_DATE = วันที่บทความถูก "เผยแพร่ครั้งแรก" (datePublished) เท่านั้น
+  ห้ามใช้วันที่แก้ไขล่าสุด (dateModified) และห้ามใช้วันที่คุณค้นเจอบทความ
+  ถ้าหน้าเว็บแสดงทั้งวันเผยแพร่และวันแก้ไข ให้ใช้วันเผยแพร่เสมอ
+  ถ้าระบุวันเผยแพร่ครั้งแรกไม่ได้ ให้ตอบ PUBLISH_DATE: UNKNOWN ห้ามเดา
 
 เกณฑ์ตัดสิน: ถ้า EVENT_DATE อยู่นอกช่วง ${oldestIso} ถึง ${todayIso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็นวันนี้ก็ตาม
 EVENT_DATE ที่ถูกต้องสำคัญมาก เพราะระบบใช้ค่านี้เป็น "วันที่ของข่าว" บนกราฟราคา
@@ -636,9 +639,23 @@ function parseAIResult(text, pipeline, grounding) {
     // event_date === today. While that gate stood, every surviving row had
     // event_date === today or null, so preferring event_date here returned
     // today either way and changed nothing. The two are one fix, not two.
-    const date = eventDate
-      || publishDate
-      || (/^\d{4}-\d{2}-\d{2}$/.test(statedDate) ? statedDate : todayISO());
+    // Order of preference, and the reason each rank sits where it does:
+    //   event_date   — when the thing HAPPENED. What the price chart is about.
+    //   publish_date — when the outlet FIRST published (datePublished). The
+    //                  prompt now forbids dateModified and the crawl date
+    //                  explicitly, and asks for UNKNOWN rather than a guess: a
+    //                  page edited today about last week's story would
+    //                  otherwise report today and land on the wrong day.
+    //   stated DATE  — a volunteered date line; rare, the prompts don't ask.
+    //   todayISO()   — genuinely last. Reaching here means we are stamping the
+    //                  CRAWL date, which is the bug this ordering exists to
+    //                  avoid, so it is logged rather than applied silently.
+    let date = eventDate || publishDate;
+    if (!date && /^\d{4}-\d{2}-\d{2}$/.test(statedDate)) date = statedDate;
+    if (!date) {
+      date = todayISO();
+      console.warn(`[gemini] no event/publish date for "${String(get('HEADLINE')).slice(0, 48)}" — falling back to the crawl date ${date}`);
+    }
 
     return {
       date,                                      // event > publish > stated > ICT today
