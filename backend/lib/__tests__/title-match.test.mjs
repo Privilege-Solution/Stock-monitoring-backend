@@ -331,3 +331,35 @@ test('an unspaced hyphen is compound punctuation, not a publisher suffix', () =>
   // A SPACED separator still cuts.
   assert.equal(stripSiteSuffix('ครม. ไฟเขียวลดค่าโอน 0.01% - ฐานเศรษฐกิจ'), 'ครม. ไฟเขียวลดค่าโอน 0.01%');
 });
+
+test('an abbreviation and its full name are one entity', () => {
+  // Caught while about to hide 59 links: this pair is the SAME story — the
+  // BOT's own page for the rate decision — and was scored a HIGH mismatch
+  // purely because the headline says "กนง." and the page says the full name.
+  // Demoting it to medium keeps the link and asks a human instead.
+  const r = compareHeadlineToTitle(
+    'กนง. มีมติลดอัตราดอกเบี้ยนโยบาย 0.25% เหลือ 2.00% ต่อปี',
+    'ผลการประชุมคณะกรรมการนโยบายการเงิน ครั้งที่ 1/2568',
+    { host: 'bot.or.th' });
+  assert.notEqual(r.verdict, TITLE_VERDICT.MISMATCH_HIGH, r.reason);
+  assert.ok(r.sharedEntities >= 1);
+});
+
+test('a warrant headline matches the warrant-holder page', () => {
+  const r = compareHeadlineToTitle(
+    '[ASW-W2 กำหนดการใช้สิทธิครั้งแรก ระหว่างวันที่ 17-21 เมษายน 2566]',
+    'ข้อมูลสำหรับผู้ถือใบสำคัญแสดงสิทธิ',
+    { host: 'assetwise.co.th' });
+  assert.notEqual(r.verdict, TITLE_VERDICT.MISMATCH_HIGH, r.reason);
+});
+
+test('genuinely unrelated pages stay HIGH after the alias widening', () => {
+  for (const [h, t] of [
+    ['รัฐบาลเร่งแก้ผลกระทบรถไฟฟ้าสายสีม่วง', 'มาจริงคงโหด "ลิเวอร์พูล" เกือบได้ "แข้ง 4 พันล้าน"'],
+    ['ตลาดอสังหาฯ ครึ่งปีแรก 69 โครงการใหม่ลด', 'คดี "แอชตัน อโศก" ล่าสุด "ศรีสุวรรณ" บี้ กทม.'],
+    ['ศุภาลัยกำไร Q2/69 พุ่ง 36%', 'สมเด็จพระบรมราชชนนีพันปีหลวง พระราชทานคำขวัญ วันแม่แห่งชาติ'],
+  ]) {
+    assert.equal(compareHeadlineToTitle(h, t, { host: 'siamrath.co.th' }).verdict,
+                 TITLE_VERDICT.MISMATCH_HIGH, h);
+  }
+});

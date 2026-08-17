@@ -239,9 +239,25 @@ function containmentScore(a, b) {
 // Organisations, agencies and tickers whose presence in BOTH texts is strong
 // evidence they discuss the same thing — and whose presence in only one is
 // strong evidence they do not.
+// Each entry must list the ABBREVIATION and the FULL NAME together. Thai
+// institutions are referred to both ways and a headline routinely uses one
+// while the publisher's own page title uses the other:
+//
+//   ours: "กนง. มีมติลดอัตราดอกเบี้ยนโยบาย 0.25%"
+//   page: "ผลการประชุมคณะกรรมการนโยบายการเงิน ครั้งที่ 1/2568"   ← same story
+//
+// That pair was scored a HIGH mismatch and would have had a correct link to
+// the BOT's own decision page taken away. Abbreviation and full name are one
+// entity or the check punishes publishers for writing formally.
 const ENTITY_PATTERNS = [
-  /ครม\.?|คณะรัฐมนตรี/g, /กนง\.?/g, /ธปท\.?|ธนาคารแห่งประเทศไทย/g,
-  /ก\.ล\.ต\.?/g, /ธอส\.?/g, /กรมที่ดิน/g, /ราชกิจจา\w*/g, /สศช\.?|สภาพัฒน์/g,
+  /ครม\.?|คณะรัฐมนตรี/g,
+  /กนง\.?|คณะกรรมการนโยบายการเงิน|คณะกรรมการนโยบายการเงิน\s*\(กนง\.?\)/g,
+  /ธปท\.?|ธนาคารแห่งประเทศไทย|แบงก์ชาติ/g,
+  /ก\.ล\.ต\.?|สำนักงานคณะกรรมการกำกับหลักทรัพย์/g,
+  /ธอส\.?|ธนาคารอาคารสงเคราะห์/g, /กรมที่ดิน/g, /ราชกิจจา\w*/g,
+  /สศช\.?|สภาพัฒน์|สำนักงานสภาพัฒนาการเศรษฐกิจ/g,
+  /กกร\.?|คณะกรรมการร่วมภาคเอกชน/g,
+  /ใบสำคัญแสดงสิทธิ|วอร์แรนต์|warrant|-W\d\b/gi,
   /REIC|ศูนย์ข้อมูลอสังหาริมทรัพย์/gi, /BOI/g, /Fed|เฟด/g, /BOJ/g, /ECB/g,
   /\bASW\b|AssetWise|แอสเซทไวส์/gi, /\bSPALI\b|ศุภาลัย/gi, /\bAP\b|เอพี/g,
   /\bLH\b|แลนด์แอนด์เฮ้าส์/gi, /\bSIRI\b|แสนสิริ/gi, /\bORI\b|ออริจิ้น/gi,
