@@ -122,6 +122,17 @@
     background: color-mix(in srgb, var(--primary) 14%, transparent);
     padding: 0.05rem 0.4rem; border-radius: 0.25rem; margin-left: 0.35rem;
   }
+  /* Shown next to a link we could offer but could not verify — HTTP 401/403
+     (the publisher blocks crawlers), a timeout, or a 5xx. The link still works
+     for a human, so it stays clickable; the marker is there so a dead-looking
+     click is not a surprise. Deliberately quiet: this is a caveat, not a
+     warning, and it must not compete with the headline. */
+  .news-link-warn {
+    font-size: 0.6rem; font-weight: 500; color: var(--muted);
+    border: 1px solid var(--border, #d8d8d8);
+    padding: 0.02rem 0.35rem; border-radius: 0.25rem;
+    margin-left: 0.4rem; white-space: nowrap; vertical-align: middle;
+  }
   .news-card-delete {
     position: absolute; top: 0.35rem; right: 0.35rem;
     width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center;
@@ -1848,7 +1859,7 @@ function buildMarkAnnotations(filtered) {
     // click through — so it does not earn a place on the chart. The tooltip
     // still lists a day's link-less headlines once a pin exists for another
     // reason; this only decides whether the dot is drawn at all.
-    if (!items.some(n => safeUrl(n.source_url))) { byTargetDay.delete(day); continue; }
+    if (!items.some(n => articleHref(n))) { byTargetDay.delete(day); continue; }
   }
 
   const visible = thinPinDays(byTargetDay);
@@ -2212,6 +2223,7 @@ function renderDashNews(filtered) {
     category: n.category || 'MACRO',
     text: n.title || '',
     url: n.source_url,
+    source_url_status: n.source_url_status || null,   // migrate-v11
     id: n.id,
     chart_marked: !!n.chart_marked,
     severity: n.severity,
@@ -2247,11 +2259,11 @@ function renderDashNews(filtered) {
   list.innerHTML = feedItems.map(item => {
     const badge = REMARK_BADGE[item.category] || REMARK_BADGE.MACRO;
     const isTarget = inTarget(item);
-    const u = safeUrl(item.url);
+    const u = articleHref(item);
     const headline = escapeHtml((item.text || '').slice(0, 80));
     const sev = item.severity === 'high' ? 'font-weight:600;' : '';
     const link = u
-      ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener" style="color:${badge.color};text-decoration:none;${sev}">${headline}</a>`
+      ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" style="color:${badge.color};text-decoration:none;${sev}">${headline}</a>`
       : `<span style="color:#555;${sev}">${headline}</span>`;
     return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0f0;${isTarget ? '' : 'opacity:0.6;'}">
       <span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;padding:2px 6px;border-radius:3px;margin-right:6px;">${escapeHtml(badge.label)}</span>
@@ -2300,8 +2312,46 @@ function safeUrl(u) {
   if (!u) return null;
   try {
     const p = new URL(String(u));
-    return (p.protocol === 'http:' || p.protocol === 'https:') ? u : null;
+    if (p.protocol !== 'http:' && p.protocol !== 'https:') return null;
+    // Second line of defence, mirroring backend/lib/url-validator.mjs. The
+    // server is the authority, but a row written before that validator existed
+    // (or by a rolled-back deploy) can still carry a redirector URL, and those
+    // are guaranteed dead ends rather than articles.
+    const h = p.hostname.toLowerCase();
+    if (h === 'vertexaisearch.cloud.google.com' || h === 'news.google.com') return null;
+    if (String(u).includes('grounding-api-redirect')) return null;
+    if (h === 'www.bing.com' || h === 'bing.com') return null;
+    return u;
   } catch (e) { return null; }
+}
+
+/* Link statuses (news_feed.source_url_status, migrate-v11).
+ *
+ * The distinction that matters: `blocked` means the PUBLISHER refuses our
+ * crawler (HTTP 401/403), not that the article is gone. 8 of 60 sampled links
+ * are this, and one was spot-checked in a real browser and loads fine. Hiding
+ * those would throw away working links, so they are still offered — with a
+ * marker saying we could not verify them automatically.
+ *
+ * `dead`/`homepage`/`mismatch`/`unsafe` are the opposite: we have positive
+ * evidence the link does not lead to this story. Those never render as an
+ * article link. The headline, summary, date and category still render — the
+ * news item is not lost, only its (wrong) link. */
+const LINK_STATUS_CLICKABLE = new Set(['valid', 'unchecked', 'unknown', 'rate_limited', 'timeout', 'blocked', null, undefined, '']);
+const LINK_STATUS_UNVERIFIED = new Set(['blocked', 'rate_limited', 'timeout', 'unknown']);
+
+// The URL to render as a clickable article link, or null.
+function articleHref(item) {
+  const raw = item && (item.url != null ? item.url : item.source_url);
+  const u = safeUrl(raw);
+  if (!u) return null;
+  const st = item && item.source_url_status;
+  return LINK_STATUS_CLICKABLE.has(st) ? u : null;
+}
+
+// True when we have a link but could not confirm it — show it, flag it.
+function linkUnverified(item) {
+  return !!item && LINK_STATUS_UNVERIFIED.has(item.source_url_status);
 }
 
 // Inline SVG icon helper (Feather-inspired, MIT).
@@ -3001,7 +3051,7 @@ function hpOpenDrawer(date) {
       <h4 class="th">ข่าวในวันนั้น${news.length ? ` (${news.length})` : ''}</h4>
       ${news.length
         ? news.slice(0, 8).map(n => {
-            const u = safeUrl(n.source_url);
+            const u = articleHref(n);
             const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
             const inner = `<span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;">${escapeHtml(badge.label)}</span> ${escapeHtml(n.title || '')}`;
             return u ? `<a class="hp-dnews th" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
@@ -3172,6 +3222,9 @@ function buildMergedNewsItems() {
     text: n.title,
     summary: n.summary || null,
     url: n.source_url,
+    // migrate-v11 — carried through so the renderer can tell "we checked and
+    // this link is wrong" from "we have not checked yet".
+    source_url_status: n.source_url_status || null,
     sourceLabel: n.source_label,
     impact: n.impact,
     severity: n.severity,
@@ -3328,9 +3381,12 @@ function renderUnifiedNewsItem(item) {
   // now shows on every card — operator can remove a wrong/stale pipeline
   // item too. The handler confirms before deleting and warns that the
   // story may come back if the cron re-pulls the same headline.
-  // Scheme-checked href — a stored `javascript:` source_url would otherwise be
-  // one click from executing. null => render the plain <span> branch instead.
-  const href = safeUrl(item.url);
+  // Status-aware href. safeUrl() blocks unsafe schemes and known redirectors;
+  // articleHref() additionally withholds a link we have positive evidence
+  // against (dead / homepage / mismatch / unsafe). null => plain <span>, so the
+  // headline, summary and date still render — a bad link never costs the item.
+  const href = articleHref(item);
+  const unverified = href && linkUnverified(item);
   const isManual = item.pipeline === 'manual';
   const manualBadge = isManual ? `<span class="news-manual-badge th">เพิ่มเอง</span>` : '';
   const delBtn = (item.id != null)
@@ -3348,7 +3404,8 @@ function renderUnifiedNewsItem(item) {
         <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
       </div>
       ${href
-        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>`
+        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>` +
+          (unverified ? `<span class="news-link-warn th" title="เปิดลิงก์ได้ แต่ระบบตรวจสอบอัตโนมัติไม่ได้ (เว็บบล็อกบอต)">ตรวจสอบอัตโนมัติไม่ได้</span>` : '')
         : `<span class="news-card-title th" style="cursor:default">${escapeHtml(item.text)}</span>`
       }
       ${summaryHtml}
@@ -3700,7 +3757,7 @@ function openNewsDetailModal(ymd) {
   } else {
     list.innerHTML = items.map(n => {
       const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-      const u = safeUrl(n.source_url);
+      const u = articleHref(n);
       const sevColor = n.severity === 'high' ? '#c0392b' : n.severity === 'medium' ? '#b35c00' : '#7a7a7a';
       const sevPill = n.severity
         ? `<span class="nd-sev" style="background:${sevColor}1a;color:${sevColor};">${escapeHtml(n.severity)}</span>`

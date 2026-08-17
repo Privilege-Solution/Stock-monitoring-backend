@@ -24,6 +24,16 @@ import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
 // The recap gate in writeFeedItems() spans exactly this window — see the note
 // there on why the gate and the dedup must share one constant.
 import { DEDUP_WINDOW_HOURS } from '../news-dedup.mjs';
+// One definition of "is this link real" for every fetcher.
+import { classifyUrlOffline, STATUS } from '../url-validator.mjs';
+import { vetRowUrls } from '../news-url-guard.mjs';
+
+// URLs already claimed by a headline during THIS process's lifetime, so a
+// collision across pipelines (sector claims a link, macro tries to reuse it for
+// an unrelated story) is caught, not just one inside a single batch. Module
+// scope is deliberate: the cron runs each batch in a fresh process, so this
+// never becomes a stale long-lived cache.
+const RUN_SEEN_URLS = new Map();
 import {
   normalizeHeadline, normalizeDateYear,
   isHomepageUrl, deepenHomepageUrl, mapLimit,
@@ -437,25 +447,35 @@ function hostnamesMatch(a, b) {
   return x === y || x.endsWith('.' + y) || y.endsWith('.' + x);
 }
 
-// Heuristic: does this string look like a domain (so we can construct a URL
-// from it)? Gemini's web.title is usually a bare hostname but occasionally
-// leaks the publisher's display name ("Bangkok Post") — we can't build a
-// usable URL from those, so we skip them as a URL source.
-function looksLikeHostname(s) {
-  return typeof s === 'string' && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(s) && !/\s/.test(s);
-}
-
-// Given Gemini's stated URL and the grounding info, return the most reliable
-// URL for this item. Policy:
-//   1. If Gemini's URL hostname matches a grounded publisher, trust it —
-//      this is the deep article URL (best outcome).
-//   2. Otherwise find the chunk whose groundingSupport overlaps this item's
-//      text position; build a publisher URL from its title.
-//   3. If no support overlap, scan trusted hosts for a hostname match against
-//      the stated URL one more time (in case supports were incomplete).
-//   4. Last resort: return the stated URL unchanged. We'd rather keep a
-//      suspect URL than drop the item — the cron operator can hide bad rows.
-function resolveGroundedUrl(statedUrl, itemPos, grounding, trustedHosts) {
+// Given Gemini's stated URL and the grounding info, return a VERIFIED article
+// URL for this item, or null.
+//
+// Policy — only one way to pass:
+//   The stated URL's hostname matches a publisher that grounding actually
+//   cited, AND the URL points at an article rather than a site root.
+//   Anything else returns null and the item is kept with no link.
+//
+// TWO FALLBACKS WERE REMOVED HERE, both of which manufactured bad data:
+//
+//   1. "build a publisher URL from the chunk title" produced
+//      `https://www.<host>/` — a HOMEPAGE. The old comment called it "a stable
+//      homepage URL", which is true and beside the point: it loads, and it
+//      never shows the story. 154 homepage rows are in news_feed because of
+//      this, and 106 URLs ended up shared across 374 rows with different
+//      headlines — `https://www.line.me/` alone labels 24 unrelated stories.
+//      Constructing a URL from a hostname is guessing, and the guess is always
+//      the same string, so it collides by construction.
+//
+//   2. "last resort: return the stated URL unchanged" stored whatever the model
+//      typed, with nothing backing it. The stated URL is the model's memory
+//      unless grounding corroborates the host — that is precisely the
+//      hallucinated-link case.
+//
+// An item with no verifiable link keeps its headline, summary, category, date
+// and impact. Those come from the article text, not from the URL. Losing the
+// link costs one click-through; inventing one costs the reader's trust in every
+// other link on the page.
+function resolveGroundedUrl(statedUrl, trustedHosts) {
   // Reject Gemini's own grounding-redirect URLs outright. They look like
   // https://vertexaisearch.cloud.google.com/grounding-api-redirect/... and
   // expire quickly (often 404 within days). They are an internal Google
@@ -473,33 +493,26 @@ function resolveGroundedUrl(statedUrl, itemPos, grounding, trustedHosts) {
   };
   const safeStatedUrl = isGoogleInternal(statedUrl) ? null : statedUrl;
 
-  // 1. Validate stated URL against trusted hosts
-  if (safeStatedUrl) {
-    const urlHost = hostnameOf(safeStatedUrl);
-    if (urlHost && trustedHosts.some(th => hostnamesMatch(urlHost, th))) {
-      return safeStatedUrl;
-    }
+  if (!safeStatedUrl) return null;
+
+  // The offline gate rejects non-http(s), SSRF targets, redirectors/trackers,
+  // and — critically — anything without an article path. A site root cannot
+  // pass from here on.
+  const offline = classifyUrlOffline(safeStatedUrl);
+  if (offline.status) {
+    console.log(`[gemini] url rejected (${offline.status}): ${offline.reason}`);
+    return null;
   }
 
-  // 2. Find the grounding chunk that backs this item's HEADLINE text
-  const matchingSupports = grounding.supports
-    .filter(s => s.start < itemPos.end && s.end > itemPos.start)
-    .sort((a, b) => b.confidence - a.confidence);
-
-  for (const sup of matchingSupports) {
-    for (const idx of sup.chunkIndices) {
-      const chunk = grounding.chunks[idx];
-      if (chunk?.title && looksLikeHostname(chunk.title)) {
-        const host = chunk.title.replace(/^www\./, '');
-        // Prefer the publisher's www subdomain for a stable homepage URL.
-        return `https://www.${host}/`;
-      }
-    }
+  // Grounding must corroborate the PUBLISHER. Without this the URL is only the
+  // model's recollection of a plausible link.
+  const urlHost = hostnameOf(safeStatedUrl);
+  if (urlHost && trustedHosts.some(th => hostnamesMatch(urlHost, th))) {
+    return safeStatedUrl;
   }
 
-  // 3. & 4. No grounding match — keep the safe URL (or null if it was a
-  // rejected Google-internal redirect, so parseAIResult drops the item).
-  return safeStatedUrl;
+  console.log(`[gemini] url rejected (ungrounded): ${urlHost || '?'} is not among the cited publishers`);
+  return null;
 }
 
 function parseAIResult(text, pipeline, grounding) {
@@ -592,7 +605,7 @@ function parseAIResult(text, pipeline, grounding) {
     // matches a grounded publisher, otherwise replace with the publisher
     // URL derived from the chunk that backs this headline.
     const resolvedUrl = grounding
-      ? resolveGroundedUrl(statedUrl, { start, end }, grounding, trustedHosts)
+      ? resolveGroundedUrl(statedUrl, trustedHosts)
       : statedUrl;
     // Date discipline (see DATE_DISCIPLINE): the model reports when the EVENT
     // happened separately from when the ARTICLE was published, so a months-old
@@ -645,13 +658,17 @@ function parseAIResult(text, pipeline, grounding) {
                  (pipeline === 'macro' && impactLevel === 'HIGH'),
     };
   }).filter(r => {
-    // Drop blocks missing any required field. URL is required because the
-    // client-side valid-link filter in index.html drops items with empty
-    // source_url — better to not insert at all than to insert a row the UI
-    // will hide. Gemini's `url` is `null` if the URL: line was truncated or
-    // omitted; we also treat the literal "NONE" sentinel as missing.
+    // Drop blocks missing the fields that MAKE it a news item. A headline and a
+    // category are the item; everything else is decoration.
+    //
+    // The URL requirement that used to live here is gone. It said "better to
+    // not insert at all than to insert a row the UI will hide" — which stopped
+    // being true twice over: writeFeedItems() has kept link-less rows since
+    // 99b20f8, so this filter was silently overriding the policy one layer
+    // down, and resolveGroundedUrl() now returns null far more often on
+    // purpose. Keeping the rule would mean the stricter URL check quietly
+    // deleted news, turning a link-quality fix into a coverage regression.
     if (!r.category || !r.headline) return false;
-    if (!r.url || r.url.trim().toUpperCase() === 'NONE') return false;
     return true;
   });
 }
@@ -897,17 +914,21 @@ async function writeFeedItems(items, tag) {
     });
   }
 
-  // Verified means: this URL was found by search AND points at this article.
-  // A publisher homepage is neither, so it is cleared rather than stored as if
-  // it were the source.
-  let unresolved = 0;
-  for (const r of rows) {
-    if (isHomepageUrl(r.source_url)) { r.source_url = ''; }
-    r.url_verified = /^https?:\/\//i.test(r.source_url || '');
-    if (!r.url_verified) unresolved++;
-  }
+  // The shared gate: scheme, SSRF, redirector/tracker hosts, article-path shape,
+  // publisher/label agreement, and — the check nothing did before — whether this
+  // URL is already carrying a DIFFERENT story. `seenUrls` is threaded across the
+  // whole run so a collision between the sector and macro pipelines is caught
+  // too, not just one within a single batch.
+  //
+  // Rows are NEVER dropped here. A cleared URL costs a click-through; dropping
+  // the row costs the headline, summary, date, category and impact, none of
+  // which came from the URL.
+  const vetted = vetRowUrls(rows, { seenUrls: RUN_SEEN_URLS, tag });
+  rows.length = 0;
+  rows.push(...vetted.rows);
+  const unresolved = rows.filter(r => !r.source_url).length;
   if (unresolved) {
-    console.log(`[${tag}] ${unresolved} item(s) kept with no verified URL (content intact, url_verified=false)`);
+    console.log(`[${tag}] ${unresolved} item(s) kept with no link (content intact)`);
   }
 
   // writeNewsItems applies content-level dedup against the last 48h and within

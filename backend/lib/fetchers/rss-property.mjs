@@ -27,6 +27,12 @@
 import db from '../../db.js';
 import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
 import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit } from './news-rss-helpers.mjs';
+import { vetRowUrls } from '../news-url-guard.mjs';
+
+const TAG = 'rss-property';
+// URLs already claimed by a headline in this process. Module scope: the cron
+// runs each batch in a fresh process, so this never goes stale.
+const RUN_SEEN_URLS = new Map();
 
 // Max simultaneous Bing requests. Bing throttles an unbounded fan-out (25
 // queries at once, then every deepen search at once) and a throttled response
@@ -386,10 +392,22 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
       if (deep) it.source_url = deep;
     });
   }
-  const dropped = valid.filter(it => isHomepageUrl(it.source_url));
-  const deepened = valid.filter(it => !isHomepageUrl(it.source_url));
+  // Central gate — one definition of "is this link real", shared with the
+  // Gemini pipelines and the manual-add endpoint. Beyond the homepage check
+  // this catches redirector/tracker hosts, SSRF targets, a source_label that
+  // names a different publisher than the hostname, and a URL already bound to
+  // an unrelated headline (106 URLs in the live table are shared across 374
+  // rows; deepenHomepageUrl above is one of the two ways that happened).
+  const vetted = vetRowUrls(valid, { seenUrls: RUN_SEEN_URLS, tag: TAG });
+  // An RSS item is a headline plus a link and nothing else — no summary, no
+  // impact, no category of its own. With the link gone there is not enough
+  // left to be worth a row, so these are still dropped here. That is NOT true
+  // of the Gemini pipelines, whose rows keep summary/category/impact/date from
+  // the article text; those keep the row and clear only the URL.
+  const dropped = vetted.rows.filter(it => !it.source_url);
+  const deepened = vetted.rows.filter(it => it.source_url);
   if (dropped.length) {
-    console.log(`[rss-property] dropped ${dropped.length} items (no deep URL found)`);
+    console.log(`[rss-property] dropped ${dropped.length} items (no verifiable article URL)`);
   }
   console.log(`[rss-property] parsed=${all.length} unique=${unique.length} with_url=${deepened.length} dropped_no_url=${unique.length - valid.length} dropped_homepage=${dropped.length}`);
 

@@ -8,7 +8,7 @@
   "scripts": {
     "build:css": "cd frontend && tailwindcss -i ./src/styles.css -o ./dist/styles.css --minify",
     "watch:css": "cd frontend && tailwindcss -i ./src/styles.css -o ./dist/styles.css --watch",
-    "test": "node --test backend/lib/fetchers/__tests__/*.test.mjs",
+    "test": "node --test backend/lib/__tests__/*.test.mjs backend/lib/fetchers/__tests__/*.test.mjs",
     "start": "node backend/server.js",
     "dev": "npm run build:css && node backend/server.js"
   },

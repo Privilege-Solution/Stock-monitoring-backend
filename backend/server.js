@@ -26,6 +26,15 @@ async function loadTaxonomy() {
   return _taxonomy;
 }
 
+// Same lazy-ESM pattern as loadTaxonomy — server.js is CommonJS. Gates the
+// manual POST /api/news URL through the shared validator so a hand-added row
+// cannot carry a link shape the pipelines reject.
+let _urlValidator = null;
+async function loadUrlValidator() {
+  if (!_urlValidator) _urlValidator = await import('./lib/url-validator.mjs');
+  return _urlValidator;
+}
+
 const PORT = process.env.PORT || 3000;
 const app = express();
 
@@ -519,12 +528,28 @@ app.post('/api/news', async (req, res) => {
     }
 
     const rawUrl = typeof body.source_url === 'string' ? body.source_url.trim() : '';
-    let parsed;
-    try { parsed = new URL(rawUrl); } catch {
-      return res.status(400).json({ ok: false, error: 'source_url must be a valid URL', code: 'news_add_bad_url' });
+    // Same gate the pipelines use, so a hand-added row cannot introduce a link
+    // shape the automated paths reject: non-http(s) schemes, SSRF targets
+    // (loopback / private / link-local / cloud metadata), redirector and
+    // tracker hosts, and site roots with no article path.
+    //
+    // The label/hostname check is deliberately NOT applied here — a human
+    // adding a row is the authority on who published it, and there is no
+    // machine-supplied source_label to contradict.
+    const { classifyUrlOffline, STATUS } = await loadUrlValidator();
+    const verdict = classifyUrlOffline(rawUrl);
+    if (verdict.status === STATUS.UNCHECKED) {
+      return res.status(400).json({ ok: false, error: 'source_url required', code: 'news_add_bad_url' });
     }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return res.status(400).json({ ok: false, error: 'source_url must be http(s)', code: 'news_add_bad_url' });
+    if (verdict.status === STATUS.UNSAFE) {
+      return res.status(400).json({ ok: false, error: `source_url rejected: ${verdict.reason}`, code: 'news_add_bad_url' });
+    }
+    if (verdict.status === STATUS.HOMEPAGE) {
+      return res.status(400).json({
+        ok: false,
+        error: 'source_url must link to the article itself, not a homepage or section index',
+        code: 'news_add_homepage_url',
+      });
     }
 
     // Category: explicit (validated against the taxonomy) or auto-classified.

@@ -193,6 +193,19 @@ async function ensureSchema() {
     -- there). Distinct from show_pin, which the pipeline uses to boost display
     -- priority — kept separate so the two never interact.
     ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS chart_marked BOOLEAN NOT NULL DEFAULT FALSE;
+    -- migrate-v11: link-validation verdict. url_verified above cannot express
+    -- the distinctions that matter — a 403 bot-block is not a dead link, a
+    -- homepage is not an article, and a link belonging to another story is
+    -- worse than no link. See backend/lib/url-validator.mjs for the vocabulary.
+    -- Defaults to 'unchecked' so existing rows are labelled honestly rather
+    -- than assumed good. Nothing here deletes a row or edits a source_url.
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_status TEXT NOT NULL DEFAULT 'unchecked';
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_checked_at TIMESTAMPTZ;
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_http_status INTEGER;
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_final TEXT;
+    ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS source_url_validation_reason TEXT;
+    CREATE INDEX IF NOT EXISTS news_feed_url_status_idx ON news_feed (source_url_status) WHERE hidden = FALSE;
+    CREATE INDEX IF NOT EXISTS news_feed_url_checked_idx ON news_feed (source_url_checked_at NULLS FIRST) WHERE hidden = FALSE;
     CREATE UNIQUE INDEX IF NOT EXISTS news_feed_title_hash_idx ON news_feed (title_hash);
     CREATE INDEX IF NOT EXISTS news_feed_date_idx     ON news_feed (date DESC);
     CREATE INDEX IF NOT EXISTS news_feed_category_idx ON news_feed (category);
@@ -827,8 +840,8 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 15;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15})`);
+    const base = i * 20;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17},$${base+18},$${base+19},$${base+20})`);
     params.push(
       it.title,
       normalizeDateYear(it.date),
@@ -853,19 +866,29 @@ async function writeNewsItems(items) {
         : priorityForItem(it),
       it.summary      ?? null,
       it.impact_level ?? null,         // HIGH/MEDIUM/LOW impact magnitude
-      // Only a searched-and-matched article link counts as verified. Derived
-      // here when the caller did not say, so no pipeline can imply a link is
-      // trustworthy just by having one.
-      it.url_verified != null
-        ? !!it.url_verified
-        : /^https?:\/\//i.test(sanitizeSourceUrl(it.source_url) || ''),
+      // url_verified is now a MIRROR of (source_url_status = 'valid'), kept so
+      // a rollback to the previous deploy still reads a sane column. It is no
+      // longer derived from the URL's shape: `/^https?:/` only ever meant "this
+      // string looks like a link", which is why 1,534 of 1,551 rows were
+      // labelled unverified while nothing had ever checked one.
+      it.url_verified != null ? !!it.url_verified : (it.source_url_status === 'valid'),
+      // migrate-v11 validation metadata. A caller that has not run the
+      // validator leaves these null and the row is honestly 'unchecked'.
+      it.source_url_status ?? 'unchecked',
+      it.source_url_checked_at ?? null,
+      it.source_url_http_status ?? null,
+      it.source_url_final ?? null,
+      it.source_url_validation_reason ?? null,
     );
   });
   const r = await p.query(`
     INSERT INTO news_feed (title, date, category, source_url, source_label, title_hash,
                            pipeline, impact, severity, show_pin,
                            fetched_at, display_priority, summary, impact_level,
-                           url_verified)
+                           url_verified,
+                           source_url_status, source_url_checked_at,
+                           source_url_http_status, source_url_final,
+                           source_url_validation_reason)
     VALUES ${values.join(',')}
     ON CONFLICT (title_hash) DO NOTHING
   `, params);
@@ -964,7 +987,8 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
   params.push(Math.max(1, Math.min(limit || 100, 500)));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
-                      impact_level, user_note, chart_marked, url_verified
+                      impact_level, user_note, chart_marked, url_verified,
+                      source_url_status, source_url_final
                FROM news_feed
                WHERE ${where.join(' AND ')}
                ORDER BY display_priority DESC, date DESC, id DESC
