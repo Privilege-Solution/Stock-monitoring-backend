@@ -15,4 +15,4 @@ test-*.js
 # source, so they stay out of the repo.
 scripts/backup-*.json
 frontend/debug.html
-frontend/asw-yfinance.html
+frontend/asw-yfinance.htmlscripts/.title-deep-progress.json
