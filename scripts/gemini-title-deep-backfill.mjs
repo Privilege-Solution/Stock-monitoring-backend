@@ -56,6 +56,12 @@ const RESET = process.argv.includes('--reset');
 const FROM_YEAR = Number(arg('from', '2017'));
 const MAX_ROUNDS = Number(arg('rounds', '2'));
 const SLEEP_MS = Number(arg('sleep', '2500'));
+// Angles within a period are independent searches, so they run concurrently.
+// A grounded call takes ~30s, so 3 in flight is ~6 calls/min — comfortably
+// under the free tier's 15 RPM while cutting a 3.7-hour sweep to about one.
+// Rounds INSIDE an angle stay sequential: round 2 exists to ask for what
+// round 1 did not return.
+const CONCURRENCY = Number(arg('concurrency', '3'));
 const PROGRESS_FILE = join(__dirname, '.title-deep-progress.json');
 
 const MODEL = 'gemini-2.5-flash';
@@ -235,7 +241,9 @@ const runStart = Date.now();
 
 for (const p of PERIODS) {
   const periodItems = [];
-  for (const angle of angleNames) {
+
+  // Run one angle to exhaustion (its own loop-until-dry).
+  const runAngle = async (angle) => {
     const foundHere = [];
     for (let round = 1; round <= MAX_ROUNDS; round++) {
       let prompt = ANGLES[angle](p);
@@ -272,7 +280,19 @@ for (const p of PERIODS) {
       await sleep(SLEEP_MS);
       if (fresh === 0) break;                       // dry — stop drilling this angle
     }
-  }
+  };
+
+  // Fixed-size worker pool over the angle list. `seen` is mutated only in
+  // synchronous stretches between awaits, so concurrent angles cannot both
+  // claim the same headline.
+  const queue = [...angleNames];
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+    while (queue.length) {
+      const angle = queue.shift();
+      try { await runAngle(angle); }
+      catch (e) { console.error(`  ! ${p.ce}Q${p.q} ${angle}: ${e.message}`); }
+    }
+  }));
 
   grandFound += periodItems.length;
   if (periodItems.length && APPLY) {
