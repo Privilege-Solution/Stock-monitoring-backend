@@ -334,3 +334,37 @@ async function bingNewsSearch(query, ua) {
     return [];
   }
 }
+
+
+// =============================================================================
+// migrate-v13: expand stock-neutral RSS rows into per-stock news_feed rows.
+//
+// A QUERY row may serve several stocks (`stocks: ['ASW','TITLE']`); the item
+// is fetched/vetted ONCE, then copied per stock here with:
+//   - a per-stock category (the same headline files under MACRO for ASW but
+//     FX for TITLE — classifyCategory dispatches on the stock)
+//   - the TITLE pin guardrail: RSS relevance is query-level, not vetted per
+//     headline, so a TITLE copy is never allowed severity 'high' (which
+//     writeNewsItems auto-pins onto the chart). Driver pins come only from
+//     the LLM-filtered gemini-title pipelines.
+// Scratch fields (_stocks, _hint) are stripped from the emitted rows.
+// =============================================================================
+import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
+
+export function expandRowsByStock(rows) {
+  const byStock = {};
+  for (const it of rows) {
+    const stocks = it._stocks && it._stocks.length ? it._stocks : ['ASW'];
+    for (const stock of stocks) {
+      const { _stocks, _hint, ...row } = it;
+      row.category = classifyCategory(it.title, _hint, stock);
+      if (stock === 'TITLE' && row.severity === 'high') {
+        row.severity = 'medium';
+        row.show_pin = false;
+        row.impact_level = impactLevelFromSeverity('medium');
+      }
+      (byStock[stock] = byStock[stock] || []).push(row);
+    }
+  }
+  return byStock;
+}

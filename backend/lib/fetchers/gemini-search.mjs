@@ -20,7 +20,7 @@
 
 import { createHash } from 'crypto';
 import db from '../../db.js';
-import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES } from '../news-taxonomy.mjs';
+import { TAXONOMY_CATEGORIES, ALLOWED_CATEGORIES, categoriesForStock } from '../news-taxonomy.mjs';
 // The recap gate in writeFeedItems() spans exactly this window — see the note
 // there on why the gate and the dedup must share one constant.
 import { DEDUP_WINDOW_HOURS } from '../news-dedup.mjs';
@@ -33,7 +33,15 @@ import { vetRowUrls } from '../news-url-guard.mjs';
 // an unrelated story) is caught, not just one inside a single batch. Module
 // scope is deliberate: the cron runs each batch in a fresh process, so this
 // never becomes a stale long-lived cache.
-const RUN_SEEN_URLS = new Map();
+// Per-stock (migrate-v13): the same event worded differently by the ASW and
+// TITLE prompts legitimately shares one URL — a cross-stock claim must not
+// clear the second stock's link as a "collision".
+const RUN_SEEN_URLS_BY_STOCK = new Map();
+function seenUrlsFor(stock) {
+  let m = RUN_SEEN_URLS_BY_STOCK.get(stock);
+  if (!m) { m = new Map(); RUN_SEEN_URLS_BY_STOCK.set(stock, m); }
+  return m;
+}
 import {
   normalizeHeadline, normalizeDateYear,
   isHomepageUrl, deepenHomepageUrl, mapLimit,
@@ -83,7 +91,11 @@ const todayISO = () =>
 // economic_data | political | disaster | global` vocabulary is retired.
 // =============================================================================
 
-const CATEGORY_OPTIONS = TAXONOMY_CATEGORIES.join(' | ');
+// Per-stock prompt vocabularies. TAXONOMY_CATEGORIES is now the 11-value
+// superset — interpolating it into the ASW prompts would invite Gemini to
+// file ASW rows under TOURISM/OIL/…, which the ASW panel has no tab for.
+const CATEGORY_OPTIONS = categoriesForStock('ASW').join(' | ');
+const CATEGORY_OPTIONS_TITLE = categoriesForStock('TITLE').join(' | ');
 
 // Date discipline, appended to every news prompt.
 //
@@ -294,6 +306,90 @@ SOURCE: กรุงเทพธุรกิจ
 URL: https://...
 ---${DATE_DISCIPLINE(today, todayIso)}`;
 
+// ── TITLE (ร่มโพธิ์ พร็อพเพอร์ตี้ — SET: TITLE) prompts (migrate-v13) ─────────
+// TITLE is ASW's ~68.9% subsidiary: a Phuket-only leisure-residence developer
+// whose buyers are mostly FOREIGN (Russians #1 by Phuket transfer value, then
+// Chinese). Its news model therefore differs from ASW's: what moves TITLE is
+// the war/sanctions cycle, oil (Russian wealth proxy), currencies and money-
+// transfer rules, travel access to Phuket, and foreign-ownership regulation.
+
+const PROMPT_TITLE_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "ร่มโพธิ์ พร็อพเพอร์ตี้" หรือหุ้น "TITLE" หรือแบรนด์ "The Title" (ผู้พัฒนาอสังหาฯ ภูเก็ต บริษัทลูกของ AssetWise)
+ที่เกิดขึ้นใน${today}
+
+ค้นหาเฉพาะข่าวที่เกี่ยวกับ:
+- งบการเงิน / ผลประกอบการ / Presale / ยอดโอนกรรมสิทธิ์
+- การเปิดโครงการใหม่ในภูเก็ต / JV / พันธมิตรโรงแรม (เช่น IHG)
+- ปันผล / หุ้นกู้ / เพิ่มทุน / การย้ายตลาด mai → SET
+- แถลงข่าว / Oppday / บทวิเคราะห์โบรกเกอร์เกี่ยวกับ TITLE
+- ผู้บริหารซื้อขายหุ้น / SET Smart Alert
+
+ระวัง: คำว่า "title" ในภาษาอังกฤษ (เช่น title deed = โฉนด) ไม่ใช่หุ้น TITLE — ต้องเป็นข่าวของบริษัทร่มโพธิ์เท่านั้น
+
+ถ้าไม่มีข่าว TITLE วันนี้ ตอบว่า NONE
+
+ถ้ามีข่าว ตอบในรูปแบบนี้เท่านั้น (ไม่ต้องมีคำอธิบายเพิ่ม):
+CATEGORY: [COMPANY]
+HEADLINE: [หัวข้อข่าวภาษาไทย ไม่เกิน 60 ตัวอักษร]
+SUMMARY: [ขยายความ 1-2 ประโยคภาษาไทย ไม่เกิน 200 ตัวอักษร]
+IMPACT_LEVEL: [HIGH | MEDIUM | LOW]
+SOURCE: [ชื่อแหล่งข่าว]
+URL: [url จริงเท่านั้น ห้ามว่าง ถ้าหา source ไม่ได้ใส่ NONE]
+
+หมายเหตุเรื่อง IMPACT_LEVEL:
+- HIGH   = กระทบพื้นฐาน/มูลค่า TITLE โดยตรง เช่น งบ, ปันผล, เพิ่มทุน, backlog เปลี่ยนแรง
+- MEDIUM = โครงการใหม่, milestone ยอดขาย, JV
+- LOW    = ข่าวประชาสัมพันธ์ / กิจกรรมบริษัท${DATE_DISCIPLINE(today, todayIso)}`;
+
+const PROMPT_TITLE_DRIVERS = (today, todayIso) => `คุณเป็น analyst ตลาดอสังหาริมทรัพย์ภูเก็ต ลูกค้าหลักของตลาดนี้คือชาวต่างชาติ
+(รัสเซียอันดับ 1 ตามมูลค่าโอนคอนโดภูเก็ต ตามด้วยจีน อิสราเอล ยุโรป) ค้นหาข่าว${today}
+ที่กระทบ "กำลังซื้อหรือการเดินทางของผู้ซื้อต่างชาติในภูเก็ต"
+
+ค้นหาเฉพาะหัวข้อเหล่านี้ และรายงานเฉพาะเหตุการณ์ที่กระทบดีมานด์อสังหาฯ ภูเก็ตจริง ๆ
+(ไม่ใช่ทุกข่าวสงครามหรือทุกการขยับของราคาน้ำมัน — เอาเฉพาะการเปลี่ยนแปลงที่มีนัยสำคัญ):
+- สงคราม รัสเซีย-ยูเครน / การเจรจาหยุดยิง / มาตรการคว่ำบาตรใหม่ (กระทบผู้ซื้อรัสเซีย) → GEOPOLITICS
+- ราคาน้ำมันดิบ Urals/Brent เคลื่อนไหวแรง / มาตรการคว่ำบาตรน้ำมันรัสเซีย → OIL
+- ค่าเงินบาท / รูเบิล / หยวน เคลื่อนไหวแรง, กฎการโอนเงินระหว่างประเทศ, SWIFT → FX
+- นักท่องเที่ยว/เที่ยวบิน/วีซ่า เข้าภูเก็ตหรือไทย (โดยเฉพาะรัสเซีย จีน) → TOURISM
+- โควตาต่างชาติถือครองคอนโด / nominee / leasehold / มาตรการรัฐเรื่องต่างชาติซื้ออสังหาฯ → GOV_POLICY
+- ตลาดอสังหาฯ ภูเก็ต: supply ใหม่, ยอดโอนต่างชาติ, ราคา → INDUSTRY
+
+ถ้าไม่มีข่าวสำคัญวันนี้ ตอบว่า NONE
+
+ถ้ามี ตอบได้สูงสุด 4 ข่าว เฉพาะที่สำคัญจริง ๆ รูปแบบนี้:
+---
+CATEGORY: [${CATEGORY_OPTIONS_TITLE}]
+HEADLINE: [หัวข้อข่าวภาษาไทย ไม่เกิน 60 ตัวอักษร]
+SUMMARY: [ขยายความ 1-2 ประโยค อธิบายว่ากระทบผู้ซื้อต่างชาติ/ภูเก็ตอย่างไร ไม่เกิน 200 ตัวอักษร]
+IMPACT_LEVEL: [HIGH | MEDIUM | LOW]
+SOURCE: [ชื่อแหล่งข่าว]
+URL: [url จริงเท่านั้น ห้ามว่าง ถ้าหา source ไม่ได้ใส่ NONE]
+---
+
+กฎการเลือก CATEGORY:
+1. ข่าวที่กล่าวถึง TITLE / ร่มโพธิ์ โดยตรง → COMPANY เสมอ
+2. วีซ่า/เที่ยวบิน/นักท่องเที่ยว → TOURISM (แม้จะเกี่ยวกับรัสเซียก็ตาม)
+3. น้ำมัน → OIL แม้ข่าวจะพูดถึงการคว่ำบาตรด้วย
+4. ค่าเงิน/การโอนเงิน → FX
+5. สงคราม/คว่ำบาตรทั่วไป → GEOPOLITICS
+6. มาตรการรัฐเรื่องการถือครองของต่างชาติ → GOV_POLICY
+7. ตลาดอสังหาฯ ภูเก็ตภาพรวม → INDUSTRY
+8. อื่น ๆ (รวมการเมืองไทย) → MACRO
+
+IMPACT_LEVEL (มองจากมุมดีมานด์อสังหาฯ ภูเก็ต):
+- HIGH   = เปลี่ยนพฤติกรรมผู้ซื้อทันที เช่น หยุดยิง/สันติภาพ, คว่ำบาตรรอบใหม่, วีซ่าเปลี่ยน, บาทแข็ง/รูเบิลร่วงแรง
+- MEDIUM = แนวโน้มสะสม เช่น เที่ยวบินเพิ่ม/ลด, น้ำมันเคลื่อนไหวแรง, ยอดโอนต่างชาติรายไตรมาส
+- LOW    = ภาพรวม/บทวิเคราะห์
+
+ตัวอย่างผลลัพธ์ที่ถูกต้อง:
+---
+CATEGORY: TOURISM
+HEADLINE: ครม. ลดวีซ่าฟรีเหลือ 30 วัน กระทบนักท่องเที่ยวรัสเซียพำนักยาว
+SUMMARY: มติ ครม. ลดวันพำนักวีซ่าฟรีจาก 60 เหลือ 30 วัน กลุ่มรัสเซียพำนักยาวในภูเก็ตซึ่งเป็นผู้ซื้อคอนโดหลักอาจชะลอการตัดสินใจซื้อ
+IMPACT_LEVEL: HIGH
+SOURCE: กรุงเทพธุรกิจ
+URL: https://...
+---${DATE_DISCIPLINE(today, todayIso)}`;
+
 const PROMPT_BRIEF = () => `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปสถานการณ์ให้ผู้บริหาร
 
 สัปดาห์ที่ผ่านมา (จันทร์-ศุกร์ก่อนหน้า) มีเหตุการณ์อะไรบ้างที่กระทบ
@@ -316,8 +412,9 @@ REASON: [1 ประโยคอธิบาย tone]`;
 // the day's headlines grouped by category and asks for a concise digest —
 // Gemini summarizes what we already pulled, so source news rows are never
 // mutated. `date` is an ISO (ICT) key; `items` carry title/category/source.
-const PROMPT_DAILY_SUMMARY = (date, items) => {
-  const order = ['COMPANY', 'COMPETITOR', 'RATES', 'GOV_POLICY', 'POLITICS', 'INDUSTRY', 'MACRO'];
+const PROMPT_DAILY_SUMMARY = (date, items, stock = 'ASW') => {
+  // Category order per stock — the TITLE digest groups by its driver buckets.
+  const order = categoriesForStock(stock);
   const byCat = {};
   for (const it of items) {
     const c = order.includes(it.category) ? it.category : 'MACRO';
@@ -328,7 +425,10 @@ const PROMPT_DAILY_SUMMARY = (date, items) => {
     .map(c => `${c}:\n` + byCat[c].slice(0, 6)
       .map(it => `- [${it.impact_level || '—'}] ${it.title} (${it.source_label || '—'})`).join('\n'))
     .join('\n\n');
-  return `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปข่าวประจำวันที่ ${date}
+  const persona = stock === 'TITLE'
+    ? `คุณเป็น analyst หุ้น TITLE (ร่มโพธิ์ พร็อพเพอร์ตี้ — อสังหาฯ ภูเก็ต ลูกค้าหลักเป็นชาวต่างชาติ) สรุปข่าวประจำวันที่ ${date}`
+    : `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปข่าวประจำวันที่ ${date}`;
+  return `${persona}
 
 นี่คือข่าวทั้งหมดของวันนี้ (จัดกลุ่มตามหมวด):
 
@@ -337,11 +437,11 @@ ${block}
 งานของคุณ: สรุปประเด็นสำคัญของวันนี้ให้ผู้บริหารอ่านเร็ว
 กฎ:
 - สรุปและรวมประเด็นด้วยภาษาของคุณเอง — ห้ามทำซ้ำ headline ต้นฉบับ ห้ามตัดแปะชื่อข่าวมาต่อกันเป็นประโยคเดียว
-- ไม่เกิน 6 ประเด็น เรียงจากสำคัญที่สุด → น้อยที่สุด สำหรับหุ้น ASW
+- ไม่เกิน 6 ประเด็น เรียงจากสำคัญที่สุด → น้อยที่สุด สำหรับหุ้น ${stock === 'TITLE' ? 'TITLE (มองผ่านดีมานด์ผู้ซื้อต่างชาติในภูเก็ต)' : 'ASW'}
 - แต่ละประเด็นอยู่คนละบรรทัด ขึ้นต้นด้วย "- "
 - HEADLINE คือ 1 ประโยคสรุปข่าวทั้งวัน ไม่เกิน 100 ตัวอักษร (นับรวมช่องว่าง) จะใช้เป็น Remark — เขียนตามกฎ:
   1) เริ่มจากข่าว impact สูงสุดก่อน (HIGH > MEDIUM > LOW) เป็นประเด็นหลักของประโยค
-  2) ข่าวบริษัทเป้าหมาย (ASW) ใส่เป็นประธานประโยค แม้ไม่ใช่ HIGH ก็ตาม
+  2) ข่าวบริษัทเป้าหมาย (${stock}) ใส่เป็นประธานประโยค แม้ไม่ใช่ HIGH ก็ตาม
   3) ข่าวรอง (มหภาค/ตลาดโดยรวม) ย่อต่อท้ายด้วยวลีสั้น ๆ คั่นคำเชื่อม เช่น "ท่ามกลาง..." หรือ "พร้อม..."
   4) ตัดซ้ำ — หลายข่าวเรื่องเดียวกัน (เช่น TRIS อัปเกรดเครดิต ถูกรายงานซ้ำจากหลายสำนัก) นับเป็นประเด็นเดียว ไม่พูดซ้ำ
   5) ใช้ตัวเลขสำคัญแทนคำอธิบายยาว (เช่น "หุ้นกู้ 920 ลบ." แทน "เสนอขายหุ้นกู้ 2 ชุด มูลค่ารวมไม่เกิน 920 ล้านบาท")
@@ -518,8 +618,11 @@ function resolveGroundedUrl(statedUrl, trustedHosts) {
   return null;
 }
 
-function parseAIResult(text, pipeline, grounding) {
+function parseAIResult(text, pipeline, grounding, stock = 'ASW') {
   if (!text || text.trim() === 'NONE') return [];
+  // Validate categories against THIS stock's vocabulary, not the global
+  // superset — a TOURISM row on the ASW panel would be invisible (no tab).
+  const allowedForStock = new Set(categoriesForStock(stock));
 
   // Trusted publisher hostnames extracted from grounding chunks. Gemini's
   // web.title field is consistently the publisher's canonical hostname
@@ -575,8 +678,8 @@ function parseAIResult(text, pipeline, grounding) {
     // the Railway logs instead of quietly re-filing everything as MACRO/MEDIUM.
     const rawCategory = normalizeEnumValue(get('CATEGORY'));
     let category = rawCategory;
-    if (!ALLOWED_CATEGORIES.has(category)) {
-      if (rawCategory) console.warn(`[gemini] unexpected CATEGORY "${get('CATEGORY')}" → coerced to MACRO`);
+    if (!allowedForStock.has(category)) {
+      if (rawCategory) console.warn(`[gemini] unexpected CATEGORY "${get('CATEGORY')}" for ${stock} → coerced to MACRO`);
       category = 'MACRO';
     }
     const rawImpactLevel = normalizeEnumValue(get('IMPACT_LEVEL'));
@@ -862,7 +965,7 @@ function normalizeForNewsFeed(it) {
 // Dropping (rather than keeping the homepage, or keeping an empty URL) is
 // deliberate and matches the RSS fetchers: better to lose one row than to show
 // a headline the reader cannot actually open.
-async function writeFeedItems(items, tag) {
+async function writeFeedItems(items, tag, stock = 'ASW') {
   // Date discipline gate. Rejects recaps — an article published today about a
   // cabinet resolution from June is not news, and filing it under today
   // misrepresents when the market actually moved.
@@ -940,7 +1043,7 @@ async function writeFeedItems(items, tag) {
   // Rows are NEVER dropped here. A cleared URL costs a click-through; dropping
   // the row costs the headline, summary, date, category and impact, none of
   // which came from the URL.
-  const vetted = vetRowUrls(rows, { seenUrls: RUN_SEEN_URLS, tag });
+  const vetted = vetRowUrls(rows, { seenUrls: seenUrlsFor(stock), tag });
   rows.length = 0;
   rows.push(...vetted.rows);
   const unresolved = rows.filter(r => !r.source_url).length;
@@ -950,7 +1053,7 @@ async function writeFeedItems(items, tag) {
 
   // writeNewsItems applies content-level dedup against the last 48h and within
   // this batch, and reports how many it collapsed.
-  const { inserted, deduped } = await db.writeNewsItems(rows);
+  const { inserted, deduped } = await db.writeNewsItems(stock, rows);
   return { inserted, dropped: 0, unresolvedUrls: unresolved, staleDropped: stale.length, deduped: deduped || 0 };
 }
 
@@ -1030,7 +1133,7 @@ function normalizeBullets(raw) {
 async function runCompany(sinceDate) {
   const td = todayThai();
   const { text, grounding } = await geminiSearch(PROMPT_COMPANY(td, todayISO()));
-  const items = parseAIResult(text, 'company', grounding);
+  const items = parseAIResult(text, 'company', grounding, 'ASW');
   if (!items.length) {
     console.log(`[gemini-company] ${td} → no items`);
     return { ok: true, date: td, category: null, text: null, sourceTitles: [] };
@@ -1039,11 +1142,11 @@ async function runCompany(sinceDate) {
   const top = items[0];
   // Write the pin against the ISO date key (todayISO), NOT the Thai display
   // string — otherwise the UPDATE matches no daily row and the pin is lost.
-  await db.updateSingleRemark(todayISO(), {
+  await db.updateSingleRemark('ASW', todayISO(), {
     category: top.category,
     text: top.headline,
   });
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-company');
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-company', 'ASW');
 
   return {
     ok: true,
@@ -1061,8 +1164,8 @@ async function runCompany(sinceDate) {
 async function runSector(sinceDate) {
   const td = todayThai();
   const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td, todayISO()));
-  const items = parseAIResult(text, 'sector', grounding);
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-sector');
+  const items = parseAIResult(text, 'sector', grounding, 'ASW');
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-sector', 'ASW');
   console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped}`);
   return { ok: true, fetched: items.length, inserted, dropped };
 }
@@ -1072,15 +1175,15 @@ async function runSector(sinceDate) {
 async function runMacro(sinceDate) {
   const td = todayThai();
   const { text, grounding } = await geminiSearch(PROMPT_MACRO(td, todayISO()));
-  const items = parseAIResult(text, 'macro', grounding);
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-macro');
+  const items = parseAIResult(text, 'macro', grounding, 'ASW');
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-macro', 'ASW');
 
   // The first severity=high item gets appended as a pin. We use
   // appendRemarkPin so the company pin from runCompany (above) is preserved.
   const topHigh = items.find(it => it.severity === 'high');
   if (topHigh) {
     // ISO key (see runCompany) — the Thai display string never matches daily.date.
-    await db.appendRemarkPin(todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
+    await db.appendRemarkPin('ASW', todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
   }
   const highCount = items.filter(i => i.severity === 'high').length;
   console.log(`[gemini-macro] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
@@ -1104,9 +1207,46 @@ async function runMorningBrief(sinceDate) {
   const reason = reasonMatch ? reasonMatch[1].trim() : '';
 
   const date = todayISO();                          // ICT date — was UTC
-  await db.updateMorningBrief(date, { lastWeek, thisWeek, tone, reason });
+  await db.updateMorningBrief('ASW', date, { lastWeek, thisWeek, tone, reason });
   console.log(`[gemini-morning-brief] ${date} tone=${tone} reason="${reason}"`);
   return { ok: true, date, tone, lastWeek, thisWeek, reason };
+}
+
+// (4b) TITLE COMPANY — news feed + remark pin on the TITLE chart, mirroring
+//      runCompany's shape but writing under stock='TITLE'.
+async function runTitleCompany(sinceDate) {
+  const td = todayThai();
+  const { text, grounding } = await geminiSearch(PROMPT_TITLE_COMPANY(td, todayISO()));
+  const items = parseAIResult(text, 'title-company', grounding, 'TITLE');
+  if (!items.length) {
+    console.log(`[gemini-title-company] ${td} → no items`);
+    return { ok: true, date: td, category: null, text: null, sourceTitles: [] };
+  }
+  const top = items[0];
+  await db.updateSingleRemark('TITLE', todayISO(), {
+    category: top.category,
+    text: top.headline,
+  });
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-title-company', 'TITLE');
+  return { ok: true, date: td, category: top.category, text: top.headline, inserted, dropped };
+}
+
+// (4c) TITLE DRIVERS — the TITLE panel's soul: wars/sanctions, oil, FX,
+//      tourism access, foreign-ownership policy, filtered by "does this move
+//      Phuket property demand". severity=high items pin the TITLE chart,
+//      mirroring runMacro.
+async function runTitleDrivers(sinceDate) {
+  const td = todayThai();
+  const { text, grounding } = await geminiSearch(PROMPT_TITLE_DRIVERS(td, todayISO()));
+  const items = parseAIResult(text, 'title-drivers', grounding, 'TITLE');
+  const { inserted, dropped } = await writeFeedItems(items, 'gemini-title-drivers', 'TITLE');
+  const topHigh = items.find(it => it.severity === 'high');
+  if (topHigh) {
+    await db.appendRemarkPin('TITLE', todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
+  }
+  const highCount = items.filter(i => i.severity === 'high').length;
+  console.log(`[gemini-title-drivers] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
+  return { ok: true, fetched: items.length, inserted, dropped, high: highCount };
 }
 
 // (5) DAILY SUMMARY — one Gemini digest of the day's news_feed rows, stored
@@ -1114,7 +1254,8 @@ async function runMorningBrief(sinceDate) {
 //     so it summarizes the full day. Source rows are READ-ONLY here — never
 //     writeNewsItems / UPDATE news_feed. Accepts an optional date (ICT ISO)
 //     so the manual refresh route can regenerate a specific day.
-async function runDailySummary(sinceDate) {
+async function runDailySummary(sinceDate, stock = 'ASW') {
+  const tag = stock === 'TITLE' ? 'gemini-title-daily-summary' : 'gemini-daily-summary';
   // Look at today first; if there's nothing yet (quiet morning, weekend,
   // holiday), fall back to the most recent day that has news. This makes
   // the dashboard show the last available summary instead of "failed"
@@ -1122,15 +1263,15 @@ async function runDailySummary(sinceDate) {
   // { ok: true, reason: 'no-news', date } when there's genuinely nothing
   // in the feed at all — that's not a failure, just an empty state.
   let date = sinceDate || todayISO();
-  let items = await db.readNewsFeedForDate(date);
+  let items = await db.readNewsFeedForDate(stock, date);
 
   if ((!items || !items.length) && !sinceDate) {
     // Auto-fallback: query the latest day that actually has rows.
-    const latest = await db.readLatestNewsDate();
+    const latest = await db.readLatestNewsDate(stock);
     if (latest && latest !== date) {
-      console.log(`[gemini-daily-summary] ${date} → no news, falling back to ${latest}`);
+      console.log(`[${tag}] ${date} → no news, falling back to ${latest}`);
       date = latest;
-      items = await db.readNewsFeedForDate(date);
+      items = await db.readNewsFeedForDate(stock, date);
     }
   }
 
@@ -1138,7 +1279,7 @@ async function runDailySummary(sinceDate) {
     // Genuine empty state (no news in the last week). Log as ok=true with
     // reason:'no-news' so the dashboard doesn't render a "failed" status —
     // the absence of news isn't a pipeline failure.
-    console.log(`[gemini-daily-summary] ${date} → no news, skipping`);
+    console.log(`[${tag}] ${date} → no news, skipping`);
     return { ok: true, reason: 'no-news', date, sourceCount: 0 };
   }
 
@@ -1146,14 +1287,14 @@ async function runDailySummary(sinceDate) {
   // (this path is where the truncation was first diagnosed, so keep it pinned).
   // 90s is the matching upper bound on the wait — this is the longest prompt we
   // send and it has no grounding round-trip to hide behind.
-  const { text } = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items), {
+  const { text } = await geminiSearch(PROMPT_DAILY_SUMMARY(date, items, stock), {
     ground: false, maxTokens: 8192, timeoutMs: 90_000,
   });
   if (!text || text.trim() === 'NONE') {
-    console.log(`[gemini-daily-summary] ${date} → empty digest`);
+    console.log(`[${tag}] ${date} → empty digest`);
     return { ok: false, reason: 'empty', date };
   }
-  console.log(`[gemini-daily-summary] raw=${text.slice(0, 500)}`);
+  console.log(`[${tag}] raw=${text.slice(0, 500)}`);
 
   const keyPoints = normalizeBullets(extractSection(text, 'KEY_POINTS'));
   // HEADLINE: one ≤100-char sentence summing up the day — becomes the Remark
@@ -1168,14 +1309,14 @@ async function runDailySummary(sinceDate) {
   const { tone } = parseTone(toneMatch ? toneMatch[1] : '');
   const reason = reasonMatch ? reasonMatch[1].trim() : '';
 
-  await db.upsertDailySummary(date, {
+  await db.upsertDailySummary(stock, date, {
     digest: keyPoints,
     headline,
     tone,
     reason,
     sourceCount: items.length,
   });
-  console.log(`[gemini-daily-summary] ${date} → tone=${tone} items=${items.length} reason="${reason}"`);
+  console.log(`[${tag}] ${date} → tone=${tone} items=${items.length} reason="${reason}"`);
   return { ok: true, date, tone, reason, sourceCount: items.length };
 }
 
@@ -1192,7 +1333,11 @@ async function run({ source, sinceDate } = {}) {
     case 'gemini-sector':         return runSector(sinceDate);
     case 'gemini-macro':          return runMacro(sinceDate);
     case 'gemini-morning-brief':  return runMorningBrief(sinceDate);
-    case 'gemini-daily-summary':  return runDailySummary(sinceDate);
+    case 'gemini-daily-summary':  return runDailySummary(sinceDate, 'ASW');
+    // migrate-v13 — the TITLE (Phuket / foreign-demand) pipelines.
+    case 'gemini-title-company':       return runTitleCompany(sinceDate);
+    case 'gemini-title-drivers':       return runTitleDrivers(sinceDate);
+    case 'gemini-title-daily-summary': return runDailySummary(sinceDate, 'TITLE');
     default:
       throw new Error(`gemini-search: unknown source "${source}"`);
   }

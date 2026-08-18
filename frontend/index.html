@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>ASW Monitor — ASSETWISE PUBLIC COMPANY LIMITED (ASW.BK)</title>
+<title>Stock Monitor — ASW · TITLE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -202,9 +202,17 @@
   <!-- Top bar -->
   <header class="topbar">
     <div class="topbar-brand">
-      <img src="/logo.png" alt="ASW Monitor" style="height:8px;width:auto;margin-right:8px;" />
+      <img src="/logo.png" alt="Stock Monitor" style="height:8px;width:auto;margin-right:8px;" />
       <div>
-        <div class="topbar-title">ASW Monitor</div>
+        <div class="topbar-title" id="topbarTitle">ASW Monitor</div>
+      </div>
+      <!-- migrate-v13: stock switcher — the whole app follows the selection -->
+      <div id="stockSwitch" role="tablist" aria-label="เลือกหุ้น"
+           style="display:flex;gap:2px;margin-left:16px;background:#edeae3;border-radius:9px;padding:2px;">
+        <button type="button" class="stock-switch-btn" data-stock="ASW"
+                style="padding:4px 14px;font-size:12px;font-weight:700;border:none;border-radius:7px;cursor:pointer;background:var(--primary);color:#fff;">ASW</button>
+        <button type="button" class="stock-switch-btn" data-stock="TITLE"
+                style="padding:4px 14px;font-size:12px;font-weight:700;border:none;border-radius:7px;cursor:pointer;background:transparent;color:#555;">TITLE</button>
       </div>
     </div>
     <div class="topbar-actions">
@@ -348,7 +356,7 @@
             <canvas id="dashChart"></canvas>
           </div>
           <div class="chart-legend">
-            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--primary)"></span> ASW Close</div>
+            <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--primary)"></span> <span id="legendCloseLabel">ASW Close</span></div>
             <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--muted); border-top:1px dashed var(--muted)"></span> SET Index</div>
             <div class="chart-legend-item"><span class="legend-swatch" style="background:var(--teal); border-top:1px dashed var(--teal)"></span> PROP Index</div>
             <!-- Dashboard pins are now user-placed "marks" (chart_marked news),
@@ -543,15 +551,10 @@
       </div>
 
       <!-- Category tabs -->
-      <div id="newsCatTabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
-        <button class="news-tab active th" data-cat="__all" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:none;cursor:pointer;background:var(--primary);color:#fff;">ทั้งหมด</button>
-        <button class="news-tab th" data-cat="COMPANY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">บริษัท (ASW)</button>
-        <button class="news-tab th" data-cat="COMPETITOR" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">คู่แข่ง</button>
-        <button class="news-tab th" data-cat="RATES" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">ดอกเบี้ย</button>
-        <button class="news-tab th" data-cat="GOV_POLICY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">นโยบายรัฐ</button>
-        <button class="news-tab th" data-cat="INDUSTRY" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">อุตสาหกรรม</button>
-        <button class="news-tab th" data-cat="MACRO" style="white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;border:1px solid #e0e0e0;cursor:pointer;background:#fff;">มหภาค</button>
-      </div>
+      <!-- migrate-v13: tabs are JS-rendered per stock (renderNewsCatTabs) —
+           the sets differ (TITLE adds ท่องเที่ยว/ภูมิรัฐศาสตร์/น้ำมัน/ค่าเงิน, drops การเมือง)
+           and the COMPANY label names the selected stock. -->
+      <div id="newsCatTabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;"></div>
 
       <!-- Unified timeline: summaries + news merged per day -->
       <div id="newsTimeline"></div>
@@ -631,7 +634,7 @@
       <span id="sbEvents" style="color:var(--text);">—</span>
     </div>
     <div class="statusbar-right">
-      <span class="th">ASW.BK</span>
+      <span class="th" id="settingsTicker">ASW.BK</span>
       <span>·</span>
       <span id="sbView" style="color:var(--text);">Dashboard</span>
     </div>
@@ -720,7 +723,7 @@
 'use strict';
 window.ASW_API = {
   async metadata() {
-    try { const r = await fetch('/api/metadata'); if (!r.ok) throw 0; return await r.json(); }
+    try { const r = await fetch('/api/metadata' + stockQS()); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { rowCount: (window.SAMPLE_DATA||[]).length, lastFetched: null, lastFetchOk: null, lastFetchSource: 'bundled', status: 'bundled' }; }
   },
   // Returns [] when the backend is healthy but the DB has no rows yet, and
@@ -728,7 +731,7 @@ window.ASW_API = {
   // silently substituting SAMPLE_DATA here made a fresh deploy render bundled
   // 2021-2024 sample prices labelled "Live · yahoo". See applyDailyRows().
   async daily() {
-    try { const r = await fetch('/api/daily'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
+    try { const r = await fetch('/api/daily' + stockQS()); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
     catch (e) { return null; }
   },
   async peers() {
@@ -740,12 +743,12 @@ window.ASW_API = {
   // The KPI falls back to the last DATA close when marketOpen=false or
   // when price is null (e.g. cold cache, server restart).
   async intraday() {
-    try { const r = await fetch('/api/intraday'); if (!r.ok) throw 0; return await r.json(); }
+    try { const r = await fetch('/api/intraday' + stockQS()); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { price: null, prevClose: null, ts: null, marketOpen: false, source: null, cacheAgeMs: null, lastError: 'offline' }; }
   },
   async refresh() {
     try {
-      const r = await fetch('/api/refresh', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' });
+      const r = await fetch('/api/refresh', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ stock: STATE.stock }) });
       return await r.json();
     } catch (e) { return { ok: false, error: 'offline' }; }
   },
@@ -758,7 +761,7 @@ window.ASW_API = {
     catch (e) { return { ok: false, error: 'offline' }; }
   },
   async newsFeed() {
-    try { const r = await fetch('/api/news?limit=500'); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
+    try { const r = await fetch('/api/news?limit=500' + stockQS('&')); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
     catch (e) { return []; }
   },
   // Chart pins across the whole IPO→now range. Separate from newsFeed()
@@ -766,7 +769,7 @@ window.ASW_API = {
   // drops the oldest pins first — see GET /api/news/pins in server.js.
   async newsPins(since) {
     try {
-      const q = since ? `?since=${encodeURIComponent(since)}` : '';
+      const q = (since ? `?since=${encodeURIComponent(since)}&` : '?') + 'stock=' + encodeURIComponent(STATE.stock);
       const r = await fetch('/api/news/pins' + q);
       if (!r.ok) throw 0;
       const d = await r.json();
@@ -785,7 +788,7 @@ window.ASW_API = {
   // (migrate-v4). Drives the status strip under the news toolbar.
   async newsStatus() {
     try {
-      const r = await fetch('/api/news/status');
+      const r = await fetch('/api/news/status' + stockQS());
       if (!r.ok) throw 0;
       return await r.json();
     } catch (e) { return { lastRuns: {}, counts: { total: 0, high: 0, high_priority: 0, today: 0 }, fetchedAt: null }; }
@@ -822,7 +825,7 @@ window.ASW_API = {
   // or {ok:true, duplicate:true} when the headline+link already exists.
   async addNews({ title, source_url, date, category, severity }) {
     try {
-      const body = { title, source_url };
+      const body = { title, source_url, stock: STATE.stock };
       if (date) body.date = date;
       if (category) body.category = category;
       if (severity) body.severity = severity;
@@ -851,7 +854,7 @@ window.ASW_API = {
     } catch (e) { return { ok: false, error: 'offline' }; }
   },
   async morningBrief() {
-    try { const r = await fetch('/api/morning-brief'); if (!r.ok) throw 0; return await r.json(); }
+    try { const r = await fetch('/api/morning-brief' + stockQS()); if (!r.ok) throw 0; return await r.json(); }
     catch (e) { return { date: null, morning_brief: null }; }
   },
   async morningBriefRefresh() {
@@ -862,7 +865,7 @@ window.ASW_API = {
   // latest). Returns {date, digest, tone, reason, source_count, generated_at}.
   async dailySummary(date) {
     try {
-      const qs = date ? `?date=${encodeURIComponent(date)}` : '';
+      const qs = (date ? `?date=${encodeURIComponent(date)}&` : '?') + 'stock=' + encodeURIComponent(STATE.stock);
       const r = await fetch('/api/daily-summary' + qs);
       if (!r.ok) throw 0;
       return await r.json();
@@ -873,7 +876,7 @@ window.ASW_API = {
   // pin + one Remark cell, derived client-side from the first bullet.
   async dailySummaries() {
     try {
-      const r = await fetch('/api/daily-summaries');
+      const r = await fetch('/api/daily-summaries' + stockQS());
       if (!r.ok) throw 0;
       const j = await r.json();
       return (j && j.items) || [];
@@ -881,7 +884,7 @@ window.ASW_API = {
   },
   async dailySummaryRefresh(date) {
     try {
-      const body = date ? JSON.stringify({ date }) : undefined;
+      const body = JSON.stringify(date ? { date, stock: STATE.stock } : { stock: STATE.stock });
       const r = await fetch('/api/daily-summary/refresh', {
         method: 'POST', headers: { 'content-type': 'application/json' }, body,
       });
@@ -903,7 +906,37 @@ window.ASW_API = {
  * ==================================================================== */
 
 /* ============== State ============== */
+// ── migrate-v13: client-side stock registry ─────────────────────────────────
+// Mirrors backend/lib/stocks.js (labels, tab sets, per-stock IPO anchor for
+// the pins range + "since IPO" pill). TITLE = Rhom Bho Property, ASW's ~68.9%
+// Phuket subsidiary; its buyers are mostly foreign, hence the driver tabs.
+const STOCKS_META = {
+  ASW: {
+    label: 'ASW', ticker: 'ASW.BK', title: 'ASW Monitor',
+    ipoDate: '2021-04-28',   // first trading day (close ฿8.76)
+    categories: ['COMPANY', 'COMPETITOR', 'RATES', 'GOV_POLICY', 'POLITICS', 'INDUSTRY', 'MACRO'],
+    hasMorningBrief: true,
+  },
+  TITLE: {
+    label: 'TITLE', ticker: 'TITLE.BK', title: 'TITLE Monitor',
+    ipoDate: '2017-11-02',   // mai debut; moved to SET Jan 2026, same ticker
+    categories: ['COMPANY', 'GEOPOLITICS', 'OIL', 'FX', 'TOURISM', 'GOV_POLICY', 'COMPETITOR', 'RATES', 'INDUSTRY', 'MACRO'],
+    hasMorningBrief: false,  // v13 scope: Monday brief is ASW-only
+  },
+};
+// Monotonic switch counter — every async load captures it and discards its
+// result if a newer switch happened while the request was in flight (guards
+// rapid A→B→A toggling and the perpetual 60s/90s pollers).
+let STOCK_EPOCH = 0;
+const stockIpoDate = () => STOCKS_META[STATE.stock].ipoDate;
+const stockQS = (sep = '?') => sep + 'stock=' + encodeURIComponent(STATE.stock);
+
 const STATE = {
+  // Selected stock — persisted so a reload keeps the panel you were on.
+  stock: (() => {
+    try { const s = localStorage.getItem('monitor.stock'); return STOCKS_META[s] ? s : 'ASW'; }
+    catch (e) { return 'ASW'; }
+  })(),
   view: 'dashboard',
   range: '6M',
   overlay: 'price',
@@ -969,9 +1002,10 @@ function applyDailyRows(rows, keepOnFailure = false) {
   return mode;
 }
 
-// ASW.BK (AssetWise) IPO date — first trading day (2021-04-28, close ฿8.76).
-// Anchors the "since IPO" pill, the IPO annotation line, and the return-since-IPO stat.
-const IPO_DATE = '2021-04-28';
+// Per-stock IPO anchor lives in STOCKS_META (ASW 2021-04-28 close ฿8.76;
+// TITLE 2017-11-02 on mai). IPO_DATE stays as a live getter so every existing
+// call site follows the selected stock without a sweep.
+Object.defineProperty(window, 'IPO_DATE', { get: () => stockIpoDate() });
 
 /* ============== Utilities ============== */
 const $ = (id) => document.getElementById(id);
@@ -1146,6 +1180,11 @@ const REMARK_BADGE = {
   //   INDUSTRY   — RE market trends / peer activity / supply-demand
   //   MACRO      — broad economic indicators (GDP/CPI/FX/trade)
   COMPANY:    { label: 'COMPANY',     thaiLabel: 'บริษัท',            cls: 'cat-company',    color: '#1D9E75' },
+  // ── Migrate-v13 driver categories (TITLE panel: Phuket / foreign demand) ──
+  TOURISM:    { label: 'TOURISM',     thaiLabel: 'ท่องเที่ยว',          cls: 'cat-tourism',    color: '#0E9AA7' },
+  GEOPOLITICS:{ label: 'GEOPOLITICS', thaiLabel: 'ภูมิรัฐศาสตร์',       cls: 'cat-geopolitics',color: '#5D4037' },
+  OIL:        { label: 'OIL',         thaiLabel: 'น้ำมัน',             cls: 'cat-oil',        color: '#37474F' },
+  FX:         { label: 'FX',          thaiLabel: 'ค่าเงิน',            cls: 'cat-fx',         color: '#185FA5' },
   COMPETITOR: { label: 'คู่แข่ง',      thaiLabel: 'คู่แข่ง',             cls: 'cat-competitor', color: '#C2185B' },
   RATES:      { label: 'RATES',       thaiLabel: 'อัตราดอกเบี้ย',       cls: 'cat-rates',      color: '#A32D2D' },
   GOV_POLICY: { label: 'GOV_POLICY',  thaiLabel: 'นโยบายรัฐ',          cls: 'cat-gov-policy', color: '#7F77DD' },
@@ -1878,7 +1917,7 @@ function buildMarkAnnotations(filtered) {
   for (const [day, items] of visible) {
     const row = byDate.get(day);
     // Use the highest-priority category's colour for this date's pin
-    const CAT_PRIORITY = { COMPANY: 0, COMPETITOR: 1, RATES: 2, GOV_POLICY: 3, INDUSTRY: 4, MACRO: 5, POLITICS: 6 };
+    const CAT_PRIORITY = { COMPANY: 0, GEOPOLITICS: 1, OIL: 2, FX: 3, TOURISM: 4, COMPETITOR: 5, RATES: 6, GOV_POLICY: 7, INDUSTRY: 8, MACRO: 9, POLITICS: 10 };
     const sorted = [...items].sort((a, b) => (CAT_PRIORITY[a.category] ?? 9) - (CAT_PRIORITY[b.category] ?? 9));
     const badge = REMARK_BADGE[sorted[0].category] || REMARK_BADGE.MACRO;
     ann['usrMark_' + (i++)] = {
@@ -1933,7 +1972,7 @@ function buildDashChart(filtered) {
   }
 
   const datasets = [{
-    label: 'ASW Close', data: priceData,
+    label: STOCKS_META[STATE.stock].label + ' Close', data: priceData,
     borderColor: getCSS('--primary'),
     backgroundColor: 'rgba(59,139,212,0.06)',
     borderWidth: 4,
@@ -2021,7 +2060,7 @@ function buildDashChart(filtered) {
             let html = '<div style="font-weight:700;margin-bottom:4px;">' + dt.toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'numeric'}) + '</div>';
             for (const dp of items) {
               const v = dp.parsed.y;
-              html += '<div style="color:#555;">' + dp.dataset.label + ': ' + (dp.dataset.label.includes('ASW') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
+              html += '<div style="color:#555;">' + dp.dataset.label + ': ' + (dp.dataset.label.includes(' Close') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
             }
 
             // Headlines as PLAIN TEXT — the panel is pointer-events:none, so an
@@ -3033,7 +3072,7 @@ function hpRenderSpans(rows) {
       <div class="i-sub th" style="font-size:11px;color:var(--muted);">
         ฿${fmtNum(s.from.close)} → ฿${fmtNum(s.to.close)} · ${s.days} วันทำการ</div>
       <div class="hp-span-meta th">${bits.map(b => `<span>${b}</span>`).join('')}</div>
-      ${rel != null ? `<div class="th" style="font-size:11px;margin-top:4px;" class="${hpPctCls(rel)}">ASW เทียบ PROP <span class="${hpPctCls(rel)}">${rel > 0 ? '+' : ''}${rel.toFixed(2)} pp</span></div>` : ''}
+      ${rel != null ? `<div class="th" style="font-size:11px;margin-top:4px;" class="${hpPctCls(rel)}">${STOCKS_META[STATE.stock].label} เทียบ PROP <span class="${hpPctCls(rel)}">${rel > 0 ? '+' : ''}${rel.toFixed(2)} pp</span></div>` : ''}
       <button type="button" class="hp-span-cta th" data-hpspan="${s.from.date}|${s.to.date}">ดูช่วงนี้ →</button>
     </div>`;
   }).join('');
@@ -3178,7 +3217,7 @@ async function loadNewsFeed() {
   try {
     // User-hidden rows are already excluded server-side; this cache is the
     // single source of truth for both renderDashNews() and renderUnifiedNews().
-    const r = await fetch('/api/news?limit=500');
+    const r = await fetch('/api/news?limit=500' + stockQS('&'));
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     window.NEWS_DATA = d.rows || [];
@@ -3455,15 +3494,18 @@ async function loadNewsStatus() {
     return `${ic} ${fmtTime(r.finished_at || r.started_at)} (${r.rows_added || 0} รายการ${r.ok ? '' : ' · ' + escapeHtml(r.error || 'fail')})`;
   };
   const dotClass = (r) => r && r.ok ? 'ok' : (r ? 'error' : 'pending');
+  // migrate-v13: render rows from the keys the API actually returned — the
+  // pipeline set differs per stock (TITLE: company/drivers/daily-summary; no
+  // sector/macro/brief), so a hardcoded list would show dead rows.
+  const KEY_LABELS = { 'rss-property': 'rss-property', 'rss-extended': 'rss-extended',
+    company: 'company', sector: 'sector', macro: 'macro', drivers: 'drivers',
+    brief: 'brief', 'daily-summary': 'สรุปวัน' };
+  const spans = Object.keys(s.lastRuns).map(k =>
+    `<span><span class="dot ${dotClass(s.lastRuns[k])}"></span> <strong>${escapeHtml(KEY_LABELS[k] || k)}</strong> · ${fmtRun(s.lastRuns[k])}</span>`
+  ).join('\n      ');
   row.innerHTML = `
     <div class="news-status-row">
-      <span><span class="dot ${dotClass(s.lastRuns['rss-property'])}"></span> <strong>rss-property</strong> · ${fmtRun(s.lastRuns['rss-property'])}</span>
-      <span><span class="dot ${dotClass(s.lastRuns['rss-extended'])}"></span> <strong>rss-extended</strong> · ${fmtRun(s.lastRuns['rss-extended'])}</span>
-      <span><span class="dot ${dotClass(s.lastRuns.company)}"></span> <strong>company</strong> · ${fmtRun(s.lastRuns.company)}</span>
-      <span><span class="dot ${dotClass(s.lastRuns.sector)}"></span> <strong>sector</strong> · ${fmtRun(s.lastRuns.sector)}</span>
-      <span><span class="dot ${dotClass(s.lastRuns.macro)}"></span> <strong>macro</strong> · ${fmtRun(s.lastRuns.macro)}</span>
-      <span><span class="dot ${dotClass(s.lastRuns.brief)}"></span> <strong>brief</strong> · ${fmtRun(s.lastRuns.brief)}</span>
-      <span><span class="dot ${dotClass(s.lastRuns['daily-summary'])}"></span> <strong>สรุปวัน</strong> · ${fmtRun(s.lastRuns['daily-summary'])}</span>
+      ${spans}
     </div>
     <div class="muted th mt-8" style="font-size:11px;">
       📊 ทั้งหมด <strong>${s.counts.total}</strong> รายการ · high <strong>${s.counts.high}</strong> · priority ≥75 <strong>${s.counts.high_priority}</strong> · วันนี้ <strong>${s.counts.today}</strong>
@@ -3475,6 +3517,13 @@ async function loadNewsStatus() {
 // removed the News-view banner. Same data source (`/api/morning-brief`),
 // different DOM target (`#morningBriefContent`).
 async function loadMorningBrief() {
+  // v13 scope: the Monday brief exists for ASW only — skip the round-trip and
+  // render the empty state on stocks that don't have one.
+  if (!STOCKS_META[STATE.stock].hasMorningBrief) {
+    window.MORNING_BRIEF = null;
+    renderMorningBrief();
+    return;
+  }
   const brief = await window.ASW_API.morningBrief();
   window.MORNING_BRIEF = brief;
   renderMorningBrief();
@@ -3648,22 +3697,24 @@ async function refreshNewsFeed() {
  * (the backend DELETE guards on pipeline='manual').
  */
 
-// Taxonomy-v2 keys in display order — drives the category <select> options so
-// the dropdown matches the filter chips + card badges (single source: catLabel).
-const MANUAL_NEWS_CATEGORIES = ['COMPANY','COMPETITOR','RATES','GOV_POLICY','POLITICS','INDUSTRY','MACRO'];
+// Taxonomy keys in display order — per stock (migrate-v13): drives the
+// category <select> options so the dropdown matches the tabs + card badges.
+const MANUAL_NEWS_CATEGORIES = () => STOCKS_META[STATE.stock].categories;
 
-// Populate the category <select> once at boot. Idempotent — guards on the
-// option already existing so re-calls (defensive) don't duplicate.
+// (Re)populate the category <select> for the current stock. Called at boot
+// and again on every stock switch — the sets differ.
 function populateAddNewsCategories() {
   const sel = $('addNewsCategory');
-  if (!sel || sel.dataset.populated === '1') return;
-  for (const cat of MANUAL_NEWS_CATEGORIES) {
+  if (!sel || sel.dataset.populated === STATE.stock) return;
+  // Keep the first option (the "auto" placeholder) — drop the rest.
+  while (sel.options.length > 1) sel.remove(1);
+  for (const cat of MANUAL_NEWS_CATEGORIES()) {
     const o = document.createElement('option');
     o.value = cat;
     o.textContent = catLabel(cat);
     sel.appendChild(o);
   }
-  sel.dataset.populated = '1';
+  sel.dataset.populated = STATE.stock;
 }
 
 function openAddNewsModal() {
@@ -3939,6 +3990,139 @@ function renderSettingsInfo() {
 }
 
 /* ============== View routing ============== */
+/* ============== migrate-v13: stock switcher ============== */
+
+// Render the category tab row for the CURRENT stock. Buttons carry the same
+// .news-tab/data-cat contract the old static markup had; the click handler is
+// attached here (the static wiring at DOMContentLoaded is gone with the
+// static buttons).
+function renderNewsCatTabs() {
+  const wrap = $('newsCatTabs');
+  if (!wrap) return;
+  const cats = ['__all', ...STOCKS_META[STATE.stock].categories];
+  // A category filter from the other stock's set would show an empty feed —
+  // reset to "all" when it doesn't exist here.
+  if (STATE.newsCats && STATE.newsCats !== '__all' && !cats.includes(STATE.newsCats)) {
+    STATE.newsCats = '__all';
+  }
+  wrap.innerHTML = '';
+  for (const cat of cats) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'news-tab th';
+    b.dataset.cat = cat;
+    const active = (STATE.newsCats || '__all') === cat;
+    b.style.cssText = 'white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;cursor:pointer;'
+      + (active ? 'background:var(--primary);color:#fff;border:none;' : 'background:#fff;border:1px solid #e0e0e0;');
+    if (active) b.classList.add('active');
+    b.textContent = cat === '__all' ? 'ทั้งหมด'
+      : cat === 'COMPANY' ? ('บริษัท (' + STOCKS_META[STATE.stock].label + ')')
+      : catLabel(cat);
+    b.addEventListener('click', () => {
+      STATE.newsCats = cat;
+      renderNewsCatTabs();
+      renderUnifiedNews();
+    });
+    wrap.appendChild(b);
+  }
+}
+
+// Repaint every stock-labelled surface for the current STATE.stock.
+function updateStockUI() {
+  const meta = STOCKS_META[STATE.stock];
+  document.title = meta.title + ' — ' + meta.ticker;
+  const tt = $('topbarTitle');        if (tt) tt.textContent = meta.title;
+  const lg = $('legendCloseLabel');   if (lg) lg.textContent = meta.label + ' Close';
+  const st = $('settingsTicker');     if (st) st.textContent = meta.ticker;
+  document.querySelectorAll('#stockSwitch .stock-switch-btn').forEach(b => {
+    const on = b.dataset.stock === STATE.stock;
+    b.style.background = on ? 'var(--primary)' : 'transparent';
+    b.style.color = on ? '#fff' : '#555';
+  });
+  renderNewsCatTabs();
+  populateAddNewsCategories();
+}
+
+// Switch the whole app to another stock. Semantics pinned by scrutiny pass 2:
+//   - epoch-guarded: a stale in-flight response can never paint under the
+//     wrong label (incl. rapid A→B→A toggling and the background pollers)
+//   - fetch failure REVERTS the toggle and keeps the old stock rendered under
+//     its old label — data is never relabelled (the app already fought a
+//     "bundled data labelled Live" bug once; not again)
+//   - healthy-but-empty renders the honest empty banner via applyDailyRows
+let _switching = false;
+async function switchStock(next) {
+  if (!STOCKS_META[next] || next === STATE.stock || _switching) return;
+  const prev = STATE.stock;
+  const epoch = ++STOCK_EPOCH;
+  _switching = true;
+  STATE.stock = next;
+  updateStockUI();
+  try {
+    const rows = await window.ASW_API.daily();
+    if (epoch !== STOCK_EPOCH) return;
+    if (rows === null) {
+      // Backend unreachable — revert, never relabel.
+      STATE.stock = prev;
+      STOCK_EPOCH++;
+      updateStockUI();
+      const banner = $('noDataBanner');
+      if (banner) {
+        const origText = banner.textContent;
+        banner.textContent = '— โหลดข้อมูล ' + next + ' ไม่สำเร็จ กลับไปที่ ' + prev + ' —';
+        banner.hidden = false;
+        setTimeout(() => { banner.hidden = true; banner.textContent = origText; }, 4000);
+      }
+      return;
+    }
+    try { localStorage.setItem('monitor.stock', next); } catch (e) {}
+
+    // Reset every stock-scoped cache/positional state (plan §6 list).
+    window.NEWS_DATA = [];
+    window.NEWS_PINS = [];
+    window.ALL_SUMMARIES = [];
+    window.MORNING_BRIEF = null;
+    window.DAILY_SUMMARY = null;
+    CACHED_DIGESTS = [];
+    window.DIGEST_REMARKS = new Map();
+    PIN_NEWS_BY_DAY = new Map();
+    HP_METRICS = new Map(); HP_NEWS_BY_DATE = new Map(); HP_SELECTED_DATE = null; HP_TABLE_PAGE = 0;
+    STATE.focusedDate = null; STATE.tablePage = 0; STATE.priceFilter = null;
+    LIVE_TICK.price = null; LIVE_TICK.prevClose = null; LIVE_TICK.ts = null;
+    LIVE_TICK.marketOpen = false; LIVE_TICK.source = null;
+    if (window.__resetAutoPollSeen) window.__resetAutoPollSeen();
+    // PEER_CACHE deliberately survives — the peer table is stock-independent.
+
+    // Fresh data for the new stock — same parallel set as boot.
+    const [meta, newsRows, newsPins, brief, dailySummary, allDigests] = await Promise.all([
+      window.ASW_API.metadata(),
+      window.ASW_API.newsFeed(),
+      window.ASW_API.newsPins(stockIpoDate()),
+      window.ASW_API.morningBrief(),
+      window.ASW_API.dailySummary(),
+      window.ASW_API.dailySummaries(),
+    ]);
+    if (epoch !== STOCK_EPOCH) return;
+    CACHED_DIGESTS = allDigests || [];
+    const mode = applyDailyRows(rows);
+    if (newsRows) { window.NEWS_DATA = newsRows; window.__newsFeedLoaded = true; syncNewsDateBounds(); }
+    if (newsPins) window.NEWS_PINS = newsPins;
+    if (brief && brief.date) window.MORNING_BRIEF = brief;
+    if (dailySummary && dailySummary.date) window.DAILY_SUMMARY = dailySummary;
+    if (mode !== 'sample' && meta && meta.lastFetchSource) {
+      CURRENT_FILE_NAME = 'Live · ' + meta.lastFetchSource;
+      const sb = $('sbFile'); if (sb) sb.textContent = CURRENT_FILE_NAME;
+    }
+    applyDigestRemarks(CACHED_DIGESTS);
+    renderMorningBrief();
+    loadNewsStatus();
+    setView(STATE.view);   // re-renders the active view against the new DATA
+    updateStatusBar();
+  } finally {
+    _switching = false;
+  }
+}
+
 function setView(view) {
   STATE.view = view;
   STATE.focusedDate = null;
@@ -4026,7 +4210,7 @@ function updateDateInfo() {
 // Fetch all daily summaries and re-render so they appear in the panel.
 async function loadAllSummaries() {
   try {
-    const r = await fetch('/api/daily-summaries');
+    const r = await fetch('/api/daily-summaries' + stockQS());
     if (!r.ok) return;
     const j = await r.json();
     window.ALL_SUMMARIES = j.items || j || [];
@@ -4275,22 +4459,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     dpTo.addEventListener('change', onDateChange);
   }
 
-  // Category tabs
-  document.querySelectorAll('.news-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      STATE.newsCats = tab.dataset.cat || '__all';
-      document.querySelectorAll('.news-tab').forEach(t => {
-        t.classList.remove('active');
-        t.style.background = '#fff';
-        t.style.color = '';
-        t.style.border = '1px solid #e0e0e0';
-      });
-      tab.classList.add('active');
-      tab.style.background = 'var(--primary)';
-      tab.style.color = '#fff';
-      tab.style.border = 'none';
-      renderUnifiedNews();
-    });
+  // Category tabs are JS-rendered per stock (renderNewsCatTabs) — the render
+  // attaches its own click handlers; nothing to wire here.
+
+  // Stock switcher (migrate-v13)
+  document.querySelectorAll('#stockSwitch .stock-switch-btn').forEach(b => {
+    b.addEventListener('click', () => switchStock(b.dataset.stock));
   });
 
   // Add news button
@@ -4496,6 +4670,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => e.preventDefault());
 
+  // migrate-v13: paint the stock-labelled surfaces + per-stock tabs for the
+  // persisted selection before any data lands.
+  updateStockUI();
+
   // Init active pill states
   document.querySelectorAll('#rangePills .pill').forEach(b => {
     b.classList.toggle('active', b.dataset.range === STATE.range);
@@ -4652,14 +4830,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // for prices to feel "live". Browser tab throttling is fine — cron
   // already runs server-side, this is just for catching up the UI.
   let _lastFetchedSeen = null;
+  // Reset hook for switchStock(): per-stock lastFetched values are unrelated —
+  // carrying one across a switch would trigger a spurious reload or mask one.
+  window.__resetAutoPollSeen = () => { _lastFetchedSeen = null; };
   async function autoPollOnce() {
     try {
+      const epoch = STOCK_EPOCH;   // discard if a stock switch lands mid-poll
       const m = await window.ASW_API.metadata();
+      if (epoch !== STOCK_EPOCH) return;
       if (!m || !m.lastFetched) return;
       if (_lastFetchedSeen === null) { _lastFetchedSeen = m.lastFetched; return; }
       if (m.lastFetched === _lastFetchedSeen) return;
       _lastFetchedSeen = m.lastFetched;
       const rows = await window.ASW_API.daily();
+      if (epoch !== STOCK_EPOCH) return;
       // Re-stamps digestRemark on the fresh row objects (applyDigestRemarks
       // mutates in place, so the 60-s poll used to wipe the Remark column).
       // keepOnFailure: the background poll must never downgrade good live data
@@ -4688,7 +4872,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // DATA (EOD closes); only the KPI displays the intraday partial.
   async function pollIntraday() {
     try {
+      const epoch = STOCK_EPOCH;   // a stale tick must not restore the old stock's price
       const j = await window.ASW_API.intraday();
+      if (epoch !== STOCK_EPOCH) return;
       if (j) {
         LIVE_TICK.price = j.price;
         LIVE_TICK.prevClose = j.prevClose;

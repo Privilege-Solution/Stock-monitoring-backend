@@ -97,6 +97,16 @@ async function fetchOne(symbol, period1, period2, interval = '1d') {
   return rows;
 }
 
+// Daily series for one arbitrary symbol (migrate-v13: the non-ASW stocks,
+// e.g. TITLE.BK). Same retry + window semantics as fetchAll's ASW pull.
+export async function fetchSymbolDaily(symbol, { sinceDate } = {}) {
+  const period2 = Math.floor(Date.now() / 1000);
+  const period1 = sinceDate
+    ? Math.floor(new Date(sinceDate + 'T00:00:00Z').getTime() / 1000)
+    : period2 - 60 * 60 * 24 * 365 * 5; // 5 years default
+  return await withRetry(() => fetchOne(symbol, period1, period2), { label: `yahoo:${symbol}` });
+}
+
 export async function fetchAll({ sinceDate } = {}) {
   const period2 = Math.floor(Date.now() / 1000);
   const period1 = sinceDate
@@ -152,10 +162,10 @@ export async function fetchAll({ sinceDate } = {}) {
 //
 // The returned `source` field ('candle' or 'meta-fallback') lets the
 // dashboard annotate the delay if desired.
-export async function fetchIntraday({ windowMinutes = 60 } = {}) {
+export async function fetchIntraday({ symbol = SYMBOLS.asw, windowMinutes = 60 } = {}) {
   const period2 = Math.floor(Date.now() / 1000);
   const period1 = period2 - windowMinutes * 60;
-  const { rows, meta } = await fetchRaw(SYMBOLS.asw, period1, period2, '1m');
+  const { rows, meta } = await fetchRaw(symbol, period1, period2, '1m');
 
   // Path 1: real 1-min candle.
   if (rows.length) {

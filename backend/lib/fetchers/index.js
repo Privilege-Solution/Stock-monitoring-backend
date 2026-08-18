@@ -3,6 +3,7 @@
 const db = require('../../db');
 const { fetchAll: mockFetch } = require('./mock');
 const { computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES } = require('../prop-basket');
+const { STOCKS, STOCK_KEYS, DEFAULT_STOCK, assertStock } = require('../stocks.js');
 
 let yahooModule = null;
 async function loadYahoo() {
@@ -78,35 +79,78 @@ async function runFetch({ source = 'yahoo', sinceDate, maxAgeDays } = {}) {
     return await m.run({ sinceDate, maxAgeDays });
   }
 
-  if (!sinceDate) {
-    const meta = await db.metadata();
+  // Price sources delegate to the combined multi-stock run (migrate-v13).
+  return runDailyPrices({ sinceDate, source });
+}
+
+// =============================================================================
+// ONE combined daily price run for every stock in STOCKS (migrate-v13).
+//
+// Deliberately NOT a per-stock loop over the old fetch path — that would
+// refetch SET + all 20 peers once per stock (≈21 wasted Yahoo calls/day) and
+// write peer_prices twice. Instead:
+//   1. sinceDate is computed PER STOCK from per-stock metadata (ASW:
+//      dateMax−7d self-heal window; TITLE's first run: dateMax=null → the
+//      5-year default inside yahoo.fetchAll).
+//   2. Shared series (SET + peers, which feed setIdx/propIdx on EVERY stock's
+//      rows) are fetched ONCE over the WIDER of the windows — a one-time 5y
+//      cost on TITLE's first run, converging to 7d after.
+//   3. Each non-ASW stock's own series is one extra chart call.
+//   4. joinByDate runs per stock; the caller writes rows per stock with its
+//      own fetch_log entry.
+//
+// mock stays ASW-only (no real peer/TITLE data in the fixture).
+// =============================================================================
+async function runDailyPrices({ sinceDate, source = 'yahoo' } = {}) {
+  // Per-stock incremental windows.
+  const sinceByStock = {};
+  for (const stock of STOCK_KEYS) {
+    if (sinceDate) { sinceByStock[stock] = sinceDate; continue; }
+    const meta = await db.metadata(stock);
     if (meta.dateMax) {
       const d = new Date(meta.dateMax + 'T00:00:00Z');
       d.setUTCDate(d.getUTCDate() - 7);
-      sinceDate = d.toISOString().slice(0, 10);
+      sinceByStock[stock] = d.toISOString().slice(0, 10);
+    } else {
+      sinceByStock[stock] = null; // full-history backfill for this stock
     }
   }
+  // Shared window = the widest any stock needs (null = 5y default wins).
+  const sharedSince = Object.values(sinceByStock).some(v => v == null)
+    ? null
+    : Object.values(sinceByStock).sort()[0];
 
-  let asw, set, peers;
   if (source === 'mock') {
-    ({ asw, set, peers } = await mockFetch({ sinceDate }));
-  } else {
-    const yahoo = await loadYahoo();
-    ({ asw, set, peers } = await yahoo.fetchAll({ sinceDate }));
+    const { asw, set, peers } = await mockFetch({ sinceDate: sharedSince || undefined });
+    const propSeries = computePropBasket(peers);
+    return { perStock: { ASW: joinByDate(asw, set, propSeries) }, source, peersWritten: 0 };
   }
+
+  const yahoo = await loadYahoo();
+  const { asw, set, peers } = await yahoo.fetchAll({ sinceDate: sharedSince || undefined });
   const propSeries = computePropBasket(peers);
-  const rows = joinByDate(asw, set, propSeries);
 
-  // Persist individual peer prices for the peer-snapshot table on the frontend.
-  // Skip when using mock (no real peer data).
-  let peersWritten = 0;
-  if (source === 'yahoo') {
-    const names = PEER_TICKERS.map(t => PEER_NAMES[t] || t.replace('.BK', ''));
-    const result = await db.writePeers(PEER_TICKERS, names, peers);
-    peersWritten = result.rows;
+  const perStock = {};
+  for (const stock of STOCK_KEYS) {
+    let series;
+    if (STOCKS[stock].yahoo === yahoo.SYMBOLS.asw) {
+      series = asw; // already fetched as part of the shared pull
+    } else {
+      // One extra chart call per additional stock (TITLE.BK). Isolated so a
+      // failing extra symbol doesn't cost the ASW/SET/peer data.
+      try {
+        series = await yahoo.fetchSymbolDaily(STOCKS[stock].yahoo, { sinceDate: sinceByStock[stock] || sharedSince || undefined });
+      } catch (e) {
+        console.warn(`[fetchers] ${stock} (${STOCKS[stock].yahoo}) daily fetch failed:`, e.message || e);
+        series = null;
+      }
+    }
+    if (series) perStock[stock] = joinByDate(series, set, propSeries);
   }
 
-  return { rows, source, peersWritten };
+  const names = PEER_TICKERS.map(t => PEER_NAMES[t] || t.replace('.BK', ''));
+  const result = await db.writePeers(PEER_TICKERS, names, peers);
+  return { perStock, source, peersWritten: result.rows };
 }
 
 // Lightweight live-ticker fetch — touches only ASW via Yahoo 1-min interval.
@@ -114,22 +158,17 @@ async function runFetch({ source = 'yahoo', sinceDate, maxAgeDays } = {}) {
 // Returns { price, ts, prevClose } where prevClose is yesterday's EOD close
 // (read from DB so the KPI can compute change% against the last settled
 // close rather than against another intraday tick).
-async function runIntraday() {
+async function runIntraday(stock = DEFAULT_STOCK) {
+  assertStock(stock, 'runIntraday');
   const yahoo = await loadYahoo();
-  const tick = await yahoo.fetchIntraday({ windowMinutes: 5 });
+  const tick = await yahoo.fetchIntraday({ symbol: STOCKS[stock].yahoo, windowMinutes: 5 });
   if (!tick) return { price: null, ts: null, prevClose: null };
 
-  // Read the latest EOD close from DB (skip the row equal to today —
-  // today's row in `daily` may already be partial during market hours, but
-  // we want yesterday's settled close as the reference).
-  const meta = await db.metadata();
+  // Yesterday's settled close as the KPI reference — a single indexed query,
+  // per stock. (Pre-v13 this loaded EVERY daily row and popped the max date,
+  // which with two stocks in the table could hand ASW's KPI TITLE's close.)
   const todayISO = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-  const rows = await db.readAllRows(null, null);
-  // The row with the largest date strictly less than today is "prev close".
-  const settled = rows
-    .filter(r => r.date < todayISO && r.close != null)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .pop();
+  const settled = await db.latestSettledClose(stock, todayISO);
 
   return {
     price: tick.price,
@@ -142,4 +181,4 @@ async function runIntraday() {
   };
 }
 
-module.exports = { runFetch, runIntraday };
+module.exports = { runFetch, runDailyPrices, runIntraday };

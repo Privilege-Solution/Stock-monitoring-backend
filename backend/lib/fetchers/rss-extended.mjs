@@ -37,9 +37,9 @@
 import { createHash } from 'node:crypto';
 import db from '../../db.js';
 import {
-  classifyCategory, impactLevelFromSeverity, headlineMentionsAsw,
+  impactLevelFromSeverity, headlineMentionsAsw,
 } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit } from './news-rss-helpers.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit, expandRowsByStock } from './news-rss-helpers.mjs';
 import { vetRowUrls } from '../news-url-guard.mjs';
 
 const TAG = 'rss-extended';
@@ -94,12 +94,12 @@ const QUERIES = [
   { q: 'SET Smart Alert ASW',       category: 'investor_alert', pipeline: 'company', requireAsw: true, severity: 'medium' },
 
   // ── 4. BoT FX + debt rating + legal / foreign ownership ──────────────────
-  { q: 'บาท USD/THB',               category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium' },
-  { q: 'ดอกเบี้ย นโยบาย กนง.',      category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'high'   },
+  { q: 'บาท USD/THB',               category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium', stocks: ['ASW', 'TITLE'] },
+  { q: 'ดอกเบี้ย นโยบาย กนง.',      category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'high', stocks: ['ASW', 'TITLE'] },
   { q: 'TRIS rating ASW',           category: 'debt_rating', pipeline: 'company', requireAsw: true,  severity: 'high' },
   { q: 'อันดับเครดิต ASW',          category: 'debt_rating', pipeline: 'company', requireAsw: true,  severity: 'medium' },
-  { q: 'foreign ownership Phuket condo', category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium' },
-  { q: 'เอกชนถือครอง ภูเก็ต พัทยา',   category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium' },
+  { q: 'foreign ownership Phuket condo', category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium', stocks: ['ASW', 'TITLE'] },
+  { q: 'เอกชนถือครอง ภูเก็ต พัทยา',   category: 'macro_fx', pipeline: 'macro', requireAsw: false, severity: 'medium', stocks: ['ASW', 'TITLE'] },
 ];
 
 // Broker signals — require at least one of these to land in the broker
@@ -206,10 +206,9 @@ function parseItem(itemXml, q) {
   if (q.requireAsw === 'OR'
       && !(mentionsAsw || headlineMentionsBroker(title))) return null;
 
-  // Classify into the new 6-way taxonomy. The headline's title pattern wins
-  // (matches migrate-v9.js priority); the query's legacy `category` is a
-  // fallback for generic titles where no pattern matches.
-  const category = classifyCategory(title, q.category);
+  // Category is assigned per stock at expandRowsByStock() time (the same
+  // headline can file under MACRO for ASW and FX for TITLE); the query's
+  // legacy `category` rides along as the classifier's hint fallback.
 
   // Severity/show_pin come from the QUERY row, which describes what the query
   // is FOR — not what this particular headline actually says. On an 'OR' query
@@ -229,7 +228,8 @@ function parseItem(itemXml, q) {
     title,
     // Convert pubDate to ICT (UTC+7) — see rss-property.mjs for rationale.
     date: new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10),
-    category,                        // taxonomy-v2 key
+    _hint: q.category,               // classifier fallback, per-stock at expansion
+    _stocks: q.stocks || ['ASW'],
     source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',
     // Dedup by normalized headline (not guid/link) so different publishers
@@ -280,12 +280,19 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
 
   // Dedupe by title_hash across queries — Google News surfaces overlapping
   // results for queries like "ASPS ASW" and "target price ASW".
-  const seen = new Set();
-  const unique = all.filter(it => {
-    if (seen.has(it.title_hash)) return false;
-    seen.add(it.title_hash);
-    return true;
-  });
+  const seen = new Map(); // title_hash → kept item
+  const unique = [];
+  for (const it of all) {
+    const kept = seen.get(it.title_hash);
+    if (kept) {
+      // Same story via two queries — union the stock tags so the second
+      // query's panel isn't silently starved of the row.
+      kept._stocks = [...new Set([...(kept._stocks || ['ASW']), ...(it._stocks || ['ASW'])])];
+      continue;
+    }
+    seen.set(it.title_hash, it);
+    unique.push(it);
+  }
 
   const valid = unique.filter(it => it.source_url && it.source_url.length > 0);
 
@@ -325,14 +332,24 @@ async function run({ sinceDate, maxAgeDays = 14 } = {}) {
   // on the existing display_priority formula in the unified feed (which
   // already understands broker vs. macro). For items WITHOUT a stored value
   // the frontend's priorityForItem() falls back to severity-based scoring.
-  const { inserted } = await db.writeNewsItems(deepened);
+  // Per-stock expansion + write (migrate-v13): category assigned per stock,
+  // TITLE severity capped at medium (pin guardrail) inside the helper.
+  const byStock = expandRowsByStock(deepened);
+  let inserted = 0;
+  const written = [];
+  for (const [stock, rows] of Object.entries(byStock)) {
+    const r = await db.writeNewsItems(stock, rows);
+    console.log(`[rss-extended] ${stock}: inserted=${r.inserted}`);
+    inserted += r.inserted;
+    written.push(...rows);
+  }
 
   // Per-category counts for the log line (operator at-a-glance). Uses the
   // NEW taxonomy keys so the log matches what the user sees in the UI.
   const byCat = {};
-  for (const it of deepened) byCat[it.category] = (byCat[it.category] || 0) + 1;
+  for (const it of written) byCat[it.category] = (byCat[it.category] || 0) + 1;
   const byImpact = {};
-  for (const it of deepened) byImpact[it.impact_level] = (byImpact[it.impact_level] || 0) + 1;
+  for (const it of written) byImpact[it.impact_level] = (byImpact[it.impact_level] || 0) + 1;
   console.log(`[rss-extended] parsed=${all.length} unique=${unique.length} deepened=${deepened.length} dropped_homepage=${dropped.length} inserted=${inserted} byCat=${JSON.stringify(byCat)} byImpact=${JSON.stringify(byImpact)}`);
   return { ok: true, fetched: deepened.length, inserted, byCat, byImpact };
 }

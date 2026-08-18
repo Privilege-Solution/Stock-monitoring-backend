@@ -25,8 +25,8 @@
 // =============================================================================
 
 import db from '../../db.js';
-import { classifyCategory, impactLevelFromSeverity } from '../news-taxonomy.mjs';
-import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit } from './news-rss-helpers.mjs';
+import { impactLevelFromSeverity } from '../news-taxonomy.mjs';
+import { bingNewsRssUrl, extractPublisherUrl, extractSourceName, normalizeHeadline, isHomepageUrl, deepenHomepageUrl, mapLimit, expandRowsByStock } from './news-rss-helpers.mjs';
 import { vetRowUrls } from '../news-url-guard.mjs';
 
 const TAG = 'rss-property';
@@ -73,9 +73,26 @@ const QUERIES = [
   { q: 'presale โอน คอนโด ไทย',  category: 'sector_data',  pipeline: 'sector' },
   { q: 'ค่าโอน จดจำนอง 0.01%',   category: 'sector_policy', pipeline: 'sector' },
   { q: 'LTV สินเชื่อบ้าน 2569',  category: 'sector_policy', pipeline: 'sector' },
-  { q: 'ต่างชาติ ซื้อ คอนโด ไทย', category: 'sector_data',  pipeline: 'sector' },
+  { q: 'ต่างชาติ ซื้อ คอนโด ไทย', category: 'sector_data',  pipeline: 'sector', stocks: ['ASW', 'TITLE'] },
   { q: 'ดอกเบี้ย ธปท. 2569',     category: 'interest_rate', pipeline: 'macro' },
-  { q: 'ค่าเงินบาท USD',         category: 'macro_fx',     pipeline: 'macro' },
+  { q: 'ค่าเงินบาท USD',         category: 'macro_fx',     pipeline: 'macro', stocks: ['ASW', 'TITLE'] },
+
+  // ── TITLE (ร่มโพธิ์ — Phuket, foreign-buyer demand) — migrate-v13 ────────
+  // baseScore: these targeted queries are their own relevance filter; without
+  // it a tourism headline with no property keyword dies in scoreItem()'s
+  // hard-drop. All land at severity 'medium' (rss-property default), so none
+  // of them can pin the TITLE chart — pins come from the Gemini pipelines.
+  // Deliberately NO broad war/oil queries here: unfiltered daily war volume
+  // would flood the feed; GEOPOLITICS/OIL enter via gemini-title-drivers.
+  { q: 'TITLE ร่มโพธิ์',            category: 'peer_news',      pipeline: 'title-company', stocks: ['TITLE'], baseScore: 30 },
+  { q: 'ร่มโพธิ์ พร็อพเพอร์ตี้',      category: 'peer_news',      pipeline: 'title-company', stocks: ['TITLE'], baseScore: 30 },
+  { q: 'เดอะ ไทเทิล ภูเก็ต',         category: 'peer_news',      pipeline: 'title-company', stocks: ['TITLE'], baseScore: 30 },
+  { q: 'อสังหาริมทรัพย์ ภูเก็ต',      category: 'phuket_sector',  pipeline: 'title-sector',  stocks: ['TITLE'], baseScore: 15 },
+  { q: 'คอนโด ภูเก็ต ต่างชาติ',       category: 'foreign_demand', pipeline: 'title-sector',  stocks: ['TITLE'], baseScore: 20 },
+  { q: 'วิลล่า ภูเก็ต',              category: 'phuket_sector',  pipeline: 'title-sector',  stocks: ['TITLE'], baseScore: 15 },
+  { q: 'นักท่องเที่ยว ภูเก็ต',        category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
+  { q: 'เที่ยวบิน ภูเก็ต รัสเซีย',     category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
+  { q: 'วีซ่า นักท่องเที่ยว ไทย',      category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
 ];
 
 const { createHash } = await import('node:crypto');
@@ -180,6 +197,12 @@ const HIGH_KEYWORDS = [
   { kw: 'ASW',            boost: 50, type: 'asw' },
   { kw: 'Assetwise',      boost: 50, type: 'asw' },
   { kw: 'แอสเซทไวส์',     boost: 50, type: 'asw' },
+  // TITLE (ร่มโพธิ์) direct — the subsidiary this app also monitors
+  // (migrate-v13). Thai names only: scoreItem matches lowercased substrings,
+  // and the bare English word "title" would boost every headline carrying it.
+  { kw: 'ร่มโพธิ์',        boost: 50, type: 'title' },
+  { kw: 'rhom bho',       boost: 50, type: 'title' },
+  { kw: 'เดอะ ไทเทิล',    boost: 40, type: 'title' },
   // Thai real estate / housing market (each 25)
   { kw: 'อสังหาริมทรัพย์', boost: 25, type: 'sector' },
   { kw: 'อสังหาฯ',         boost: 25, type: 'sector' },
@@ -228,19 +251,22 @@ const HIGH_KEYWORDS = [
 // `display_priority` = 50 + min(score, 75) → range [50, 125]. So an ASW
 // headline can reach 100+ (high priority in the unified feed), while a
 // generic sector headline sits at 60-70.
-function scoreItem(title) {
+function scoreItem(title, baseScore = 0) {
   const t = title.toLowerCase();
   // Sum the HIGH keyword boosts FIRST. The DROP scan used to run before this
   // and `return 0` immediately, which meant the ASW boost was never even
   // computed — so an ASW-direct headline that happened to name an unrelated
   // ticker ("ASW จับมือ SCB ปล่อยสินเชื่อโครงการ") was killed outright. We need
   // to know whether this is ASW news BEFORE deciding to drop it.
-  let score = 0;
+  // baseScore (migrate-v13): targeted queries — e.g. the TITLE tourism set —
+  // ARE the relevance filter; their matches must not die for lacking a
+  // property keyword. Query-level, so broad queries keep the 0 floor.
+  let score = baseScore;
   let aswDirect = false;
   for (const { kw, boost, type } of HIGH_KEYWORDS) {
     if (t.includes(kw.toLowerCase())) {
       score += boost;
-      if (type === 'asw') aswDirect = true;
+      if (type === 'asw' || type === 'title') aswDirect = true;
     }
   }
   // Hard drop — any DROP keyword kills the item, UNLESS it is ASW-direct.
@@ -305,7 +331,7 @@ function parseItem(itemXml, query) {
   // filtered later. ASW direct = 50+, real estate = 25+, BoT rate = 20+,
   // macro = 10+. display_priority = 50 + score, capped at 125 so ASW news
   // sits at top of the unified feed (above generic sector noise).
-  const score = scoreItem(headline);
+  const score = scoreItem(headline, query.baseScore || 0);
   if (score === 0) return null;        // hard drop — no row at all
   const displayPriority = Math.min(50 + score, 125);
 
@@ -314,11 +340,11 @@ function parseItem(itemXml, query) {
     // Convert pubDate to ICT (UTC+7) before slicing — without this, items
     // published between 00:00-07:00 ICT get the PREVIOUS day's UTC date.
     date: new Date(date.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10),
-    // Classify through the shared taxonomy so rss-property rows emit the same
-    // 7 keys (COMPANY/COMPETITOR/RATES/GOV_POLICY/POLITICS/INDUSTRY/MACRO) the
-    // frontend filters on — previously this wrote the legacy query hint
-    // (sector_data / interest_rate / peer_news …) which matched no chip.
-    category: classifyCategory(headline, query.category),
+    // Category is assigned per stock at expandRowsByStock() time — the same
+    // headline can legitimately file under MACRO for ASW and FX for TITLE.
+    // _hint carries the query's legacy category as the classifier fallback.
+    _hint: query.category,
+    _stocks: query.stocks || ['ASW'],
     source_url: publisherUrl,         // real publisher article URL (decoded from Bing link)
     source_label: sourceName || 'Google News',
     title_hash: titleHash,
@@ -367,12 +393,19 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
 
   // Dedupe by title_hash (guid-based) across all queries — Google News can
   // surface the same article in multiple query results.
-  const seen = new Set();
-  const unique = all.filter(it => {
-    if (seen.has(it.title_hash)) return false;
-    seen.add(it.title_hash);
-    return true;
-  });
+  const seen = new Map(); // title_hash → kept item
+  const unique = [];
+  for (const it of all) {
+    const kept = seen.get(it.title_hash);
+    if (kept) {
+      // Same story via two queries — union the stock tags so the second
+      // query's panel isn't silently starved of the row.
+      kept._stocks = [...new Set([...(kept._stocks || ['ASW']), ...(it._stocks || ['ASW'])])];
+      continue;
+    }
+    seen.set(it.title_hash, it);
+    unique.push(it);
+  }
 
   // Require a non-empty source_url — same valid-link rule as the unified feed
   // filter. Drops the rare <item> with a missing <link>.
@@ -413,8 +446,15 @@ async function run({ sinceDate, maxAgeDays = 7 } = {}) {
 
   if (!deepened.length) return { ok: true, fetched: 0, inserted: 0 };
 
-  const { inserted } = await db.writeNewsItems(deepened);
-  console.log(`[rss-property] inserted=${inserted}`);
+  // Per-stock expansion + write (migrate-v13): category assigned per stock,
+  // TITLE severity capped at medium (pin guardrail) inside the helper.
+  const byStock = expandRowsByStock(deepened);
+  let inserted = 0;
+  for (const [stock, rows] of Object.entries(byStock)) {
+    const r = await db.writeNewsItems(stock, rows);
+    console.log(`[rss-property] ${stock}: inserted=${r.inserted}`);
+    inserted += r.inserted;
+  }
   return { ok: true, fetched: valid.length, inserted };
 }
 

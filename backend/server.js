@@ -14,7 +14,9 @@ const cors = require('cors');
 const cron = require('node-cron');
 
 const db = require('./db');
-const { runFetch, runIntraday } = require('./lib/fetchers');
+const { runFetch, runDailyPrices, runIntraday } = require('./lib/fetchers');
+// migrate-v13: multi-stock registry + HTTP param normalization.
+const { STOCKS, STOCK_KEYS, DEFAULT_STOCK, normalizeStockParam } = require('./lib/stocks.js');
 const { expectedTradingDays, classify, isMarketOpen } = require('./lib/thai-trading-days');
 
 // Lazy ESM import of the shared news taxonomy (news-taxonomy.mjs is ESM;
@@ -140,6 +142,18 @@ app.use((req, res, next) => {
   return res.status(401).json({ error: 'unauthorized', code: 'auth_required' });
 });
 
+// Resolve the stock a request is about. Absent → 'ASW' (every pre-v13 client
+// keeps working); present-but-garbage → 400 (silently serving ASW data for a
+// typo'd ?stock= would be worse than an error).
+function stockOf(req, res) {
+  const s = normalizeStockParam((req.query && req.query.stock) || (req.body && req.body.stock));
+  if (!s) {
+    res.status(400).json({ error: `unknown stock — expected one of ${STOCK_KEYS.join(', ')}`, code: 'stock_unknown' });
+    return null;
+  }
+  return s;
+}
+
 // Static: serve the frontend/ dir (HTML/CSS), plus an explicit route for the
 // repo-root `sample_data.js` (the frontend loads it via <script src> and the
 // seed function below reads it from disk — both need an exact path).
@@ -154,14 +168,15 @@ app.use(express.static(FRONTEND_DIR));
 // ASW line shows only end-of-day closes while the KPI shows the latest
 // intraday tick. Populated by the `*/3` intraday cron and reset on process
 // restart (acceptable: first poll after restart falls back to DATA[last]).
-const INTRADAY = {
+// One cache per stock (migrate-v13) — same shape as before per entry.
+const INTRADAY = Object.fromEntries(STOCK_KEYS.map(k => [k, {
   price: null,
   prevClose: null,
   ts: null,         // unix ms of latest Yahoo tick
   marketOpen: false,
   source: null,     // 'yahoo'
   lastError: null,
-};
+}]));
 
 // --- Seed from sample_data.js on first boot ---
 // sample_data.js still ships a window.SAMPLE_DATA array; we use it as a
@@ -186,7 +201,7 @@ function seedFromSampleData() {
   if (!Array.isArray(parsed) || !parsed.length) return 0;
   // writeRows is async, but seed is fire-and-forget at boot — return value is
   // best-effort and the rows will land shortly after.
-  db.writeRows(parsed).then(({ added, updated }) => {
+  db.writeRows('ASW', parsed).then(({ added, updated }) => {
     console.log(`[seed] inserted ${added + updated} rows from sample_data.js`);
   }).catch(e => console.error('[seed] failed:', e.message || e));
   return parsed.length;
@@ -229,8 +244,10 @@ app.get('/api/daily', async (req, res) => {
         return res.status(400).json({ error: `${name} must be YYYY-MM-DD`, code: 'date_bad_format' });
       }
     }
-    const rows = await db.readAllRows(start, end);
-    res.json({ rows, count: rows.length });
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    const rows = await db.readAllRows(stock, start, end);
+    res.json({ stock, rows, count: rows.length });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'read_failed' });
   }
@@ -248,8 +265,10 @@ app.post('/api/daily/:date/remark', async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD', code: 'date_bad_format' });
     }
+    const stock = stockOf(req, res);
+    if (!stock) return;
     const note = (req.body && typeof req.body.note === 'string') ? req.body.note : null;
-    const saved = await db.setDailyRemark(date, note);
+    const saved = await db.setDailyRemark(stock, date, note);
     // setDailyRemark ensures the daily row first, but only for trading days —
     // a note on a weekend/holiday matches nothing. Report that instead of
     // echoing ok:true for a write that never landed.
@@ -319,22 +338,26 @@ app.get('/api/debug/yahoo-test', async (req, res) => {
 // % change vs the prior session, not vs another intraday tick.
 app.get('/api/intraday', async (req, res) => {
   try {
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    const cache = INTRADAY[stock];
     // Refresh the marketOpen flag in case it's been a while since the cron fired.
-    const cacheAgeMs = INTRADAY.ts ? (Date.now() - INTRADAY.ts) : Infinity;
+    const cacheAgeMs = cache.ts ? (Date.now() - cache.ts) : Infinity;
     const marketOpen = isMarketOpen(new Date());
-    if (marketOpen !== INTRADAY.marketOpen) INTRADAY.marketOpen = marketOpen;
+    if (marketOpen !== cache.marketOpen) cache.marketOpen = marketOpen;
     res.json({
-      price: INTRADAY.price,
-      prevClose: INTRADAY.prevClose,
-      ts: INTRADAY.ts,
-      marketOpen: INTRADAY.marketOpen,
-      source: INTRADAY.source,
+      stock,
+      price: cache.price,
+      prevClose: cache.prevClose,
+      ts: cache.ts,
+      marketOpen: cache.marketOpen,
+      source: cache.source,
       // `cacheAgeMs` carried a value in SECONDS. Keep the old key (a client may
       // read it) but make it actually milliseconds, and expose the seconds
       // value under an honestly-named key.
       cacheAgeMs:  cacheAgeMs === Infinity ? null : Math.round(cacheAgeMs),
       cacheAgeSec: cacheAgeMs === Infinity ? null : Math.round(cacheAgeMs / 1000),
-      lastError: INTRADAY.lastError,
+      lastError: cache.lastError,
     });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'intraday_failed' });
@@ -343,35 +366,59 @@ app.get('/api/intraday', async (req, res) => {
 
 app.get('/api/metadata', async (req, res) => {
   try {
-    res.json(await db.metadata());
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    res.json({ stock, ...(await db.metadata(stock)) });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'metadata_failed' });
   }
 });
 
+// Runs the ONE combined price run (§4 of the v13 plan): shared SET/peer
+// series fetched once, every stock's rows written, per-stock fetch_log
+// entries. Both panels refresh regardless of which one the button was
+// clicked from — cheap, and keeps the route contract simple.
 app.post('/api/refresh', async (req, res) => {
   const source = (req.body && req.body.source) || 'yahoo';
   const sinceDate = (req.body && req.body.sinceDate) || null;
-  const id = await db.logFetchStart();
+  const stock = stockOf(req, res); // for the metadata echoed back
+  if (!stock) return;
   try {
-    const { rows, peersWritten } = await runFetch({ source, sinceDate });
-    const { added, updated } = await db.writeRows(rows);
-    await db.logFetchFinish(id, 1, source, added, updated, null);
-    res.json({ ok: true, added, updated, peersWritten: peersWritten || 0, ...(await db.metadata()) });
+    const { perStock, peersWritten } = await runDailyPrices({ source, sinceDate });
+    let added = 0, updated = 0;
+    for (const st of Object.keys(perStock)) {
+      const id = await db.logFetchStart();
+      try {
+        const r = await db.writeRows(st, perStock[st]);
+        await db.logFetchFinish(id, 1, st === 'ASW' ? source : `${source}-${st.toLowerCase()}`, r.added, r.updated, null);
+        added += r.added; updated += r.updated;
+      } catch (e) {
+        await db.logFetchFinish(id, 0, st === 'ASW' ? source : `${source}-${st.toLowerCase()}`, 0, 0, String(e.message || e));
+        throw e;
+      }
+    }
+    res.json({ ok: true, added, updated, peersWritten: peersWritten || 0, ...(await db.metadata(stock)) });
   } catch (e) {
-    await db.logFetchFinish(id, 0, source, 0, 0, String(e.message || e));
-    res.json({ ok: false, error: String(e.message || e), ...(await db.metadata()) });
+    res.json({ ok: false, error: String(e.message || e), ...(await db.metadata(stock)) });
   }
 });
 
+// Health stays PINNED to ASW (scrutiny pass 1): Railway's healthcheck and the
+// freshness verdict must not degrade while TITLE is still empty pre-backfill.
+// A per-stock row-count breakdown rides along as info, never as the verdict.
 app.get('/api/health', async (req, res) => {
   try {
-    const meta = await db.metadata();
+    const meta = await db.metadata('ASW');
+    const perStock = {};
+    for (const st of STOCK_KEYS) {
+      const m = st === 'ASW' ? meta : await db.metadata(st);
+      perStock[st] = { rowCount: m.rowCount, dateMin: m.dateMin, dateMax: m.dateMax };
+    }
     if (!meta.dateMin || !meta.dateMax) {
-      return res.json({ expected: 0, stored: 0, missingDates: [], missingGaps: 0, ok: true });
+      return res.json({ expected: 0, stored: 0, missingDates: [], missingGaps: 0, ok: true, perStock });
     }
     const expected = expectedTradingDays(meta.dateMin, meta.dateMax);
-    const stored = await db.getStoredDates();
+    const stored = await db.getStoredDates('ASW');
     // Count gaps across the FULL list, then cap only what we send. Slicing
     // first meant the 200-row payload cap silently truncated real gaps out of
     // the count — with a multi-year range /api/health reported 1 gap when 4
@@ -391,6 +438,7 @@ app.get('/api/health', async (req, res) => {
       dateMin: meta.dateMin,
       dateMax: meta.dateMax,
       ok: true,
+      perStock,
     });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'health_failed' });
@@ -416,21 +464,27 @@ app.post('/api/health/refresh', async (req, res) => {
   res.status(202).json({ ok: true, started: true, source, pollWith: '/api/metadata' });
 
   (async () => {
-    const meta = await db.metadata();
+    const meta = await db.metadata('ASW');
     const sinceDate = meta.dateMin || null;
     const delays = [60_000, 5 * 60_000, 15 * 60_000];
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const id = await db.logFetchStart();
       try {
-        const { rows } = await runFetch({ source, sinceDate });
-        const { added, updated } = await db.writeRows(rows);
-        await db.logFetchFinish(id, 1, source, added, updated, null);
-        console.log(`[health/refresh] ok attempt=${attempt} added=${added} updated=${updated}`);
+        const { perStock } = await runDailyPrices({ source, sinceDate });
+        for (const st of Object.keys(perStock)) {
+          const id = await db.logFetchStart();
+          try {
+            const r = await db.writeRows(st, perStock[st]);
+            await db.logFetchFinish(id, 1, st === 'ASW' ? source : `${source}-${st.toLowerCase()}`, r.added, r.updated, null);
+            console.log(`[health/refresh] ok attempt=${attempt} stock=${st} added=${r.added} updated=${r.updated}`);
+          } catch (e) {
+            await db.logFetchFinish(id, 0, st === 'ASW' ? source : `${source}-${st.toLowerCase()}`, 0, 0, String(e.message || e));
+            throw e;
+          }
+        }
         return;
       } catch (e) {
         const lastError = String(e.message || e);
-        await db.logFetchFinish(id, 0, source, 0, 0, lastError);
         console.error(`[health/refresh] attempt ${attempt}/${maxAttempts} failed:`, lastError);
         if (attempt < maxAttempts) await new Promise(r => setTimeout(r, delays[attempt - 1]));
       }
@@ -470,13 +524,16 @@ app.post('/api/remarks/refresh', async (req, res) => {
 // User-hidden rows are always excluded (see db.readNewsFeed).
 app.get('/api/news', async (req, res) => {
   try {
+    const stock = stockOf(req, res);
+    if (!stock) return;
     const { category, since, limit } = req.query;
     const rows = await db.readNewsFeed({
+      stock,
       category: category || null,
       since: since || null,
       limit: Math.max(1, Math.min(parseInt(limit || '100', 10) || 100, 500)),
     });
-    res.json({ rows, count: rows.length });
+    res.json({ stock, rows, count: rows.length });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_read_failed' });
   }
@@ -501,8 +558,10 @@ app.get('/api/news/pins', async (req, res) => {
         return res.status(400).json({ error: `${name} must be YYYY-MM-DD`, code: 'date_bad_format' });
       }
     }
-    const rows = await db.readNewsPins({ since: since || null, until: until || null });
-    res.json({ rows, count: rows.length });
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    const rows = await db.readNewsPins({ stock, since: since || null, until: until || null });
+    res.json({ stock, rows, count: rows.length });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_pins_failed' });
   }
@@ -552,16 +611,21 @@ app.post('/api/news', async (req, res) => {
       });
     }
 
-    // Category: explicit (validated against the taxonomy) or auto-classified.
-    const { classifyCategory, ALLOWED_CATEGORIES } = await loadTaxonomy();
+    const stock = stockOf(req, res);
+    if (!stock) return;
+
+    // Category: explicit (validated against THIS stock's vocabulary) or
+    // auto-classified through the per-stock branch.
+    const { classifyCategory, categoriesForStock } = await loadTaxonomy();
+    const allowed = new Set(categoriesForStock(stock));
     let category = null;
     if (body.category != null && body.category !== '') {
-      if (!ALLOWED_CATEGORIES.has(body.category)) {
-        return res.status(400).json({ ok: false, error: 'unknown category', code: 'news_add_bad_category' });
+      if (!allowed.has(body.category)) {
+        return res.status(400).json({ ok: false, error: `unknown category for ${stock}`, code: 'news_add_bad_category' });
       }
       category = body.category;
     }
-    if (!category) category = classifyCategory(title);
+    if (!category) category = classifyCategory(title, null, stock);
 
     // Severity: optional, must be high|medium|low.
     let severity = null;
@@ -581,7 +645,7 @@ app.post('/api/news', async (req, res) => {
       customDate = body.date;
     }
 
-    const { inserted } = await db.insertManualNews({ title, source_url: rawUrl, category, severity, date: customDate });
+    const { inserted } = await db.insertManualNews({ stock, title, source_url: rawUrl, category, severity, date: customDate });
     if (inserted === 0) {
       // title_hash collision — same headline+link already in the feed.
       return res.json({ ok: true, duplicate: true, inserted: 0 });
@@ -616,7 +680,9 @@ app.delete('/api/news/:id', async (req, res) => {
 // Powers the #newsStatusRow indicator strip on the new "ข่าวและปัจจัย" view.
 app.get('/api/news/status', async (req, res) => {
   try {
-    res.json(await db.readNewsStatus());
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    res.json({ stock, ...(await db.readNewsStatus(stock)) });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'news_status_failed' });
   }
@@ -626,6 +692,16 @@ app.get('/api/news/status', async (req, res) => {
 // `{"source": "gemini-sector"}` or `{"source": "gemini-macro"}` to choose.
 app.post('/api/news/refresh', async (req, res) => {
   const source = (req.body && req.body.source) || 'gemini-sector';
+  // Known gemini sources only — a typo'd source would otherwise fall through
+  // runFetch into the price path and fetch Yahoo data under a news log entry.
+  const GEMINI_SOURCES = new Set([
+    'gemini-company', 'gemini-sector', 'gemini-macro', 'gemini-morning-brief',
+    'gemini-daily-summary', 'gemini-title-company', 'gemini-title-drivers',
+    'gemini-title-daily-summary',
+  ]);
+  if (!GEMINI_SOURCES.has(source)) {
+    return res.status(400).json({ ok: false, error: `unknown news source "${source}"`, code: 'news_source_unknown' });
+  }
   const id = await db.logFetchStart();
   try {
     const result = await runFetch({ source });
@@ -717,7 +793,12 @@ app.post('/api/news/:id/mark', async (req, res) => {
 // Read the latest non-null morning brief.
 app.get('/api/morning-brief', async (req, res) => {
   try {
-    const row = await db.readMorningBrief();
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    // v13 scope: the Monday brief exists for ASW only. TITLE gets an honest
+    // empty (the panel hides the card) rather than ASW's brief mislabelled.
+    if (stock !== 'ASW') return res.json({ stock, brief: null });
+    const row = await db.readMorningBrief('ASW');
     res.json(row || { date: null, morning_brief: null, morning_watch: null, morning_remark: null, morning_weekly_at: null });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'morning_brief_failed' });
@@ -754,7 +835,9 @@ app.post('/api/morning-brief/refresh', async (req, res) => {
 app.get('/api/daily-summary', async (req, res) => {
   try {
     const date = req.query.date || null;
-    const row = await db.readDailySummary(date);
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    const row = await db.readDailySummary(stock, date);
     res.json(row || {
       date: null, digest: null, headline: null, tone: null, reason: null,
       bullets: null, source_count: null, generated_at: null,
@@ -770,7 +853,9 @@ app.get('/api/daily-summary', async (req, res) => {
 // pin + one Remark cell, updating as new digests arrive.
 app.get('/api/daily-summaries', async (req, res) => {
   try {
-    const items = await db.readAllDailySummaries();
+    const stock = stockOf(req, res);
+    if (!stock) return;
+    const items = await db.readAllDailySummaries(stock);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e.message || e), code: 'daily_summaries_failed' });
@@ -788,13 +873,16 @@ app.post('/api/daily-summary/refresh', async (req, res) => {
     });
   }
   const sinceDate = (req.body && req.body.date) || null;
+  const stock = stockOf(req, res);
+  if (!stock) return;
+  const summarySource = stock === 'TITLE' ? 'gemini-title-daily-summary' : 'gemini-daily-summary';
   const id = await db.logFetchStart();
   try {
-    const result = await runFetch({ source: 'gemini-daily-summary', sinceDate });
-    await db.logFetchFinish(id, result.ok ? 1 : 0, 'gemini-daily-summary', result.ok ? 1 : 0, 0, result.error || null);
+    const result = await runFetch({ source: summarySource, sinceDate });
+    await db.logFetchFinish(id, result.ok ? 1 : 0, summarySource, result.ok ? 1 : 0, 0, result.error || null);
     res.json({ ok: result.ok, ...result });
   } catch (e) {
-    await db.logFetchFinish(id, 0, 'gemini-daily-summary', 0, 0, String(e.message || e));
+    await db.logFetchFinish(id, 0, summarySource, 0, 0, String(e.message || e));
     res.json({ ok: false, error: String(e.message || e) });
   }
 });
@@ -810,13 +898,17 @@ db.openDb();
     // a fresh Railway Postgres deploy work with zero manual migration steps —
     // without it, /api/health 500s and the Railway healthcheck crash-loops.
     await db.ensureSchema();
-    const before = await db.metadata();
+    // Seed check is ASW-scoped on purpose: TITLE being empty pre-backfill is
+    // the expected state and must not trigger (ASW) sample seeding.
+    const before = await db.metadata('ASW');
     if (before.rowCount === 0) {
       console.log('[startup] empty DB — seeding from sample_data.js');
       seedFromSampleData();
     }
-    const m = await db.metadata();
-    console.log(`[startup] rows=${m.rowCount} range=${m.dateMin} → ${m.dateMax}`);
+    for (const st of STOCK_KEYS) {
+      const m = await db.metadata(st);
+      console.log(`[startup] ${st}: rows=${m.rowCount} range=${m.dateMin} → ${m.dateMax}`);
+    }
   } catch (e) {
     // Previously this only logged and fell through, so app.listen() still ran
     // and the service came up looking healthy while every endpoint returned
@@ -835,24 +927,28 @@ db.openDb();
 // cron below remains the sole writer of today's `daily.close` (true EOD).
 cron.schedule('*/3 * * * *', async () => {
   if (!isMarketOpen()) {
-    INTRADAY.marketOpen = false;
+    for (const st of STOCK_KEYS) INTRADAY[st].marketOpen = false;
     return;
   }
-  INTRADAY.marketOpen = true;
   console.log('[scheduler] intraday tick poll');
-  try {
-    const t = await runIntraday();
-    if (t && t.price != null) {
-      INTRADAY.price = t.price;
-      INTRADAY.prevClose = t.prevClose;
-      INTRADAY.ts = t.ts;
-      INTRADAY.source = t.source || 'yahoo';
-      INTRADAY.lastError = null;
-      console.log(`[scheduler] intraday tick price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'} ts=${new Date(t.ts).toISOString()}`);
+  for (const st of STOCK_KEYS) {
+    INTRADAY[st].marketOpen = true;
+    try {
+      const t = await runIntraday(st);
+      if (t && t.price != null) {
+        INTRADAY[st].price = t.price;
+        INTRADAY[st].prevClose = t.prevClose;
+        INTRADAY[st].ts = t.ts;
+        INTRADAY[st].source = t.source || 'yahoo';
+        INTRADAY[st].lastError = null;
+        console.log(`[scheduler] intraday ${st} price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'} ts=${new Date(t.ts).toISOString()}`);
+      }
+    } catch (e) {
+      INTRADAY[st].lastError = String(e.message || e);
+      console.error(`[scheduler] intraday ${st} tick failed:`, e.message || e);
     }
-  } catch (e) {
-    INTRADAY.lastError = String(e.message || e);
-    console.error('[scheduler] intraday tick failed:', e.message || e);
+    // Small stagger between symbols to stay friendly with Yahoo's rate limit.
+    await new Promise(r => setTimeout(r, 150));
   }
 }, { timezone: 'Asia/Bangkok' });
 
@@ -879,13 +975,26 @@ function _yahooDailyGuard() {
 }
 async function _runDailyYahoo() {
   console.log('[scheduler] daily fetch triggered');
-  const id = await db.logFetchStart();
+  // ONE combined run (v13 plan §4): shared SET/peer series fetched once,
+  // per-stock row-sets written under per-stock fetch_log entries
+  // ('yahoo', 'yahoo-title'). TITLE's very first run auto-backfills its full
+  // history (per-stock metadata → dateMax null → 5y window).
   try {
-    const { rows } = await runFetch({ source: 'yahoo' });
-    const { added, updated } = await db.writeRows(rows);
-    await db.logFetchFinish(id, 1, 'yahoo', added, updated, null);
-    console.log(`[scheduler] yahoo ok added=${added} updated=${updated}`);
+    const { perStock } = await runDailyPrices({ source: 'yahoo' });
+    for (const st of Object.keys(perStock)) {
+      const logSource = st === 'ASW' ? 'yahoo' : `yahoo-${st.toLowerCase()}`;
+      const id = await db.logFetchStart();
+      try {
+        const { added, updated } = await db.writeRows(st, perStock[st]);
+        await db.logFetchFinish(id, 1, logSource, added, updated, null);
+        console.log(`[scheduler] ${logSource} ok added=${added} updated=${updated}`);
+      } catch (e) {
+        await db.logFetchFinish(id, 0, logSource, 0, 0, String(e.message || e));
+        console.error(`[scheduler] ${logSource} write failed:`, e.message || e);
+      }
+    }
   } catch (e) {
+    const id = await db.logFetchStart();
     await db.logFetchFinish(id, 0, 'yahoo', 0, 0, String(e.message || e));
     console.error('[scheduler] yahoo failed:', e.message || e);
   }
@@ -960,6 +1069,10 @@ async function _runNewsBatch(phase) {
       { source: 'gemini-company' },
       { source: 'gemini-sector' },
       { source: 'gemini-macro' },
+      // migrate-v13 — the TITLE (Phuket / foreign-demand) pipelines. Serial
+      // like everything else; ~+1 min per batch, ~1.7× daily Gemini usage.
+      { source: 'gemini-title-company' },
+      { source: 'gemini-title-drivers' },
     );
   }
   // Monday morning adds the weekly brief at the front of the batch.
@@ -993,14 +1106,16 @@ async function _runNewsBatch(phase) {
   // triggers this — midday/morning/night runs skip it. Gated on
   // GEMINI_API_KEY and run in its own try/catch with its own fetch_log entry.
   if (phase === 'evening' && process.env.GEMINI_API_KEY) {
-    const sid = await db.logFetchStart();
-    try {
-      const s = await runFetch({ source: 'gemini-daily-summary' });
-      await db.logFetchFinish(sid, s.ok ? 1 : 0, 'gemini-daily-summary', s.ok ? 1 : 0, 0, s.error || null);
-      console.log(`[scheduler:${phase}] gemini-daily-summary ok tone=${s.tone || '∅'} items=${s.sourceCount ?? '?'}`);
-    } catch (e) {
-      await db.logFetchFinish(sid, 0, 'gemini-daily-summary', 0, 0, String(e.message || e));
-      console.error(`[scheduler:${phase}] gemini-daily-summary failed:`, e.message || e);
+    for (const summarySource of ['gemini-daily-summary', 'gemini-title-daily-summary']) {
+      const sid = await db.logFetchStart();
+      try {
+        const s = await runFetch({ source: summarySource });
+        await db.logFetchFinish(sid, s.ok ? 1 : 0, summarySource, s.ok ? 1 : 0, 0, s.error || null);
+        console.log(`[scheduler:${phase}] ${summarySource} ok tone=${s.tone || '∅'} items=${s.sourceCount ?? '?'}`);
+      } catch (e) {
+        await db.logFetchFinish(sid, 0, summarySource, 0, 0, String(e.message || e));
+        console.error(`[scheduler:${phase}] ${summarySource} failed:`, e.message || e);
+      }
     }
   }
   console.log(`[scheduler:${phase}] news batch done`);
@@ -1064,19 +1179,25 @@ app.listen(PORT, () => {
   // null for up to 3 minutes after a restart — the dashboard KPI card
   // showed "—" instead of the live price during that window. Fire-and-
   // forget so a slow Yahoo response doesn't block app.listen's callback.
-  runIntraday().then(t => {
-    if (t && t.price != null) {
-      INTRADAY.price = t.price;
-      INTRADAY.prevClose = t.prevClose;
-      INTRADAY.ts = t.ts;
-      INTRADAY.source = t.source || 'yahoo';
-      INTRADAY.marketOpen = true;
-      INTRADAY.lastError = null;
-      console.log(`[startup] intraday warm price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'}`);
-    } else {
-      console.log('[startup] intraday warm returned no tick (market closed or no data)');
+  (async () => {
+    for (const st of STOCK_KEYS) {
+      try {
+        const t = await runIntraday(st);
+        if (t && t.price != null) {
+          INTRADAY[st].price = t.price;
+          INTRADAY[st].prevClose = t.prevClose;
+          INTRADAY[st].ts = t.ts;
+          INTRADAY[st].source = t.source || 'yahoo';
+          INTRADAY[st].marketOpen = true;
+          INTRADAY[st].lastError = null;
+          console.log(`[startup] intraday warm ${st} price=${t.price.toFixed(2)} prevClose=${t.prevClose != null ? t.prevClose.toFixed(2) : '∅'}`);
+        } else {
+          console.log(`[startup] intraday warm ${st} returned no tick (market closed or no data)`);
+        }
+      } catch (e) {
+        console.warn(`[startup] intraday warm ${st} failed:`, e.message || e);
+      }
+      await new Promise(r => setTimeout(r, 150));
     }
-  }).catch(e => {
-    console.warn('[startup] intraday warm failed:', e.message || e);
-  });
+  })();
 });

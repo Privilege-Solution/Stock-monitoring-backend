@@ -17,6 +17,10 @@ const { createHash } = require('node:crypto');
 // Used by ensureDailyRow() so remark/pin/brief writes never create a row for a
 // weekend or SET holiday (which would show as a price-less point on the chart).
 const { isTradingDay } = require('./lib/thai-trading-days');
+// migrate-v13: multi-stock registry. Write paths call assertStock() so a
+// missed/typo'd stock fails loudly instead of silently touching both stocks'
+// rows; HTTP-facing reads default to DEFAULT_STOCK.
+const { assertStock, DEFAULT_STOCK } = require('./lib/stocks.js');
 
 // Lazily loaded ESM: db.js is CommonJS. canonicalizeUrl is pure and has no
 // side effects, so a synchronous fallback to the raw string is safe until the
@@ -151,7 +155,8 @@ async function ensureSchema() {
   const p = getPool();
   const statements = splitSqlStatements(`
     CREATE TABLE IF NOT EXISTS daily (
-      date              TEXT PRIMARY KEY,
+      stock             TEXT NOT NULL DEFAULT 'ASW',
+      date              TEXT NOT NULL,
       close             DOUBLE PRECISION,
       "change"          DOUBLE PRECISION,
       volume            DOUBLE PRECISION,
@@ -165,13 +170,15 @@ async function ensureSchema() {
       morning_remark    TEXT,
       morning_weekly_at TEXT,
       fetched_at        TEXT NOT NULL,
-      user_note         TEXT
+      user_note         TEXT,
+      PRIMARY KEY (stock, date)
     );
     CREATE INDEX IF NOT EXISTS daily_date_idx ON daily(date);
     CREATE INDEX IF NOT EXISTS daily_user_note_idx ON daily (date DESC) WHERE user_note IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS news_feed (
       id            SERIAL PRIMARY KEY,
+      stock         TEXT NOT NULL DEFAULT 'ASW',
       title         TEXT NOT NULL,
       date          TEXT NOT NULL,
       category      TEXT NOT NULL,
@@ -224,7 +231,6 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS news_feed_url_status_idx ON news_feed (source_url_status) WHERE hidden = FALSE;
     CREATE INDEX IF NOT EXISTS news_feed_url_recheck_idx ON news_feed (source_url_status, source_url_checked_at NULLS FIRST) WHERE hidden = FALSE;
     CREATE INDEX IF NOT EXISTS news_feed_url_checked_idx ON news_feed (source_url_checked_at NULLS FIRST) WHERE hidden = FALSE;
-    CREATE UNIQUE INDEX IF NOT EXISTS news_feed_title_hash_idx ON news_feed (title_hash);
     CREATE INDEX IF NOT EXISTS news_feed_date_idx     ON news_feed (date DESC);
     CREATE INDEX IF NOT EXISTS news_feed_category_idx ON news_feed (category);
     CREATE INDEX IF NOT EXISTS news_feed_show_pin_idx ON news_feed (date DESC) WHERE show_pin = TRUE;
@@ -261,14 +267,16 @@ async function ensureSchema() {
     -- summary can be written even on a non-trading day with no price row, and
     -- so backfilling a past date is a clean upsert.
     CREATE TABLE IF NOT EXISTS news_daily_summary (
-      date         TEXT PRIMARY KEY,
+      stock        TEXT NOT NULL DEFAULT 'ASW',
+      date         TEXT NOT NULL,
       digest       TEXT,            -- newline-separated KEY_POINTS bullets
       headline     TEXT,            -- ≤30-char one-sentence summary → Remark cell
       tone         TEXT,            -- bullish | bearish | neutral
       reason       TEXT,            -- 1-sentence rationale (for ASW)
       bullets      JSONB,           -- future: structured {CATEGORY: [...]}
       source_count INTEGER,         -- how many news_feed rows were summarized
-      generated_at TEXT NOT NULL
+      generated_at TEXT NOT NULL,
+      PRIMARY KEY (stock, date)
     );
     ALTER TABLE news_daily_summary ADD COLUMN IF NOT EXISTS headline TEXT;
   `);
@@ -286,6 +294,56 @@ async function ensureSchema() {
   if (failures.length) {
     throw new Error(`ensureSchema: ${failures.length} statement(s) failed:\n  - ${failures.join('\n  - ')}`);
   }
+
+  // migrate-v13 retrofit — runs AFTER the statement loop so the tables exist
+  // on a fresh deploy (where the CREATE TABLEs above already used the new
+  // shape and everything below no-ops).
+  await ensureStockMigration();
+}
+
+// =============================================================================
+// migrate-v13: retrofit the `stock` dimension onto a pre-v13 database.
+//
+// NOT part of the ensureSchema script above: splitSqlStatements() splits on
+// bare ';' so a DO $$ block would shatter, and the composite indexes here
+// reference the `stock` column, which must be ADDed first — ordering the
+// script cannot express. Direct queries, each idempotent.
+//
+// Crash-safe ordering (scrutiny pass 3): the NEW unique index is created
+// BEFORE the old constraint/index is dropped, so every intermediate state
+// keeps at least one uniqueness guarantee and a re-run converges:
+//   crash after step 2 → next boot: old+new both exist → drop old, done
+//   crash after step 3 → next boot: pk missing        → promote index, done
+// =============================================================================
+async function migrateTablePk(p, table, idxName) {
+  // `table`/`idxName` are internal constants (never user input).
+  const pk = await p.query(
+    `SELECT conname, array_length(conkey, 1) AS ncols
+       FROM pg_constraint WHERE conrelid = $1::regclass AND contype = 'p'`,
+    [table]
+  );
+  const ncols = pk.rows.length ? Number(pk.rows[0].ncols) : 0;
+  if (ncols >= 2) return; // already (stock, date) — fresh deploy or done
+  await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${idxName} ON ${table} (stock, date)`);
+  if (pk.rows.length) {
+    await p.query(`ALTER TABLE ${table} DROP CONSTRAINT "${pk.rows[0].conname}"`);
+  }
+  await p.query(`ALTER TABLE ${table} ADD CONSTRAINT ${table}_pkey PRIMARY KEY USING INDEX ${idxName}`);
+  console.log(`[db] migrate-v13: ${table} primary key is now (stock, date)`);
+}
+
+async function ensureStockMigration() {
+  const p = getPool();
+  // 1) columns — no-ops on a fresh v13-shape DB
+  await p.query(`ALTER TABLE daily ADD COLUMN IF NOT EXISTS stock TEXT NOT NULL DEFAULT 'ASW'`);
+  await p.query(`ALTER TABLE news_feed ADD COLUMN IF NOT EXISTS stock TEXT NOT NULL DEFAULT 'ASW'`);
+  await p.query(`ALTER TABLE news_daily_summary ADD COLUMN IF NOT EXISTS stock TEXT NOT NULL DEFAULT 'ASW'`);
+  // 2) news_feed dedup index: new composite FIRST, then drop the global one
+  await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS news_feed_stock_title_hash_idx ON news_feed (stock, title_hash)`);
+  await p.query(`DROP INDEX IF EXISTS news_feed_title_hash_idx`);
+  // 3) PK swaps
+  await migrateTablePk(p, 'daily', 'daily_stock_date_idx');
+  await migrateTablePk(p, 'news_daily_summary', 'news_daily_summary_stock_date_idx');
 }
 
 // Split a DDL script into individual statements. The script is authored here
@@ -318,7 +376,8 @@ function splitSqlStatements(script) {
 //     collapsed into one remark + category, company > sector > macro priority
 const REMARK_BUCKET_HELPERS = require('./lib/remark-bucket');
 
-async function writeRows(rows) {
+async function writeRows(stock, rows) {
+  assertStock(stock, 'writeRows');
   if (!rows || rows.length === 0) return { added: 0, updated: 0 };
   const p = getPool();
   const now = new Date().toISOString();
@@ -333,9 +392,11 @@ async function writeRows(rows) {
   // fetcher. Using text-vs-text avoids a cast on the $1 parameter (pg.js sends
   // JS arrays as text[]) and dodges the date/text operator mismatch.
   const dates = rows.map(r => r.date);
+  // Scoped by stock — without it TITLE's first 5y backfill counts every date
+  // as "updated" because ASW already has the date (misleading fetch_log).
   const exists = await p.query(
-    "SELECT date::text AS d FROM daily WHERE date::text = ANY($1)",
-    [dates]
+    "SELECT date::text AS d FROM daily WHERE stock = $2 AND date::text = ANY($1)",
+    [dates, stock]
   );
   const existingSet = new Set(exists.rows.map(r => r.d));
   let added = 0, updated = 0;
@@ -348,10 +409,11 @@ async function writeRows(rows) {
   const values = [];
   const params = [];
   rows.forEach((r, i) => {
-    const base = i * 10;
+    const base = i * 11;
     const rm = normalizeRemarks(r);
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10})`);
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11})`);
     params.push(
+      stock,
       r.date,
       r.close ?? null,
       r.change ?? null,
@@ -366,10 +428,10 @@ async function writeRows(rows) {
   });
 
   await p.query(`
-    INSERT INTO daily (date, close, "change", volume, value, "setIdx", "propIdx",
+    INSERT INTO daily (stock, date, close, "change", volume, value, "setIdx", "propIdx",
                        remark, category, fetched_at)
     VALUES ${values.join(',')}
-    ON CONFLICT (date) DO UPDATE SET
+    ON CONFLICT (stock, date) DO UPDATE SET
       close      = EXCLUDED.close,
       "change"   = EXCLUDED."change",
       volume     = EXCLUDED.volume,
@@ -404,8 +466,9 @@ function normalizeRemarks(r) {
   return { remark: null, category: null };
 }
 
-async function readAllRows(start, end) {
+async function readAllRows(stock, start, end) {
   const p = getPool();
+  stock = stock || DEFAULT_STOCK;
   // Pipeline refactor (migrate-v9): the legacy 3-column remark shape
   // (remark_company / remark_sector / remark_macro) was dropped from the
   // schema in the fresh-install shape. The single (remark, category) pair
@@ -419,18 +482,21 @@ async function readAllRows(start, end) {
                   morning_brief, morning_watch, morning_remark, morning_weekly_at,
                   user_note
            FROM daily`;
-  const where = [];
-  const params = [];
+  const params = [stock];
+  const where = [`stock = $1`];
   if (start) { params.push(start); where.push(`date >= $${params.length}`); }
   if (end)   { params.push(end);   where.push(`date <= $${params.length}`); }
-  const sql = `${COLS}${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY date ASC`;
+  const sql = `${COLS} WHERE ${where.join(' AND ')} ORDER BY date ASC`;
   const r = await p.query(sql, params);
   return r.rows;
 }
 
-async function metadata() {
+async function metadata(stock = DEFAULT_STOCK) {
   const p = getPool();
-  const r = await p.query('SELECT COUNT(*)::int AS n, MIN(date) AS dmin, MAX(date) AS dmax FROM daily');
+  // Per-stock on purpose: the fetcher derives its incremental window from
+  // dateMax, and TITLE's very first fetch must see dateMax = null (→ full 5y
+  // backfill), not ASW's dateMax (→ a useless 7-day window).
+  const r = await p.query('SELECT COUNT(*)::int AS n, MIN(date) AS dmin, MAX(date) AS dmax FROM daily WHERE stock = $1', [stock]);
   const last = await p.query(
     'SELECT finished_at, ok, source, rows_added, rows_updated, error FROM fetch_log ORDER BY id DESC LIMIT 1'
   );
@@ -466,8 +532,8 @@ async function logFetchFinish(id, ok, source, added, updated, error) {
   );
 }
 
-async function getStoredDates() {
-  const r = await getPool().query('SELECT date FROM daily');
+async function getStoredDates(stock = DEFAULT_STOCK) {
+  const r = await getPool().query('SELECT date FROM daily WHERE stock = $1', [stock]);
   return new Set(r.rows.map(row => row.date));
 }
 
@@ -479,10 +545,10 @@ async function getStoredDates() {
 // updateSingleRemark() with a macro → sector → company priority. Old callers
 // keep working for one release, then we drop this shim and the 3 legacy
 // columns.
-async function updateRemarks(date, { company = null, sector = null, macro = null } = {}) {
+async function updateRemarks(stock, date, { company = null, sector = null, macro = null } = {}) {
   const text = macro || sector || company;
   const category = macro ? 'macro' : sector ? 'sector' : company ? 'company' : null;
-  return updateSingleRemark(date, { category, text });
+  return updateSingleRemark(stock, date, { category, text });
 }
 
 // Make sure a `daily` row exists for `date` so the remark/pin/brief writers
@@ -498,14 +564,15 @@ async function updateRemarks(date, { company = null, sector = null, macro = null
 // Only trading days get a row: creating one for a weekend/holiday would put a
 // price-less point on the chart and an empty line in the daily price table.
 // Returns true if the date is writable, false if it was skipped.
-async function ensureDailyRow(date) {
+async function ensureDailyRow(stock, date) {
+  assertStock(stock, 'ensureDailyRow');
   date = normalizeDateYear(date);
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   if (!isTradingDay(date)) return false;
   await getPool().query(
-    `INSERT INTO daily (date, fetched_at) VALUES ($1, $2)
-     ON CONFLICT (date) DO NOTHING`,
-    [date, new Date().toISOString()]
+    `INSERT INTO daily (stock, date, fetched_at) VALUES ($1, $2, $3)
+     ON CONFLICT (stock, date) DO NOTHING`,
+    [stock, date, new Date().toISOString()]
   );
   return true;
 }
@@ -513,14 +580,15 @@ async function ensureDailyRow(date) {
 // Update only the single (remark, category) pair for a date. Used by the
 // gemini-search.mjs 'gemini-company' pipeline. The price pipeline never
 // touches these columns, so writeRows() can safely leave them alone.
-async function updateSingleRemark(date, { category = null, text = null } = {}) {
-  await ensureDailyRow(date);
+async function updateSingleRemark(stock, date, { category = null, text = null } = {}) {
+  assertStock(stock, 'updateSingleRemark');
+  await ensureDailyRow(stock, date);
   const r = await getPool().query(
     `UPDATE daily
      SET remark   = $1,
          category = $2
-     WHERE date = $3`,
-    [text, category, date]
+     WHERE stock = $4 AND date = $3`,
+    [text, category, date, stock]
   );
   if (!r.rowCount) console.warn(`[db] updateSingleRemark: no daily row for ${date} — remark dropped`);
   return r.rowCount;
@@ -534,14 +602,15 @@ async function updateSingleRemark(date, { category = null, text = null } = {}) {
 // Concatenation uses E'\n' so multi-pin days render as separate lines in the
 // tooltip. category is COALESCE — we only set it if daily.category is null
 // (so COMPANY's explicit category isn't overwritten by a vague 'macro').
-async function appendRemarkPin(date, text, category = null) {
-  await ensureDailyRow(date);
+async function appendRemarkPin(stock, date, text, category = null) {
+  assertStock(stock, 'appendRemarkPin');
+  await ensureDailyRow(stock, date);
   const r = await getPool().query(
     `UPDATE daily
      SET remark   = COALESCE(remark || E'\n' || $1, $1),
          category = COALESCE(category, $2)
-     WHERE date = $3`,
-    [text, category, date]
+     WHERE stock = $4 AND date = $3`,
+    [text, category, date, stock]
   );
   if (!r.rowCount) console.warn(`[db] appendRemarkPin: no daily row for ${date} — pin dropped`);
   return r.rowCount;
@@ -551,15 +620,16 @@ async function appendRemarkPin(date, text, category = null) {
 // Save a user's personal remark on a specific date's daily row.
 // `note === ''` or null/whitespace → clears to NULL. The Gemini-generated
 // `remark` column is NOT touched — both coexist on the same row.
-async function setDailyRemark(date, note) {
+async function setDailyRemark(stock, date, note) {
+  assertStock(stock, 'setDailyRemark');
   if (!date || typeof date !== 'string') {
     throw new Error('setDailyRemark: date (YYYY-MM-DD) required');
   }
   const trimmed = (note && typeof note === 'string') ? note.trim() : '';
-  await ensureDailyRow(date);
+  await ensureDailyRow(stock, date);
   const r = await getPool().query(
-    `UPDATE daily SET user_note = $1 WHERE date = $2`,
-    [trimmed || null, date]
+    `UPDATE daily SET user_note = $1 WHERE stock = $3 AND date = $2`,
+    [trimmed || null, date, stock]
   );
   return r.rowCount;
 }
@@ -571,19 +641,20 @@ async function setDailyRemark(date, note) {
 // non-null brief (no need to query by a specific date).
 // =============================================================================
 
-async function updateMorningBrief(date, { lastWeek = null, thisWeek = null, tone = null, reason = null } = {}) {
-  await ensureDailyRow(date);
+async function updateMorningBrief(stock, date, { lastWeek = null, thisWeek = null, tone = null, reason = null } = {}) {
+  assertStock(stock, 'updateMorningBrief');
+  await ensureDailyRow(stock, date);
   const r = await getPool().query(
     `UPDATE daily
      SET morning_brief     = $1,
          morning_watch     = $2,
          morning_remark    = $3,
          morning_weekly_at = $4
-     WHERE date = $5`,
+     WHERE stock = $6 AND date = $5`,
     // `reason` used to be destructured and then thrown away — the caller in
     // gemini-search.mjs passes a real rationale that was never stored. There is
     // no dedicated column, so it rides along with the tone it explains.
-    [lastWeek, thisWeek, reason ? `${tone} — ${reason}` : tone, new Date().toISOString(), date]
+    [lastWeek, thisWeek, reason ? `${tone} — ${reason}` : tone, new Date().toISOString(), date, stock]
   );
   if (!r.rowCount) console.warn(`[db] updateMorningBrief: no daily row for ${date} — brief dropped`);
   return r.rowCount;
@@ -592,13 +663,14 @@ async function updateMorningBrief(date, { lastWeek = null, thisWeek = null, tone
 // Returns the latest non-null morning brief (one row). Ordered by
 // morning_weekly_at DESC NULLS LAST so a row whose weekly_at was just
 // refreshed wins over older weeks even if date is the same.
-async function readMorningBrief() {
+async function readMorningBrief(stock = DEFAULT_STOCK) {
   const r = await getPool().query(
     `SELECT date, morning_brief, morning_watch, morning_remark, morning_weekly_at
      FROM daily
-     WHERE morning_brief IS NOT NULL
+     WHERE stock = $1 AND morning_brief IS NOT NULL
      ORDER BY morning_weekly_at DESC NULLS LAST
-     LIMIT 1`
+     LIMIT 1`,
+    [stock]
   );
   return r.rows[0] || null;
 }
@@ -612,14 +684,15 @@ async function readMorningBrief() {
 // additive.
 // =============================================================================
 
-async function upsertDailySummary(date, {
+async function upsertDailySummary(stock, date, {
   digest = null, headline = null, tone = null, reason = null, bullets = null, sourceCount = null,
 } = {}) {
+  assertStock(stock, 'upsertDailySummary');
   const safeDate = normalizeDateYear(date);
   await getPool().query(
-    `INSERT INTO news_daily_summary (date, digest, headline, tone, reason, bullets, source_count, generated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (date) DO UPDATE SET
+    `INSERT INTO news_daily_summary (stock, date, digest, headline, tone, reason, bullets, source_count, generated_at)
+     VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (stock, date) DO UPDATE SET
        digest       = EXCLUDED.digest,
        headline     = EXCLUDED.headline,
        tone         = EXCLUDED.tone,
@@ -627,21 +700,21 @@ async function upsertDailySummary(date, {
        bullets      = EXCLUDED.bullets,
        source_count = EXCLUDED.source_count,
        generated_at = EXCLUDED.generated_at`,
-    [safeDate, digest, headline, tone, reason, bullets, sourceCount, new Date().toISOString()]
+    [safeDate, digest, headline, tone, reason, bullets, sourceCount, new Date().toISOString(), stock]
   );
 }
 
 // Latest digest, or a specific date when passed. Ordered by date DESC so the
 // default returns the most recent day that has a digest.
-async function readDailySummary(date = null) {
+async function readDailySummary(stock = DEFAULT_STOCK, date = null) {
   const p = getPool();
   const sql = `SELECT date, digest, headline, tone, reason, bullets, source_count, generated_at
-                 FROM news_daily_summary`;
+                 FROM news_daily_summary WHERE stock = $1`;
   if (date) {
-    const r = await p.query(sql + ' WHERE date = $1', [date]);
+    const r = await p.query(sql + ' AND date = $2', [stock, date]);
     return r.rows[0] || null;
   }
-  const r = await p.query(sql + ' ORDER BY date DESC LIMIT 1');
+  const r = await p.query(sql + ' ORDER BY date DESC LIMIT 1', [stock]);
   return r.rows[0] || null;
 }
 
@@ -649,26 +722,29 @@ async function readDailySummary(date = null) {
 // column: each day that has a digest gets the `headline` shown in the Remark
 // cell (falling back to the first bullet client-side when there's none). One
 // row per ICT date, so the set stays small.
-async function readAllDailySummaries() {
+async function readAllDailySummaries(stock = DEFAULT_STOCK) {
   const r = await getPool().query(
     `SELECT date, digest, headline, tone, reason, source_count, generated_at
        FROM news_daily_summary
-      ORDER BY date ASC`
+      WHERE stock = $1
+      ORDER BY date ASC`,
+    [stock]
   );
   return r.rows || [];
 }
 
 // All news_feed rows for one ICT date — the input the daily summary digests.
 // hidden rows are excluded (user-dismissed). Capped at 500 to bound the prompt.
-async function readNewsFeedForDate(date) {
+async function readNewsFeedForDate(stock, date) {
   const p = getPool();
+  stock = stock || DEFAULT_STOCK;
   const r = await p.query(
     `SELECT id, title, date, category, source_label, severity, impact_level, display_priority
        FROM news_feed
-       WHERE date = $1 AND hidden = FALSE
+       WHERE stock = $2 AND date = $1 AND hidden = FALSE
        ORDER BY display_priority DESC, id DESC
        LIMIT 500`,
-    [date]
+    [date, stock]
   );
   return r.rows;
 }
@@ -677,12 +753,29 @@ async function readNewsFeedForDate(date) {
 // runDailySummary to fall back when today has no news yet (quiet morning,
 // weekend, holiday) — instead of returning "failed", the summary digests
 // the most recent day with content. Returns null when the feed is empty.
-async function readLatestNewsDate() {
+async function readLatestNewsDate(stock = DEFAULT_STOCK) {
   const p = getPool();
   const r = await p.query(
-    `SELECT date FROM news_feed WHERE hidden = FALSE ORDER BY date DESC LIMIT 1`
+    `SELECT date FROM news_feed WHERE stock = $1 AND hidden = FALSE ORDER BY date DESC LIMIT 1`,
+    [stock]
   );
   return r.rows[0]?.date || null;
+}
+
+// Latest settled EOD close strictly before `beforeDateIso`, per stock. The
+// intraday KPI's reference price. Replaces the old pattern of loading EVERY
+// daily row and popping the max date — which was both wasteful and, with two
+// stocks in the table, wrong (ASW's KPI could pick up TITLE's close on a tied
+// latest date). Backed by the (stock, date) primary key index.
+async function latestSettledClose(stock, beforeDateIso) {
+  assertStock(stock, 'latestSettledClose');
+  const r = await getPool().query(
+    `SELECT date, close FROM daily
+      WHERE stock = $1 AND date < $2 AND close IS NOT NULL
+      ORDER BY date DESC LIMIT 1`,
+    [stock, beforeDateIso]
+  );
+  return r.rows[0] || null;
 }
 
 // ── peer_prices ────────────────────────────────────────────────────────────
@@ -840,7 +933,8 @@ function sanitizeSourceUrl(raw) {
 // news_feed shape, in order: title, date, category, source_url, source_label,
 // title_hash, pipeline, impact, severity, show_pin, fetched_at,
 // display_priority, summary, impact_level.
-async function writeNewsItems(items) {
+async function writeNewsItems(stock, items) {
+  assertStock(stock, 'writeNewsItems');
   if (!items || !items.length) return { inserted: 0, deduped: 0 };
   const p = getPool();
 
@@ -848,7 +942,7 @@ async function writeNewsItems(items) {
   // byte-identical normalized headlines, so the same story worded differently by
   // two outlets — or truncated to a different length by the same outlet — sails
   // through as a separate row. See lib/news-dedup.mjs for the measurements.
-  const { kept, deduped } = await filterSemanticDuplicates(items);
+  const { kept, deduped } = await filterSemanticDuplicates(stock, items);
   if (deduped.length) {
     for (const d of deduped) {
       console.log(`[dedup] skip "${String(d.item.title).slice(0, 58)}" ≈ "${String(d.against).slice(0, 58)}" (${d.reason} ${d.score.toFixed(2)}${d.sameBatch ? ', same batch' : ''})`);
@@ -861,9 +955,10 @@ async function writeNewsItems(items) {
   const values = [];
   const params = [];
   items.forEach((it, i) => {
-    const base = i * 23;
-    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17},$${base+18},$${base+19},$${base+20},$${base+21},$${base+22},$${base+23})`);
+    const base = i * 24;
+    values.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15},$${base+16},$${base+17},$${base+18},$${base+19},$${base+20},$${base+21},$${base+22},$${base+23},$${base+24})`);
     params.push(
+      stock,
       it.title,
       normalizeDateYear(it.date),
       it.category,
@@ -907,7 +1002,7 @@ async function writeNewsItems(items) {
     );
   });
   const r = await p.query(`
-    INSERT INTO news_feed (title, date, category, source_url, source_label, title_hash,
+    INSERT INTO news_feed (stock, title, date, category, source_url, source_label, title_hash,
                            pipeline, impact, severity, show_pin,
                            fetched_at, display_priority, summary, impact_level,
                            url_verified,
@@ -917,7 +1012,7 @@ async function writeNewsItems(items) {
                            source_url_check_attempts, source_url_title,
                            source_url_match_score)
     VALUES ${values.join(',')}
-    ON CONFLICT (title_hash) DO NOTHING
+    ON CONFLICT (stock, title_hash) DO NOTHING
   `, params);
   return { inserted: r.rowCount, deduped: deduped.length };
 }
@@ -934,7 +1029,7 @@ async function loadDedup() {
   return _dedupMod;
 }
 
-async function filterSemanticDuplicates(items) {
+async function filterSemanticDuplicates(stock, items) {
   const kept = [], deduped = [];
   let D;
   try {
@@ -955,12 +1050,14 @@ async function filterSemanticDuplicates(items) {
     const lo = new Date(new Date(dates[0] + 'T00:00:00').getTime() - pad * 864e5).toISOString().slice(0, 10);
     const hi = new Date(new Date(dates[dates.length - 1] + 'T00:00:00').getTime() + pad * 864e5).toISOString().slice(0, 10);
     try {
+      // Scoped by stock: a BoT rate decision legitimately exists once per
+      // panel — ASW's copy must not swallow TITLE's (and vice versa).
       const r = await getPool().query(
         `SELECT id, title, date FROM news_feed
-          WHERE hidden = FALSE AND date >= $1 AND date <= $2
+          WHERE stock = $3 AND hidden = FALSE AND date >= $1 AND date <= $2
           ORDER BY date DESC, id DESC
           LIMIT 800`,
-        [lo, hi]
+        [lo, hi, stock]
       );
       recent = r.rows.map(row => ({ ...row, prepared: D.prepareForDedup(row.title) }));
     } catch (e) {
@@ -1001,12 +1098,12 @@ async function filterSemanticDuplicates(items) {
 // The composite index on (display_priority DESC, date DESC, id DESC) backs
 // this sort — high-severity items surface first, same priority keeps date
 // order, id tiebreaks identical timestamps deterministically.
-async function readNewsFeed({ category = null, since = null, limit = 100 } = {}) {
+async function readNewsFeed({ stock = DEFAULT_STOCK, category = null, since = null, limit = 100 } = {}) {
   const p = getPool();
   // User-dismissed (hidden) rows are always excluded. The hide feature was
   // removed; the column/flag is kept so previously-hidden rows stay dismissed.
-  const where = ['hidden = FALSE'];
-  const params = [];
+  const params = [stock];
+  const where = ['stock = $1', 'hidden = FALSE'];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
   // Clamp low as well as high — a negative limit reached Postgres as
@@ -1040,10 +1137,10 @@ async function readNewsFeed({ category = null, since = null, limit = 100 } = {})
 // matter how large news_feed grows: show_pin is auto-set only for
 // severity='high' (writeNewsItems), and chart_marked is the user's manual pin.
 // Ordered date ASC so the chart gets them in timeline order.
-async function readNewsPins({ since = null, until = null, limit = 5000 } = {}) {
+async function readNewsPins({ stock = DEFAULT_STOCK, since = null, until = null, limit = 5000 } = {}) {
   const p = getPool();
-  const where = ['hidden = FALSE', '(show_pin = TRUE OR chart_marked = TRUE)'];
-  const params = [];
+  const params = [stock];
+  const where = ['stock = $1', 'hidden = FALSE', '(show_pin = TRUE OR chart_marked = TRUE)'];
   if (since) { params.push(since); where.push(`date >= $${params.length}`); }
   if (until) { params.push(until); where.push(`date <= $${params.length}`); }
   params.push(Math.max(1, Math.min(limit || 5000, 20000)));
@@ -1100,12 +1197,13 @@ async function setNewsMark(id, marked) {
 // user, once from a pipeline pull — because the hashes differed.)
 // `category` is resolved by the caller (user pick or classifyCategory); MACRO is
 // the defensive fallback so the NOT NULL column is never violated.
-async function insertManualNews({ title, source_url, category, severity, summary, date } = {}) {
+async function insertManualNews({ stock = DEFAULT_STOCK, title, source_url, category, severity, summary, date } = {}) {
+  assertStock(stock, 'insertManualNews');
   const todayICT = date || new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
   let hostname = 'เพิ่มเอง';
   try { hostname = new URL(source_url).hostname || hostname; } catch {}
   const normTitle = normalizeHeadline(title) || `${String(title).trim()}|${source_url}`;
-  const { inserted } = await writeNewsItems([{
+  const { inserted } = await writeNewsItems(stock, [{
     title,
     date: todayICT,
     category: category || 'MACRO',
@@ -1166,20 +1264,30 @@ async function deleteNewsItem(id) {
 //
 // "high_priority" is display_priority >= 75 (high severity OR positive impact
 // + medium severity), the bar the unified feed renders as a pin.
-async function readNewsStatus() {
+async function readNewsStatus(stock = DEFAULT_STOCK) {
   const p = getPool();
   // Include RSS pipelines alongside Gemini ones — earlier this list missed
   // rss-property and rss-extended, so the dashboard's Pipeline Status card
   // only showed 5 of the 7 active sources.
-  const sources = [
-    'rss-property',
-    'rss-extended',
-    'gemini-company',
-    'gemini-sector',
-    'gemini-macro',
-    'gemini-morning-brief',
-    'gemini-daily-summary',
-  ];
+  // Per-stock (migrate-v13): the TITLE panel shows its own pipelines. The RSS
+  // rows are shared — one RSS run serves both stocks — so they appear on both.
+  const sources = stock === 'TITLE'
+    ? [
+        'rss-property',
+        'rss-extended',
+        'gemini-title-company',
+        'gemini-title-drivers',
+        'gemini-title-daily-summary',
+      ]
+    : [
+        'rss-property',
+        'rss-extended',
+        'gemini-company',
+        'gemini-sector',
+        'gemini-macro',
+        'gemini-morning-brief',
+        'gemini-daily-summary',
+      ];
   const lastRuns = {};
   // 7 simple queries — fetch_log is small (append-only). Could be combined
   // into one LATERAL but readability wins here.
@@ -1196,11 +1304,12 @@ async function readNewsStatus() {
     // the frontend's existing lookup; previously the API returned 'morning'
     // which caused the brief row to always render as 'never run').
     let key = source
+      .replace(/^gemini-title-/, '')
       .replace(/^gemini-/, '')
       .replace(/^rss-/, 'rss-')
       .replace(/-brief$/, '');
     if (source === 'gemini-morning-brief') key = 'brief';
-    if (source === 'gemini-daily-summary') key = 'daily-summary';
+    if (source === 'gemini-daily-summary' || source === 'gemini-title-daily-summary') key = 'daily-summary';
     lastRuns[key] = r.rows[0] || null;
   }
   const c = await p.query(`
@@ -1218,7 +1327,8 @@ async function readNewsStatus() {
             = TO_CHAR(NOW() AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD')
       ) AS today
     FROM news_feed
-  `);
+    WHERE stock = $1
+  `, [stock]);
   return {
     lastRuns,
     counts: {
@@ -1234,11 +1344,13 @@ async function readNewsStatus() {
 module.exports = {
   openDb,
   ensureSchema,
+  ensureStockMigration, // migrate-v13 retrofit — also called by migrate-v13.js
   ensureDailyRow,
   closeDb,
   // daily
   writeRows,
   readAllRows,
+  latestSettledClose,   // v13 — per-stock intraday reference close
   metadata,
   logFetchStart,
   logFetchFinish,

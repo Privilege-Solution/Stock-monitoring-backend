@@ -167,3 +167,29 @@ test('the normal one-field-per-line shape is unaffected', () => {
   assert.equal(r.summary, 'ย่อ');
   assert.equal(r.url, 'https://a.co/z');
 });
+
+// ── migrate-v13: per-stock category coercion ─────────────────────────────────
+// parseAIResult must validate against THAT stock's vocabulary: TOURISM is a
+// real category for TITLE but not for ASW — an ASW row carrying it would be
+// invisible under the ASW panel's tabs, so it coerces to MACRO there.
+test('per-stock coercion: TOURISM kept for TITLE, coerced to MACRO for ASW', () => {
+  const block = [
+    'CATEGORY: TOURISM',
+    'HEADLINE: ครม. ลดวีซ่าฟรีเหลือ 30 วัน',
+    'SUMMARY: กระทบนักท่องเที่ยวพำนักยาว',
+    'IMPACT_LEVEL: HIGH',
+    'SOURCE: กรุงเทพธุรกิจ',
+    'URL: NONE',
+  ].join('\n');
+  const forTitle = parseAIResult(block, 'title-drivers', null, 'TITLE');
+  assert.equal(forTitle.length, 1);
+  assert.equal(forTitle[0].category, 'TOURISM');
+
+  const forAsw = parseAIResult(block, 'macro', null, 'ASW');
+  assert.equal(forAsw.length, 1);
+  assert.equal(forAsw[0].category, 'MACRO');
+
+  // default stock (no 4th arg) behaves as ASW — legacy call sites unchanged
+  const legacy = parseAIResult(block, 'macro', null);
+  assert.equal(legacy[0].category, 'MACRO');
+});
