@@ -125,6 +125,29 @@ function computePropBasket(peerSeries) {
   return points;
 }
 
+// Chain a freshly-computed basket window onto the stored series.
+//
+// computePropBasket() re-bases every window to 100.00 at the window's own
+// start. For the nightly cron that window is ~7 days, so it wrote ~100-scale
+// values over a stored series sitting at a different level — and the next
+// full-window refresh snapped them back. A sawtooth in daily.propIdx that the
+// chart's normalized axis mostly hid, but the KPI reads raw values.
+//
+// Fix: multiply the whole window by one factor so its earliest point that
+// also exists in the stored series lands exactly on the stored value. One
+// factor (not per-point) preserves every daily % change inside the window.
+// No stored overlap (fresh DB, or a backfill preceding all data) → return
+// as-is, i.e. the window keeps its own base and BECOMES the reference.
+function rescaleToStored(points, storedByDate) {
+  if (!points || !points.length || !storedByDate || !storedByDate.size) return points;
+  const hit = points.find(p => storedByDate.has(p.date) && p.close);
+  if (!hit) return points;
+  const k = storedByDate.get(hit.date) / hit.close;
+  if (!Number.isFinite(k) || k <= 0) return points;
+  if (Math.abs(k - 1) < 1e-9) return points;
+  return points.map(p => ({ ...p, close: Number((p.close * k).toFixed(4)) }));
+}
+
 function joinByDate(asw, setSeries, propSeries) {
   // Each input: [{ date, close, volume? }]. Output: rows in SAMPLE_DATA schema.
   const idx = (s) => new Map(s.map(r => [r.date, r]));
@@ -154,4 +177,4 @@ function joinByDate(asw, setSeries, propSeries) {
   return out;
 }
 
-module.exports = { computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES };
+module.exports = { computePropBasket, rescaleToStored, joinByDate, PEER_TICKERS, PEER_NAMES };

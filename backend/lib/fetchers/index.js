@@ -2,7 +2,7 @@
 
 const db = require('../../db');
 const { fetchAll: mockFetch } = require('./mock');
-const { computePropBasket, joinByDate, PEER_TICKERS, PEER_NAMES } = require('../prop-basket');
+const { computePropBasket, rescaleToStored, joinByDate, PEER_TICKERS, PEER_NAMES } = require('../prop-basket');
 const { STOCKS, STOCK_KEYS, DEFAULT_STOCK, assertStock } = require('../stocks.js');
 
 let yahooModule = null;
@@ -132,7 +132,14 @@ async function runDailyPrices({ sinceDate, source = 'yahoo' } = {}) {
 
   const yahoo = await loadYahoo();
   const { asw, set, peers } = await yahoo.fetchAll({ sinceDate: sharedSince || undefined });
-  const propSeries = computePropBasket(peers);
+  let propSeries = computePropBasket(peers);
+  // Chain this window onto the stored PROP series (see rescaleToStored) —
+  // without it every 7-day cron window re-based to 100.00 and overwrote the
+  // last week of propIdx at the wrong level.
+  if (propSeries.length) {
+    const stored = await db.storedPropIdxMap(propSeries[0].date, propSeries[propSeries.length - 1].date);
+    propSeries = rescaleToStored(propSeries, stored);
+  }
 
   const perStock = {};
   for (const stock of STOCK_KEYS) {

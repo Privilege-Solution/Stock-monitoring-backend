@@ -2248,8 +2248,11 @@ function renderDashNews(filtered) {
   const newsDates = [...new Set(newsForChart().map(n => (n.date || '').slice(0,10)))].sort();
   const latestNewsDate = newsDates.length ? newsDates[newsDates.length - 1] : null;
   let targetDate = STATE.focusedDate || latestNewsDate;
-  // Set focusedDate so prev/next buttons work on first render
-  if (!STATE.focusedDate && targetDate) STATE.focusedDate = targetDate;
+  // Deliberately NOT written back to STATE.focusedDate. That seed existed only
+  // so ‹ › worked on first render, but buildDashChart re-applies focusedDate
+  // as a ±30-day zoom after EVERY rebuild — so the first overlay-pill click
+  // (Price/+SET/+PROP/All) yanked the chart to the latest news date. The nav
+  // handlers now treat "no focus" as "at the latest date" instead.
   const label = $('dashNewsDateLabel');
   if (label) label.textContent = targetDate ? '· ' + fmtThaiDate(targetDate) : '';
 
@@ -4474,14 +4477,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Dashboard news date navigation (‹ ›)
   const dPrev = $('dashNewsPrev');
   const dNext = $('dashNewsNext');
+  // With no explicit focus the sidebar shows the latest news date, so treat
+  // indexOf === -1 as "standing at the latest" (see renderDashNews).
   if (dPrev) dPrev.addEventListener('click', () => {
     const dates = [...new Set(newsForChart().map(n => (n.date || '').slice(0,10)))].sort();
     let idx = dates.indexOf(STATE.focusedDate);
+    if (idx === -1) idx = dates.length - 1;
     if (idx > 0) { STATE.focusedDate = dates[idx - 1]; focusDashOnDate(STATE.focusedDate); renderDashNews(filterByRange(DATA, STATE.range)); }
   });
   if (dNext) dNext.addEventListener('click', () => {
     const dates = [...new Set(newsForChart().map(n => (n.date || '').slice(0,10)))].sort();
     let idx = dates.indexOf(STATE.focusedDate);
+    if (idx === -1) idx = dates.length - 1;
     if (idx < dates.length - 1) { STATE.focusedDate = dates[idx + 1]; focusDashOnDate(STATE.focusedDate); renderDashNews(filterByRange(DATA, STATE.range)); }
   });
 

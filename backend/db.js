@@ -778,6 +778,20 @@ async function latestSettledClose(stock, beforeDateIso) {
   return r.rows[0] || null;
 }
 
+// Stored propIdx values in [fromDate, toDate], as a Map(date → value). Read
+// from the ASW rows (the canonical carrier — every stock's rows share the one
+// synthetic PROP series). Feeds rescaleToStored() so an incremental fetch
+// window chains onto the existing series instead of re-basing to 100.
+async function storedPropIdxMap(fromDate, toDate) {
+  const r = await getPool().query(
+    `SELECT date, "propIdx" FROM daily
+      WHERE stock = 'ASW' AND "propIdx" IS NOT NULL AND date >= $1 AND date <= $2
+      ORDER BY date ASC`,
+    [fromDate, toDate]
+  );
+  return new Map(r.rows.map(row => [row.date, Number(row.propIdx)]));
+}
+
 // Set only the `change` column for one (stock, date). Used by
 // scripts/backfill-stock-history.mjs: once older rows are prepended, the row
 // that used to be the earliest finally has a predecessor to measure against.
@@ -1365,6 +1379,7 @@ module.exports = {
   readAllRows,
   latestSettledClose,   // v13 — per-stock intraday reference close
   setBoundaryChange,    // narrow fix-up used by the IPO-history backfill
+  storedPropIdxMap,     // propIdx continuity anchor for the daily fetch window
   metadata,
   logFetchStart,
   logFetchFinish,
