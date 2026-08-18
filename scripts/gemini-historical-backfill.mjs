@@ -228,7 +228,10 @@ async function main() {
   if (APPLY && toInsert.length) {
     // Use the same writeNewsItems path as production fetchers
     const { default: db } = await import('../backend/db.js');
-    const { inserted } = await db.writeNewsItems(toInsert);
+    // migrate-v13: writeNewsItems takes the stock as its first argument. These
+    // historical backfills are ASW-only by construction (their prompts search ASW
+    // and the Thai property sector), so they pin 'ASW' explicitly.
+    const { inserted } = await db.writeNewsItems('ASW', toInsert);
     console.log(`[gemini-backfill] committed ${inserted} rows to news_feed ✓`);
   } else if (!APPLY) {
     console.log('[gemini-backfill] dry-run only — re-run with --apply to commit');

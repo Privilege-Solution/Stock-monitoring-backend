@@ -177,7 +177,10 @@ if (all.length) {
     for (const i of all) if (isHomepageUrl(i.source_url)) i.source_url = '';
   }
 
-  const { inserted } = await db.writeNewsItems(all);
+  // migrate-v13: writeNewsItems takes the stock as its first argument. These
+  // historical backfills are ASW-only by construction (their prompts search ASW
+  // and the Thai property sector), so they pin 'ASW' explicitly.
+  const { inserted } = await db.writeNewsItems('ASW', all);
   const withUrl = all.filter(i => i.source_url).length;
   process.stdout.write(`\nDONE: ${inserted} inserted, ${withUrl}/${all.length} with URLs (${Math.round(withUrl/all.length*100)}%)\n`);
 } else {
