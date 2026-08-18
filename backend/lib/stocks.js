@@ -29,6 +29,7 @@ const STOCKS = {
     label: 'ASW',
     nameTh: 'แอสเซทไวส์',
     nameEn: 'AssetWise',
+    ipoDate: '2021-04-28',   // SET debut (close ฿8.76)
     categories: ['COMPANY', 'COMPETITOR', 'RATES', 'GOV_POLICY', 'POLITICS', 'INDUSTRY', 'MACRO'],
   },
   TITLE: {
@@ -36,6 +37,10 @@ const STOCKS = {
     label: 'TITLE',
     nameTh: 'ร่มโพธิ์ พร็อพเพอร์ตี้',
     nameEn: 'Rhom Bho Property',
+    // 2 Nov 2017 per SET's company profile — mai debut; moved to SET Jan 2026
+    // under the same ticker. Anchors the empty-DB backfill window (the old
+    // 5-year default was an ASW-era assumption and cut 2017→2021 off).
+    ipoDate: '2017-11-02',
     // Order = tab order on the news view (product decision, scrutiny pass 4):
     // the user's named drivers (wars, oil, foreign money, tourism) come right
     // after COMPANY; the shared long-tail buckets close the row.

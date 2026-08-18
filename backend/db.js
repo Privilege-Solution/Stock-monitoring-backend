@@ -778,6 +778,19 @@ async function latestSettledClose(stock, beforeDateIso) {
   return r.rows[0] || null;
 }
 
+// Set only the `change` column for one (stock, date). Used by
+// scripts/backfill-stock-history.mjs: once older rows are prepended, the row
+// that used to be the earliest finally has a predecessor to measure against.
+// Deliberately narrow — a full writeRows() upsert would also rewrite propIdx.
+async function setBoundaryChange(stock, date, changePct) {
+  assertStock(stock, 'setBoundaryChange');
+  const r = await getPool().query(
+    'UPDATE daily SET "change" = $3 WHERE stock = $1 AND date = $2',
+    [stock, date, changePct]
+  );
+  return r.rowCount;
+}
+
 // ── peer_prices ────────────────────────────────────────────────────────────
 
 // peers is an array of arrays: peers[i] is the price series for the i-th ticker.
@@ -1351,6 +1364,7 @@ module.exports = {
   writeRows,
   readAllRows,
   latestSettledClose,   // v13 — per-stock intraday reference close
+  setBoundaryChange,    // narrow fix-up used by the IPO-history backfill
   metadata,
   logFetchStart,
   logFetchFinish,

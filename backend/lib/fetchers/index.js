@@ -112,7 +112,11 @@ async function runDailyPrices({ sinceDate, source = 'yahoo' } = {}) {
       d.setUTCDate(d.getUTCDate() - 7);
       sinceByStock[stock] = d.toISOString().slice(0, 10);
     } else {
-      sinceByStock[stock] = null; // full-history backfill for this stock
+      // Empty DB for this stock → backfill from its IPO. The old behaviour
+      // (null → yahoo's 5-year default) predates multi-stock and silently cut
+      // TITLE's 2017-2021 mai-era history off; 5y stays the last-resort
+      // fallback for a stock with no ipoDate on record.
+      sinceByStock[stock] = STOCKS[stock].ipoDate || null;
     }
   }
   // Shared window = the widest any stock needs (null = 5y default wins).
