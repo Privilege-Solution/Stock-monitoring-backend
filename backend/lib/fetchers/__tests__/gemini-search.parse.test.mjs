@@ -193,3 +193,23 @@ test('per-stock coercion: TOURISM kept for TITLE, coerced to MACRO for ASW', () 
   const legacy = parseAIResult(block, 'macro', null);
   assert.equal(legacy[0].category, 'MACRO');
 });
+
+// ---- show_pin ------------------------------------------------------------
+// Live TITLE rows could never pin (title-company / title-drivers weren't in
+// the rule), so TITLE's chart went blank where its backfill ended; ASW's HIGH
+// competitor/policy rows (sector pipeline) couldn't pin either.
+const pinBlock = (cat, impact) => [
+  `CATEGORY: ${cat}`, 'HEADLINE: ทดสอบหัวข้อข่าว', 'SUMMARY: สรุป', `IMPACT_LEVEL: ${impact}`, 'SOURCE: x', 'URL: NONE',
+].join('\n');
+
+test('show_pin: company pipelines pin every row, for both stocks', () => {
+  assert.equal(parseAIResult(pinBlock('COMPANY', 'LOW'), 'company', null, 'ASW')[0].show_pin, true);
+  assert.equal(parseAIResult(pinBlock('COMPANY', 'LOW'), 'title-company', null, 'TITLE')[0].show_pin, true);
+});
+
+test('show_pin: other pipelines pin HIGH rows only', () => {
+  for (const [pipe, stock, cat] of [['macro', 'ASW', 'MACRO'], ['sector', 'ASW', 'COMPETITOR'], ['title-drivers', 'TITLE', 'FX']]) {
+    assert.equal(parseAIResult(pinBlock(cat, 'HIGH'), pipe, null, stock)[0].show_pin, true, `${pipe} HIGH`);
+    assert.equal(parseAIResult(pinBlock(cat, 'MEDIUM'), pipe, null, stock)[0].show_pin, false, `${pipe} MEDIUM`);
+  }
+});

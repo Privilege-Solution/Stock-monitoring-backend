@@ -526,12 +526,21 @@ app.get('/api/news', async (req, res) => {
   try {
     const stock = stockOf(req, res);
     if (!stock) return;
-    const { category, since, limit } = req.query;
+    const { category, since, until, limit } = req.query;
+    for (const [name, v] of [['since', since], ['until', until]]) {
+      if (v !== undefined && (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v))) {
+        return res.status(400).json({ error: `${name} must be YYYY-MM-DD`, code: 'date_bad_format' });
+      }
+    }
+    // 500 for an open-ended read (unchanged); up to 2000 once the caller bounds
+    // the window, so a busy month fetched by date isn't truncated.
+    const max = (since || until) ? 2000 : 500;
     const rows = await db.readNewsFeed({
       stock,
       category: category || null,
       since: since || null,
-      limit: Math.max(1, Math.min(parseInt(limit || '100', 10) || 100, 500)),
+      until: until || null,
+      limit: Math.max(1, Math.min(parseInt(limit || '100', 10) || 100, max)),
     });
     res.json({ stock, rows, count: rows.length });
   } catch (e) {

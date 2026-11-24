@@ -110,6 +110,18 @@ export function headlineMentionsCompetitor(title) {
   return COMPETITOR_TICKER_RE.test(title); // case-sensitive — uppercase tickers only
 }
 
+// Natural disasters and building collapses — MACRO on both panels. The user
+// reads these as macro shocks (the 28 Mar 2025 earthquake hit Bangkok condo
+// demand directly), and without this rule an "แผ่นดินไหวกระทบคอนโด" headline
+// filed under INDUSTRY and a flood headline fell through to whatever else it
+// mentioned. `flood` is word-bounded and not followed by "of", so "a flood of
+// new supply" doesn't match.
+const DISASTER_RE = /แผ่นดินไหว|อาฟเตอร์ช็อก|อุทกภัย|น้ำท่วม|น้ำป่า|ดินถล่ม|สึนามิ|ภัยพิบัติ|ตึกถล่ม|อาคารถล่ม|พายุ(?!ทางเศรษฐกิจ)|earthquake|tsunami|\bflood(s|ing|ed)?\b(?!\s+of\b)/i;
+
+export function headlineIsDisaster(title) {
+  return !!title && DISASTER_RE.test(String(title));
+}
+
 // Per-stock dispatch (migrate-v13). Default 'ASW' keeps every existing call
 // site behaving exactly as before.
 export function classifyCategory(title, hint, stock = 'ASW') {
@@ -135,6 +147,10 @@ function classifyCategoryTitleStock(title, hint) {
   //     crackdown, leasehold, transfer/mortgage fees, LTV.
   if (/LTV|ค่าโอน|ค่าจดจำนอง|โควตาต่างชาติ|ต่างชาติถือครอง|นอมินี|nominee|ลีสโฮลด์|leasehold|เช่าระยะยาว|มาตรการอสังหาฯ|ลดค่าธรรมเนียม.*(โอน|จดจำนอง)/i.test(title)) return 'GOV_POLICY';
 
+  // (c') Disasters → MACRO, ahead of tourism: "แผ่นดินไหว นักท่องเที่ยวยกเลิก"
+  //      is a disaster story first.
+  if (headlineIsDisaster(title)) return 'MACRO';
+
   // (d) Travel access — visas, arrivals, flights, airport capacity. Checked
   //     BEFORE geopolitics so "นักท่องเที่ยวรัสเซีย..." lands here, not in war news.
   if (/วีซ่า|visa|นักท่องเที่ยว|เที่ยวบิน|สายการบิน|สนามบิน|ท่องเที่ยว|tourist|flight|airport|arrival/i.test(title)) return 'TOURISM';
@@ -144,7 +160,12 @@ function classifyCategoryTitleStock(title, hint) {
   if (/น้ำมันดิบ|ราคาน้ำมัน|Urals|Brent|WTI|OPEC|โอเปก/i.test(title)) return 'OIL';
 
   // (f) Currencies & moving money — baht strength, RUB/CNY, transfer rules.
-  if (/ค่าเงินบาท|เงินบาท|บาทแข็ง|บาทอ่อน|รูเบิล|เงินหยวน|อัตราแลกเปลี่ยน|โอนเงิน(ระหว่าง|ต่าง)ประเทศ|USD\/THB|(?<![A-Za-z])(RUB|CNY)(?![A-Za-z])|SWIFT/.test(title)) return 'FX';
+  //     ค่าเงิน (any currency), แข็งค่า/อ่อนค่า and the fund-flow wording were
+  //     missing, so "รูเบิลอ่อนค่าหนัก" matched only by luck and "ค่าเงินดอลลาร์…"
+  //     not at all. Latin words are case-insensitive; the RUB/CNY tickers stay
+  //     case-sensitive so "rub"/"cny" inside English words can't match.
+  if (/ค่าเงิน|เงินบาท|บาทแข็ง|บาทอ่อน|แข็งค่า|อ่อนค่า|รูเบิล|เงินหยวน|อัตราแลกเปลี่ยน|ทุนสำรอง|เงินทุน(ต่างชาติ|ต่างประเทศ)?ไหล|โอนเงิน(ระหว่าง|ต่าง)ประเทศ|USD\/THB|SWIFT|fund\s?flows?|exchange rate|forex/i.test(title)
+      || /(?<![A-Za-z])(RUB|CNY)(?![A-Za-z])/.test(title)) return 'FX';
 
   // (g) Wars, sanctions, ceasefire talks — the buyers' home-front news.
   if (/สงคราม|ยูเครน|รัสเซีย|เครมลิน|คว่ำบาตร|หยุดยิง|เจรจาสันติภาพ|ceasefire|sanction|(?<![A-Za-z])war(?![A-Za-z])|Ukraine|Russia|Kremlin|NATO|ตะวันออกกลาง|อิสราเอล|Israel/i.test(title)) return 'GEOPOLITICS';
@@ -187,6 +208,10 @@ function classifyCategoryAsw(title, hint) {
   if (/ลดค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน|อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
   if (/ค่าธรรมเนียม.*(โอน|จดจำนอง|จดทะเบียน).*(อสังหาฯ|ที่อยู่อาศัย)/.test(title)) return 'GOV_POLICY';
   if (/มาตรการกระตุ้นอสังหาฯ/.test(title)) return 'GOV_POLICY';
+
+  // (c'') Disasters → MACRO, before competitor/industry: "แผ่นดินไหวฉุดยอด
+  //       presale อสังหาฯ" is a disaster story, not an industry trend.
+  if (headlineIsDisaster(title)) return 'MACRO';
 
   // (d) Competitor mention (a rival developer named, not ASW) → COMPETITOR.
   //     Placed after rate/policy so a rate/policy article that happens to name

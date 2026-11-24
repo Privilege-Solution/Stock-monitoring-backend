@@ -39,6 +39,11 @@ const RUN_SEEN_URLS = new Map();
 // is silent — see mapLimit() in news-rss-helpers.mjs.
 const BING_CONCURRENCY = 4;
 
+// Buddhist-era year for the date-pinned queries below. Was hard-coded '2569',
+// which would have gone stale on 1 Jan 2027. Computed in ICT at module load;
+// the server restarts on every deploy, so a year rollover is picked up then.
+const BE_YEAR = new Date(Date.now() + 7 * 3600 * 1000).getUTCFullYear() + 543;
+
 const QUERIES = [
   // ── ASW direct ──────────────────────────────────────────────────────────
   { q: 'แอสเซทไวส์+ASW',       category: 'peer_news', pipeline: 'sector' },
@@ -72,10 +77,26 @@ const QUERIES = [
   { q: 'REIC ดัชนี อสังหา',     category: 'sector_data',  pipeline: 'sector' },
   { q: 'presale โอน คอนโด ไทย',  category: 'sector_data',  pipeline: 'sector' },
   { q: 'ค่าโอน จดจำนอง 0.01%',   category: 'sector_policy', pipeline: 'sector' },
-  { q: 'LTV สินเชื่อบ้าน 2569',  category: 'sector_policy', pipeline: 'sector' },
+  { q: `LTV สินเชื่อบ้าน ${BE_YEAR}`, category: 'sector_policy', pipeline: 'sector' },
   { q: 'ต่างชาติ ซื้อ คอนโด ไทย', category: 'sector_data',  pipeline: 'sector', stocks: ['ASW', 'TITLE'] },
-  { q: 'ดอกเบี้ย ธปท. 2569',     category: 'interest_rate', pipeline: 'macro' },
-  { q: 'ค่าเงินบาท USD',         category: 'macro_fx',     pipeline: 'macro', stocks: ['ASW', 'TITLE'] },
+  { q: `ดอกเบี้ย ธปท. ${BE_YEAR}`, category: 'interest_rate', pipeline: 'macro' },
+  // FX had no baseScore and none of the scoring keywords below are FX words, so
+  // a plain baht headline scored 0 and was hard-dropped — and the bank drop
+  // words killed the rest, because baht stories routinely quote a bank's
+  // research house ("กรุงศรีคาดเงินบาทแข็งค่า"). skipDrop + baseScore make the
+  // query its own relevance filter, like the TITLE tourism set below.
+  { q: 'ค่าเงินบาท USD',         category: 'macro_fx',     pipeline: 'macro', stocks: ['ASW', 'TITLE'], baseScore: 20, skipDrop: true },
+
+  // ── Disasters (shared) ─────────────────────────────────────────────────
+  // Nothing covered them: the 28 Mar 2025 earthquake that hit Bangkok condos
+  // never reached the feed. Targeted to Thai impact so foreign quake reports
+  // don't flood in; skipDrop because flood-impact stories quote bank research
+  // houses (ศูนย์วิจัยกสิกรไทย). Filed as MACRO by the classifier.
+  { q: 'แผ่นดินไหว กรุงเทพ',      category: 'disaster',     pipeline: 'macro', stocks: ['ASW', 'TITLE'], baseScore: 20, skipDrop: true },
+  { q: 'แผ่นดินไหว คอนโด',       category: 'disaster',     pipeline: 'macro', stocks: ['ASW', 'TITLE'], baseScore: 20, skipDrop: true },
+  { q: 'น้ำท่วม เศรษฐกิจไทย',     category: 'disaster',     pipeline: 'macro', stocks: ['ASW', 'TITLE'], baseScore: 20, skipDrop: true },
+  { q: 'น้ำท่วม กรุงเทพ',        category: 'disaster',     pipeline: 'macro', stocks: ['ASW'],          baseScore: 15, skipDrop: true },
+  { q: 'น้ำท่วม ภูเก็ต',          category: 'disaster',     pipeline: 'title-macro', stocks: ['TITLE'],  baseScore: 15, skipDrop: true },
 
   // ── TITLE (ร่มโพธิ์ — Phuket, foreign-buyer demand) — migrate-v13 ────────
   // baseScore: these targeted queries are their own relevance filter; without
@@ -93,6 +114,11 @@ const QUERIES = [
   { q: 'นักท่องเที่ยว ภูเก็ต',        category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
   { q: 'เที่ยวบิน ภูเก็ต รัสเซีย',     category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
   { q: 'วีซ่า นักท่องเที่ยว ไทย',      category: 'tourism',        pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 25 },
+  // FX & volatility — TITLE's buyers pay in roubles, yuan and dollars, so the
+  // baht's moves against them are a demand driver, not background noise.
+  { q: 'ค่าเงินบาท ผันผวน',          category: 'macro_fx',       pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 20, skipDrop: true },
+  { q: 'เงินบาท แข็งค่า อ่อนค่า',      category: 'macro_fx',       pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 20, skipDrop: true },
+  { q: 'ค่าเงินรูเบิล',              category: 'macro_fx',       pipeline: 'title-macro',   stocks: ['TITLE'], baseScore: 20, skipDrop: true },
 ];
 
 const { createHash } = await import('node:crypto');
@@ -245,13 +271,20 @@ const HIGH_KEYWORDS = [
   // REIC / sector data
   { kw: 'REIC',           boost: 25, type: 'sector' },
   { kw: 'ดัชนีความเชื่อมั่น', boost: 10, type: 'sector' },
+  // Currency + disasters — without these a broad query's baht or flood story
+  // scored only on incidental property words, or 0.
+  { kw: 'ค่าเงินบาท',      boost: 10, type: 'macro' },
+  { kw: 'เงินบาท',         boost: 10, type: 'macro' },
+  { kw: 'แผ่นดินไหว',      boost: 15, type: 'macro' },
+  { kw: 'น้ำท่วม',         boost: 15, type: 'macro' },
+  { kw: 'อุทกภัย',         boost: 15, type: 'macro' },
 ];
 
 // Score a headline. Returns 0 → drop, > 0 → keep, with higher = more relevant.
 // `display_priority` = 50 + min(score, 75) → range [50, 125]. So an ASW
 // headline can reach 100+ (high priority in the unified feed), while a
 // generic sector headline sits at 60-70.
-function scoreItem(title, baseScore = 0) {
+function scoreItem(title, baseScore = 0, skipDrop = false) {
   const t = title.toLowerCase();
   // Sum the HIGH keyword boosts FIRST. The DROP scan used to run before this
   // and `return 0` immediately, which meant the ASW boost was never even
@@ -273,7 +306,8 @@ function scoreItem(title, baseScore = 0) {
   // ASW is the whole point of the feed; no off-sector keyword outranks it.
   // Latin tickers use word-boundary regexes (case-sensitive for the uppercase
   // SET tickers) so they don't match unrelated English words.
-  if (!aswDirect) {
+  // skipDrop: a targeted query (FX, disasters) is its own relevance filter.
+  if (!aswDirect && !skipDrop) {
     if (DROP_LATIN_RE.test(title)) return 0;
     if (DROP_LATIN_CI_RE.test(title)) return 0;
     for (const kw of DROP_WORDS_THAI) {
@@ -331,7 +365,7 @@ function parseItem(itemXml, query) {
   // filtered later. ASW direct = 50+, real estate = 25+, BoT rate = 20+,
   // macro = 10+. display_priority = 50 + score, capped at 125 so ASW news
   // sits at top of the unified feed (above generic sector noise).
-  const score = scoreItem(headline, query.baseScore || 0);
+  const score = scoreItem(headline, query.baseScore || 0, !!query.skipDrop);
   if (score === 0) return null;        // hard drop — no row at all
   const displayPriority = Math.min(50 + score, 125);
 

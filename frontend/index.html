@@ -790,6 +790,17 @@ window.ASW_API = {
     try { const r = await fetch('/api/news?limit=500' + stockQS('&')); if (!r.ok) throw 0; const d = await r.json(); return d.rows || []; }
     catch (e) { return []; }
   },
+  // One date window of the feed (inclusive). Reaches what the 500-row default
+  // load leaves out — older days, busy months. null on failure.
+  async newsWindow(since, until) {
+    try {
+      const q = `?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=2000`;
+      const r = await fetch('/api/news' + q + stockQS('&'));
+      if (!r.ok) throw 0;
+      const d = await r.json();
+      return d.rows || [];
+    } catch (e) { return null; }
+  },
   // Chart pins across the whole IPO→now range. Separate from newsFeed()
   // because that one is capped at 500 rows ordered by display_priority, which
   // drops the oldest pins first — see GET /api/news/pins in server.js.
@@ -2289,6 +2300,13 @@ function renderDashNews(filtered) {
   const newsDates = [...new Set(newsForChart().map(n => (n.date || '').slice(0,10)))].sort();
   const latestNewsDate = newsDates.length ? newsDates[newsDates.length - 1] : null;
   let targetDate = STATE.focusedDate || latestNewsDate;
+  // A focused day older than the default load carries only its pinned rows
+  // here. Fetch the day ±1 (the sidebar's context window) and render again.
+  if (STATE.focusedDate) {
+    const shift = (ymd, d) => new Date(Date.parse(ymd + 'T00:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+    ensureNewsWindow(shift(STATE.focusedDate, -1), shift(STATE.focusedDate, 1))
+      .then(changed => { if (changed) renderDashNews(filtered); });
+  }
   // Deliberately NOT written back to STATE.focusedDate. That seed existed only
   // so ‹ › worked on first render, but buildDashChart re-applies focusedDate
   // as a ±30-day zoom after EVERY rebuild — so the first overlay-pill click
@@ -3175,6 +3193,7 @@ function hpOpenDrawer(date) {
     hpCloseDrawer();
     STATE.newsDateFrom = date; STATE.newsDateTo = date;
     setView('news');
+    ensureNewsWindow(date, date).then(changed => { if (changed) renderUnifiedNews(); });
   });
   $('dayDrawerClose').focus();
   hpRenderTable(hpPeriodRows());
@@ -3269,6 +3288,7 @@ async function loadNewsFeed() {
     console.warn(`[feed] failed: ${e.message || e}`);
     window.NEWS_DATA = [];
   }
+  NEWS_WINDOWS_LOADED.clear();   // NEWS_DATA was replaced — merged windows are gone
   // Keep the pin cache in step with the feed — a refresh that pulls new
   // HIGH-severity rows should put their pins on the chart in the same pass.
   await loadNewsPins();
@@ -3276,14 +3296,36 @@ async function loadNewsFeed() {
   syncNewsDateBounds();
 }
 
-// Clamp the two date <input type="date">s to the span actually present in
-// NEWS_DATA. Must run AFTER the feed lands — the DOMContentLoaded handler
-// runs before the bootstrap Promise.all() resolves, so computing the bounds
-// there always saw an empty array and never set min/max.
+// The default load is the top 500 rows by priority, which for either stock is
+// a fraction of what is stored — so a date picked in the news view, a day's
+// "ดูข่าวทั้งหมด", or a focused dashboard day could show nothing even though
+// that day's news exists. Before showing a specific window, fetch it and merge
+// it into NEWS_DATA. Each window is fetched once per load of the feed; a
+// failure (offline sample mode) is remembered too, so a render can't loop.
+const NEWS_WINDOWS_LOADED = new Set();
+async function ensureNewsWindow(from, to) {
+  if (!from && !to) return false;
+  const lo = from || stockIpoDate();
+  const hi = to || todayICT();
+  const key = `${STATE.stock}|${lo}|${hi}`;
+  if (NEWS_WINDOWS_LOADED.has(key)) return false;
+  NEWS_WINDOWS_LOADED.add(key);
+  const epoch = STOCK_EPOCH;
+  const rows = await window.ASW_API.newsWindow(lo, hi);
+  if (epoch !== STOCK_EPOCH || !rows || !rows.length) return false;
+  const have = new Set((window.NEWS_DATA || []).map(n => String(n.id)));
+  const fresh = rows.filter(n => !have.has(String(n.id)));
+  if (!fresh.length) return false;
+  window.NEWS_DATA = [...(window.NEWS_DATA || []), ...fresh];
+  return true;
+}
+
+// Bound the two date <input type="date">s to the stock's whole history (IPO →
+// today). They used to be clamped to the span of the loaded top-500, so any
+// day older than that could not even be picked; ensureNewsWindow() now fetches
+// whatever window is chosen.
 function syncNewsDateBounds() {
-  const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-  if (!dates.length) return;
-  const lo = dates[0], hi = dates[dates.length - 1];
+  const lo = stockIpoDate(), hi = todayICT();
   const dpFrom = $('newsDateFrom'); if (dpFrom) { dpFrom.min = lo; dpFrom.max = hi; }
   const dpTo = $('newsDateTo');     if (dpTo)   { dpTo.min = lo;   dpTo.max = hi; }
 }
@@ -4135,6 +4177,7 @@ async function switchStock(next) {
 
     // Reset every stock-scoped cache/positional state (plan §6 list).
     window.NEWS_DATA = [];
+    NEWS_WINDOWS_LOADED.clear();
     window.NEWS_PINS = [];
     window.ALL_SUMMARIES = [];
     window.MORNING_BRIEF = null;
@@ -4161,7 +4204,7 @@ async function switchStock(next) {
     if (epoch !== STOCK_EPOCH) return;
     CACHED_DIGESTS = allDigests || [];
     const mode = applyDailyRows(rows);
-    if (newsRows) { window.NEWS_DATA = newsRows; window.__newsFeedLoaded = true; syncNewsDateBounds(); }
+    if (newsRows) { window.NEWS_DATA = newsRows; NEWS_WINDOWS_LOADED.clear(); window.__newsFeedLoaded = true; syncNewsDateBounds(); }
     if (newsPins) window.NEWS_PINS = newsPins;
     if (brief && brief.date) window.MORNING_BRIEF = brief;
     if (dailySummary && dailySummary.date) window.DAILY_SUMMARY = dailySummary;
@@ -4503,17 +4546,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     STATE.newsDateFrom = dpFrom?.value || null;
     STATE.newsDateTo = dpTo?.value || null;
     renderUnifiedNews();
+    // Render what is loaded now, then again once the chosen window arrives.
+    ensureNewsWindow(STATE.newsDateFrom, STATE.newsDateTo)
+      .then(changed => { if (changed) renderUnifiedNews(); });
   }
-  if (dpFrom) {
-    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) { dpFrom.min = dates[0]; dpFrom.max = dates[dates.length - 1]; }
-    dpFrom.addEventListener('change', onDateChange);
-  }
-  if (dpTo) {
-    const dates = (window.NEWS_DATA || []).map(n => (n.date || '').slice(0, 10)).filter(Boolean).sort();
-    if (dates.length) { dpTo.min = dates[0]; dpTo.max = dates[dates.length - 1]; }
-    dpTo.addEventListener('change', onDateChange);
-  }
+  syncNewsDateBounds();
+  if (dpFrom) dpFrom.addEventListener('change', onDateChange);
+  if (dpTo) dpTo.addEventListener('change', onDateChange);
 
   // Category tabs are JS-rendered per stock (renderNewsCatTabs) — the render
   // attaches its own click handlers; nothing to wire here.

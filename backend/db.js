@@ -1125,7 +1125,12 @@ async function filterSemanticDuplicates(stock, items) {
 // The composite index on (display_priority DESC, date DESC, id DESC) backs
 // this sort — high-severity items surface first, same priority keeps date
 // order, id tiebreaks identical timestamps deterministically.
-async function readNewsFeed({ stock = DEFAULT_STOCK, category = null, since = null, limit = 100 } = {}) {
+// Hard ceiling on one feed read. The route keeps an open-ended read at 500 (the
+// frontend's default load); a date-windowed read (since/until: the news view's
+// date pickers, a pin's day) may go higher, since one busy month can top 500.
+const NEWS_FEED_MAX_LIMIT = 2000;
+
+async function readNewsFeed({ stock = DEFAULT_STOCK, category = null, since = null, until = null, limit = 100 } = {}) {
   const p = getPool();
   // User-dismissed (hidden) rows are always excluded. The hide feature was
   // removed; the column/flag is kept so previously-hidden rows stay dismissed.
@@ -1133,9 +1138,10 @@ async function readNewsFeed({ stock = DEFAULT_STOCK, category = null, since = nu
   const where = ['stock = $1', 'hidden = FALSE'];
   if (category) { params.push(category); where.push(`category = $${params.length}`); }
   if (since)    { params.push(since);    where.push(`date >= $${params.length}`); }
+  if (until)    { params.push(until);    where.push(`date <= $${params.length}`); }
   // Clamp low as well as high — a negative limit reached Postgres as
   // `LIMIT -5`, which errors with "LIMIT must not be negative" (a 500).
-  params.push(Math.max(1, Math.min(limit || 100, 500)));
+  params.push(Math.max(1, Math.min(limit || 100, NEWS_FEED_MAX_LIMIT)));
   const sql = `SELECT id, title, date, category, source_url, source_label,
                       pipeline, impact, severity, show_pin, display_priority, summary,
                       impact_level, user_note, chart_marked, url_verified,
