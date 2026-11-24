@@ -6,7 +6,9 @@
 <title>Stock Monitor — ASW · TITLE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- AssetWise team type: IBM Plex Sans Thai for all UI text (both scripts),
+     Anuphan for headings, IBM Plex Mono for numbers that must line up. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Anuphan:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -17,19 +19,36 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
 <link rel="stylesheet" href="dist/styles.css">
 <style>
-  /* CSS variables only — consumed by both Tailwind utilities (var(--*)) and runtime JS getComputedStyle() */
-  :root {
-    --primary:  #3B8BD4;
-    --positive: #3B6D11;
-    --negative: #A32D2D;
-    --amber:    #EF9F27;
-    --teal:     #1D9E75;
-    --surface:  #F4F3EF;
-    --card:     #FFFFFF;
-    --border:   #D3D1C7;
-    --text:     #1A1A18;
-    --muted:    #888780;
+  /* AssetWise "Attune" tokens. CSS variables only — consumed by Tailwind
+     utilities (var(--*)) AND by runtime JS through getComputedStyle().
 
+     HEX, not the oklch in the team's globals.css, on purpose: this page builds
+     tints by string concatenation (badge.color + '1a') and hands token values
+     straight to Chart.js canvases. Neither works with an oklch() string — the
+     tint becomes invalid CSS and is silently dropped. The HEX values are the
+     design system's own published equivalents. */
+  :root {
+    --primary:    #1C5FF7;   /* brand blue */
+    /* positive / negative are used as TEXT on white (price changes), so they
+       take the -ink tones: the bright success/destructive fills only reach
+       ~3:1 against white and fail for small numbers. */
+    --positive:   #05773B;   /* success-ink */
+    --negative:   #C90F1A;   /* destructive-ink */
+    --amber:      #E8A127;   /* warning */
+    --teal:       #117878;   /* PROP index series — module teal */
+    --background: #FCFCFD;   /* page */
+    --surface:    #F3F4F8;   /* secondary: segmented controls, hover, wells */
+    --surface-sunken: #F6F6F9; /* table headers */
+    --accent:     #E4EFFF;   /* soft blue hover / selected */
+    --accent-foreground: #1E3666;
+    --card:       #FFFFFF;
+    --border:     #E4E5E9;
+    --text:       #161723;
+    /* Was #888780. Secondary text is read all day here — dates, labels, units —
+       and the old grey sat well under 4.5:1 on white. */
+    --muted:      #4B5565;
+
+    /* Event categories — unchanged in this pass (see REMARK_BADGE note). */
     --evt-rate:  #A32D2D;
     --evt-corp:  #3B6D11;
     --evt-pol:   #EF9F27;
@@ -37,11 +56,15 @@
     --evt-macro: #6B5B95;
     --evt-other: #888780;
 
-    --sidebar-bg:      #FFFFFF;
-    --sidebar-text:    #1A1A18;
-    --sidebar-muted:   #888780;
-    --sidebar-active:  #F4F3EF;
-    --sidebar-border:  #D3D1C7;
+    /* Sidebar — the team's navy, with its own light text so the global tokens
+       above do not have to be inverted inside it. */
+    --sidebar-bg:          #1E2E50;
+    --sidebar-text:        #B2BED5;
+    --sidebar-muted:       #909DB8;   /* 4.93:1 on navy — group titles are 12px, need AA */
+    --sidebar-active:      rgba(28, 95, 247, 0.22);   /* primary at ~20% on navy */
+    --sidebar-active-text: #A0C3FF;
+    --sidebar-hover:       rgba(255, 255, 255, 0.06);
+    --sidebar-border:      rgba(255, 255, 255, 0.10);
   }
 
   /* Live-ticker badge under the #kpiPrice card. Pulses while market is open. */
@@ -84,7 +107,7 @@
   /* Centered modal overlay — toggled via .show (display:none by default). */
   .modal-overlay {
     position: fixed; inset: 0; z-index: 50;
-    background: rgba(26,26,24,0.45);
+    background: rgba(22,23,35,0.45);   /* --text #161723 */
     display: none; align-items: center; justify-content: center; padding: 1rem;
   }
   .modal-overlay.show { display: flex; }
@@ -202,17 +225,16 @@
   <!-- Top bar -->
   <header class="topbar">
     <div class="topbar-brand">
-      <img src="/logo.png" alt="Stock Monitor" style="height:8px;width:auto;margin-right:8px;" />
+      <!-- Shown only while the sidebar is collapsed to its icon rail; on wider
+           screens the wordmark lives at the top of the navy sidebar. -->
+      <img src="/logo.png" alt="AssetWise" class="topbar-wordmark" />
       <div>
         <div class="topbar-title" id="topbarTitle">ASW Monitor</div>
       </div>
       <!-- migrate-v13: stock switcher — the whole app follows the selection -->
-      <div id="stockSwitch" role="tablist" aria-label="เลือกหุ้น"
-           style="display:flex;gap:2px;margin-left:16px;background:#edeae3;border-radius:9px;padding:2px;">
-        <button type="button" class="stock-switch-btn" data-stock="ASW"
-                style="padding:4px 14px;font-size:12px;font-weight:700;border:none;border-radius:7px;cursor:pointer;background:var(--primary);color:#fff;">ASW</button>
-        <button type="button" class="stock-switch-btn" data-stock="TITLE"
-                style="padding:4px 14px;font-size:12px;font-weight:700;border:none;border-radius:7px;cursor:pointer;background:transparent;color:#555;">TITLE</button>
+      <div id="stockSwitch" class="stock-switch" role="tablist" aria-label="เลือกหุ้น">
+        <button type="button" class="stock-switch-btn is-active" data-stock="ASW" role="tab" aria-selected="true">ASW</button>
+        <button type="button" class="stock-switch-btn" data-stock="TITLE" role="tab" aria-selected="false">TITLE</button>
       </div>
     </div>
     <div class="topbar-actions">
@@ -220,7 +242,7 @@
         <span>อัปเดตล่าสุด:</span>
         <span id="lastUpdated" style="color:var(--text); font-weight:500;">—</span>
       </div>
-      <button id="refreshBtn" class="btn btn-ghost" title="ดึงข้อมูลล่าสุด">
+      <button id="refreshBtn" class="btn btn-ghost" title="ดึงข้อมูลล่าสุด" aria-label="รีเฟรชข้อมูล">
         <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
         <span class="th">รีเฟรช</span>
       </button>
@@ -229,6 +251,9 @@
 
   <!-- Sidebar -->
   <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="/logo-white.png" alt="AssetWise" class="sidebar-wordmark" />
+    </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title th">เมนูหลัก</div>
       <div class="sidebar-item active" data-view="dashboard">
@@ -371,8 +396,8 @@
             <h3 class="th" style="font-size:13px;">ข่าวล่าสุด <span id="dashNewsDateLabel" class="th muted" style="font-size:12px;font-weight:400;"></span></h3>
             <div class="row" style="gap:4px; align-items:center;">
               <span class="muted th" id="dashNewsCount" style="font-size:11px;">— รายการ</span>
-              <button id="dashNewsPrev" type="button" style="font-size:16px;padding:2px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#333;" title="วันก่อนหน้า">‹</button>
-              <button id="dashNewsNext" type="button" style="font-size:16px;padding:2px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#333;" title="วันถัดไป">›</button>
+              <button id="dashNewsPrev" type="button" class="btn btn-icon" title="วันก่อนหน้า" aria-label="วันก่อนหน้า">‹</button>
+              <button id="dashNewsNext" type="button" class="btn btn-icon" title="วันถัดไป" aria-label="วันถัดไป">›</button>
             </div>
           </div>
           <div id="dashNewsList" class="scroll-y" style="flex:1; min-height:0;"></div>
@@ -539,14 +564,14 @@
     <section class="view" id="view-news">
       <!-- Minimal toolbar: search + date toggle + category tabs -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-        <input type="text" id="newsSearch" class="input th" style="flex:1;font-size:14px;padding:8px 12px;border-radius:8px;border:1px solid #e0e0e0;" placeholder="ค้นหาข่าว..." />
-        <div style="display:flex;gap:0;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+        <input type="text" id="newsSearch" class="input th" style="flex:1;font-size:14px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);" placeholder="ค้นหาข่าว..." />
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
           <button id="newsTodayBtn" class="th" style="padding:8px 14px;font-size:13px;background:#fff;border:none;cursor:pointer;">วันนี้</button>
           <button id="newsAllBtn" class="th active" style="padding:8px 14px;font-size:13px;background:var(--primary);color:#fff;border:none;cursor:pointer;">ทั้งหมด</button>
         </div>
-        <input type="date" id="newsDateFrom" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid #e0e0e0;width:120px;" title="จากวันที่" />
+        <input type="date" id="newsDateFrom" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);width:120px;" title="จากวันที่" />
         <span class="th muted" style="font-size:12px;">—</span>
-        <input type="date" id="newsDateTo" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid #e0e0e0;width:120px;" title="ถึงวันที่" />
+        <input type="date" id="newsDateTo" class="input th" style="font-size:13px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);width:120px;" title="ถึงวันที่" />
         <button class="btn btn-ghost th" id="addNewsBtn" type="button" style="font-size:13px;padding:6px 12px;border-radius:8px;">+ เพิ่ม</button>
       </div>
 
@@ -559,7 +584,7 @@
       <!-- Unified timeline: summaries + news merged per day -->
       <div id="newsTimeline"></div>
 
-      <div id="unifiedEmpty" class="empty-state th" hidden style="padding:40px;text-align:center;color:#888780;">— ไม่พบข่าว —</div>
+      <div id="unifiedEmpty" class="empty-state th" hidden style="padding:40px;text-align:center;color:var(--muted);">— ไม่พบข่าว —</div>
 
       <!-- Pipeline status row (bottom of feed) -->
       <div class="card mt-16">
@@ -1420,7 +1445,7 @@ function applyKpiPriceLive() {
   }
   priceEl.textContent = fmtNum(displayPrice);
   const ch = refPrice ? ((displayPrice - refPrice) / refPrice) * 100 : 0;
-  chEl.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '- ' : '') + ch.toFixed(2) + '%';
+  chEl.textContent = (ch > 0 ? '▲ +' : ch < 0 ? '▼ ' : '') + ch.toFixed(2) + '%';
   chEl.className = 'kpi-delta ' + (ch > 0 ? 'pos' : ch < 0 ? 'neg' : 'mut');
 
   if (live) {
@@ -1490,7 +1515,7 @@ function renderKPIs(filtered) {
     $('kpiSet').textContent = fmtNum(lastSet);
     const setCh = pctChange(setPoints, 'setIdx');
     const el = $('kpiSetCh');
-    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '- ' : '') + (setCh || 0).toFixed(2) + '%';
+    el.textContent = (setCh > 0 ? '▲ +' : setCh < 0 ? '▼ ' : '') + (setCh || 0).toFixed(2) + '%';
     el.className = 'kpi-delta ' + (setCh > 0 ? 'pos' : setCh < 0 ? 'neg' : 'mut');
   } else {
     $('kpiSet').textContent = '—';
@@ -1505,7 +1530,7 @@ function renderKPIs(filtered) {
     $('kpiProp').textContent = fmtNum(lastProp);
     const propCh = pctChange(propPoints, 'propIdx');
     const el = $('kpiPropCh');
-    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '- ' : '') + (propCh || 0).toFixed(2) + '%';
+    el.textContent = (propCh > 0 ? '▲ +' : propCh < 0 ? '▼ ' : '') + (propCh || 0).toFixed(2) + '%';
     el.className = 'kpi-delta ' + (propCh > 0 ? 'pos' : propCh < 0 ? 'neg' : 'mut');
   } else {
     $('kpiProp').textContent = '—';
@@ -1974,7 +1999,7 @@ function buildDashChart(filtered) {
   const datasets = [{
     label: STOCKS_META[STATE.stock].label + ' Close', data: priceData,
     borderColor: getCSS('--primary'),
-    backgroundColor: 'rgba(59,139,212,0.06)',
+    backgroundColor: 'rgba(28,95,247,0.06)',
     borderWidth: 4,
     pointRadius: 0, pointHoverRadius: 4,
     spanGaps: true, tension: 0.18, fill: true,
@@ -2025,7 +2050,7 @@ function buildDashChart(filtered) {
               // It also no longer needs a grace period to be entered.
               // z-index sits BELOW .modal-overlay (50) so it cannot cover the
               // modal it launches.
-              el.style.cssText = 'position:absolute;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:none;font-size:13px;z-index:40;max-width:320px;max-height:260px;overflow:hidden;';
+              el.style.cssText = 'position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:none;font-size:13px;z-index:40;max-width:320px;max-height:260px;overflow:hidden;';
               chart.canvas.parentNode.appendChild(el);
 
               // Kept so openNewsDetailModal() can cancel a pending hide without
@@ -2060,7 +2085,7 @@ function buildDashChart(filtered) {
             let html = '<div style="font-weight:700;margin-bottom:4px;">' + dt.toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'numeric'}) + '</div>';
             for (const dp of items) {
               const v = dp.parsed.y;
-              html += '<div style="color:#555;">' + dp.dataset.label + ': ' + (dp.dataset.label.includes(' Close') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
+              html += '<div style="color:var(--muted);">' + dp.dataset.label + ': ' + (dp.dataset.label.includes(' Close') ? '฿' : '') + (v != null ? v.toFixed(2) : '—') + '</div>';
             }
 
             // Headlines as PLAIN TEXT — the panel is pointer-events:none, so an
@@ -2080,7 +2105,7 @@ function buildDashChart(filtered) {
 
             if (news.length) {
               const more = dayNews.length > news.length ? ` +${dayNews.length - news.length}` : '';
-              html += '<div style="border-top:1px solid #f0f0f0;margin-top:6px;padding-top:6px;font-size:12px;color:#888;margin-bottom:4px;">' + dayNews.length + ' ข่าว' + more + ' — <b>คลิกเพื่อดูรายละเอียด</b></div>';
+              html += '<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-size:12px;color:var(--muted);margin-bottom:4px;">' + dayNews.length + ' ข่าว' + more + ' — <b>คลิกเพื่อดูรายละเอียด</b></div>';
               for (const n of news) {
                 const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
                 const headline = escapeHtml((n.title || '').slice(0, 46));
@@ -2132,8 +2157,8 @@ function buildDashChart(filtered) {
           zoom: {
             drag: {
               enabled: true,
-              backgroundColor: 'rgba(59,139,212,0.12)',
-              borderColor: 'rgba(59,139,212,0.55)',
+              backgroundColor: 'rgba(28,95,247,0.12)',
+              borderColor: 'rgba(28,95,247,0.55)',
               borderWidth: 1,
             },
             wheel: { enabled: true, modifierKey: 'ctrl', speed: 0.08 },
@@ -2306,8 +2331,8 @@ function renderDashNews(filtered) {
     const sev = item.severity === 'high' ? 'font-weight:600;' : '';
     const link = u
       ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" style="color:${badge.color};text-decoration:none;${sev}">${headline}</a>`
-      : `<span style="color:#555;${sev}">${headline}</span>`;
-    return `<div style="padding:8px 10px;border-bottom:1px solid #f0f0f0;${isTarget ? '' : 'opacity:0.6;'}">
+      : `<span style="color:var(--muted);${sev}">${headline}</span>`;
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);${isTarget ? '' : 'opacity:0.6;'}">
       <span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;padding:2px 6px;border-radius:3px;margin-right:6px;">${escapeHtml(badge.label)}</span>
       ${link}
       <div class="th muted" style="font-size:11px;margin-top:2px;">${fmtThaiShort(item.date)}</div>
@@ -2639,7 +2664,7 @@ async function buildPeerSnapshot() {
   body.innerHTML = peerRows.map(r => {
     const chg = r.change != null ? r.change : null;
     const hasData = r.close != null && chg != null;
-    const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '- ' : '─ ';
+    const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '▼ ' : '─ ';
     const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">ASW</span>' : '';
     // A trailing ticker shows its real price with the date it belongs to, so a
     // one-session lag reads as a lag rather than as today's number.
@@ -2916,7 +2941,7 @@ function hpBuildVolumeChart(rows) {
   if (VOL_CHART) VOL_CHART.destroy();
   VOL_CHART = new Chart(ctx, {
     type: 'bar',
-    data: { datasets: [{ data, backgroundColor: 'rgba(59,139,212,0.45)', borderWidth: 0,
+    data: { datasets: [{ data, backgroundColor: 'rgba(28,95,247,0.45)', borderWidth: 0,
                          barPercentage: 1, categoryPercentage: 0.9 }] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
@@ -3373,18 +3398,18 @@ function renderUnifiedNews() {
       ? [...groups.entries()].map(([date, group]) => {
           const s = group.summary;
           const tone = (s?.tone || '').toLowerCase();
-          const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+          const toneColor = ({ bullish: '#05773B', bearish: '#C90F1A', neutral: '#4B5565' })[tone] || '#4B5565';
           const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || '';
           const bullets = s ? String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean) : [];
           return '<div style="margin-bottom:20px;">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid #f0f0f0;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border);">' +
               '<span class="th" style="font-size:15px;font-weight:700;">' + escapeHtml(fmtThaiDate(date)) + '</span>' +
               '<span class="th muted" style="font-size:12px;">' + group.items.length + ' ข่าว</span>' +
               (s ? '<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:' + toneColor + '1a;color:' + toneColor + ';font-weight:600;">' + escapeHtml(toneLabel) + '</span>' : '') +
             '</div>' +
-            (s ? '<div style="background:#f8f8f6;border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ' + toneColor + ';">' +
+            (s ? '<div style="background:var(--surface-sunken);border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ' + toneColor + ';">' +
               (s.headline ? '<div class="th" style="font-size:14px;font-weight:600;margin-bottom:6px;">' + escapeHtml(s.headline) + '</div>' : '') +
-              (bullets.length ? '<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:#555;">' + bullets.map(b => '<li>' + escapeHtml(b) + '</li>').join('') + '</ul>' : '') +
+              (bullets.length ? '<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:var(--muted);">' + bullets.map(b => '<li>' + escapeHtml(b) + '</li>').join('') + '</ul>' : '') +
               (s.reason ? '<div class="th muted" style="font-size:11px;margin-top:6px;">' + escapeHtml(s.reason) + '</div>' : '') +
             '</div>' : '') +
             group.items.map(renderUnifiedNewsItem).join('') +
@@ -3403,16 +3428,16 @@ function renderUnifiedNews() {
 function renderInlineSummary(s) {
   const tone = (s.tone || 'neutral').toLowerCase();
   const toneLabel = ({ bullish: '📈 บวก', bearish: '📉 ลบ', neutral: '➖ เป็นกลาง' })[tone] || tone;
-  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const toneColor = ({ bullish: '#05773B', bearish: '#C90F1A', neutral: '#4B5565' })[tone] || '#4B5565';
   const bullets = String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
   const reason = s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">💭 ${escapeHtml(s.reason)}</div>` : '';
-  return `<div class="news-day-summary" style="background:#f8f8f6;border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ${toneColor};">
+  return `<div class="news-day-summary" style="background:var(--surface-sunken);border-radius:8px;padding:12px 14px;margin-bottom:10px;border-left:3px solid ${toneColor};">
     <div class="row-between" style="margin-bottom:6px;">
       <span class="th muted" style="font-size:11px;font-weight:600;">🤖 สรุปข่าวประจำวัน</span>
       <span class="tag th" style="background:${toneColor}1a;color:${toneColor};font-size:12px;padding:3px 8px;border-radius:4px;">${escapeHtml(toneLabel)}</span>
     </div>
     <div class="th" style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:6px;">${escapeHtml(s.headline || '')}</div>
-    ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:#555;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+    ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.6;padding-left:18px;margin:4px 0;color:var(--muted);">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
     ${reason}
   </div>`;
 }
@@ -3544,7 +3569,7 @@ function renderMorningBrief() {
   const watchBullets    = (b.morning_watch || '').split('\n').map(s => s.trim()).filter(Boolean);
   const tone = (b.morning_remark || 'neutral').toLowerCase();
   const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
-  const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+  const toneColor = ({ bullish: '#05773B', bearish: '#C90F1A', neutral: '#4B5565' })[tone] || '#4B5565';
   const dt = new Date(b.date + 'T00:00:00');
   const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
 
@@ -3633,11 +3658,11 @@ function renderDailySummary() {
   const sorted = [...all].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   el.innerHTML = `
     <div class="mb-16">
-      <h3 class="th" style="font-size:13px;margin:0 0 8px;color:#888780;">สรุปข่าวประจำวัน</h3>
+      <h3 class="th" style="font-size:13px;margin:0 0 8px;color:var(--muted);">สรุปข่าวประจำวัน</h3>
       ${sorted.map(s => {
         const tone = (s.tone || 'neutral').toLowerCase();
         const toneLabel = ({ bullish: 'บวก', bearish: 'ลบ', neutral: 'เป็นกลาง' })[tone] || tone;
-        const toneColor = ({ bullish: '#1D9E75', bearish: '#A32D2D', neutral: '#888780' })[tone] || '#888780';
+        const toneColor = ({ bullish: '#05773B', bearish: '#C90F1A', neutral: '#4B5565' })[tone] || '#4B5565';
         const dt = new Date(s.date + 'T00:00:00');
         const dateStr = dt.toLocaleDateString('th-GB', { day: '2-digit', month: 'long', year: 'numeric' });
         const bullets = String(s.digest || '').split('\n').map(x => x.trim().replace(/^[-•]\s*/, '')).filter(Boolean);
@@ -3652,7 +3677,7 @@ function renderDailySummary() {
           </summary>
           <div style="padding:0 14px 12px;">
             ${s.headline ? `<div class="th" style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:8px;">${escapeHtml(s.headline)}</div>` : ''}
-            ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.7;padding-left:18px;margin:4px 0;color:#555;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
+            ${bullets.length ? `<ul class="th" style="font-size:12px;line-height:1.7;padding-left:18px;margin:4px 0;color:var(--muted);">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
             ${s.reason ? `<div class="th muted" style="font-size:11px;margin-top:6px;">${escapeHtml(s.reason)}</div>` : ''}
           </div>
         </details>`;
@@ -3838,7 +3863,7 @@ function openNewsDetailModal(ymd) {
     list.innerHTML = items.map(n => {
       const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
       const u = articleHref(n);
-      const sevColor = n.severity === 'high' ? '#c0392b' : n.severity === 'medium' ? '#b35c00' : '#7a7a7a';
+      const sevColor = n.severity === 'high' ? '#C90F1A' : n.severity === 'medium' ? '#895709' : '#4B5565';
       const sevPill = n.severity
         ? `<span class="nd-sev" style="background:${sevColor}1a;color:${sevColor};">${escapeHtml(n.severity)}</span>`
         : '';
@@ -4016,7 +4041,7 @@ function renderNewsCatTabs() {
     b.dataset.cat = cat;
     const active = (STATE.newsCats || '__all') === cat;
     b.style.cssText = 'white-space:nowrap;padding:6px 14px;font-size:13px;border-radius:20px;cursor:pointer;'
-      + (active ? 'background:var(--primary);color:#fff;border:none;' : 'background:#fff;border:1px solid #e0e0e0;');
+      + (active ? 'background:var(--primary);color:#fff;border:none;' : 'background:var(--card);border:1px solid var(--border);');
     if (active) b.classList.add('active');
     b.textContent = cat === '__all' ? 'ทั้งหมด'
       : cat === 'COMPANY' ? ('บริษัท (' + STOCKS_META[STATE.stock].label + ')')
@@ -4037,10 +4062,12 @@ function updateStockUI() {
   const tt = $('topbarTitle');        if (tt) tt.textContent = meta.title;
   const lg = $('legendCloseLabel');   if (lg) lg.textContent = meta.label + ' Close';
   const st = $('settingsTicker');     if (st) st.textContent = meta.ticker;
+  // State lives in a class + aria-selected, not inline colours, so the look is
+  // owned by the stylesheet and a screen reader hears which stock is selected.
   document.querySelectorAll('#stockSwitch .stock-switch-btn').forEach(b => {
     const on = b.dataset.stock === STATE.stock;
-    b.style.background = on ? 'var(--primary)' : 'transparent';
-    b.style.color = on ? '#fff' : '#555';
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   renderNewsCatTabs();
   populateAddNewsCategories();

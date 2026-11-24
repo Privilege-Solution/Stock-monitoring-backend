@@ -4,9 +4,17 @@
 
 @layer base {
   html, body {
-    @apply bg-surface text-text text-[15px] min-h-screen font-sans m-0;
+    @apply bg-background text-text text-[15px] min-h-screen font-sans m-0 antialiased;
   }
-  h1, h2, h3, h4, h5 {
+  /* Anuphan for headings only. Thai stacks vowels and tone marks above and
+     below the line, so headings get line-height ≥1.35 — tighter clips them —
+     and NO letter-spacing, which pulls Thai clusters apart. */
+  h1, h2, h3, h4 {
+    @apply font-heading font-semibold m-0;
+    line-height: 1.4;
+    letter-spacing: 0;
+  }
+  h5 {
     @apply font-semibold m-0;
   }
   button {
@@ -21,31 +29,83 @@
   * {
     @apply box-border;
   }
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  }
+}
+
+@layer utilities {
+  /* Numbers are data: prices, volumes and percentages set in a mono face with
+     equal-width digits so columns and stacked KPIs align digit-for-digit. */
+  .numeral {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  /* The system's one signature mark: a 2px bar on the left edge = "you are
+     here". Colour comes from --rail. */
+  .rail-active {
+    box-shadow: inset 2px 0 0 0 var(--rail, var(--primary));
+  }
 }
 
 @layer components {
   /* === Layout shell === */
+  /* The navy sidebar runs the full height with the brand at its top, and the
+     topbar sits beside it — the team's standard shell. It used to sit under a
+     full-width white header, which put the logo in a bar of its own. */
   .app {
     @apply grid min-h-screen;
-    grid-template-columns: 200px 1fr;
-    grid-template-rows: 48px 1fr 28px;
+    /* minmax(0,1fr), not 1fr: a bare 1fr column's minimum is its content's
+       min-content width, so the widest child (the topbar) dragged the whole
+       page sideways on phones. Now over-wide content scrolls inside .main. */
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: 52px 1fr 28px;
     grid-template-areas:
-      "header header"
+      "sidebar header"
       "sidebar main"
-      "status status";
+      "sidebar status";
   }
   .topbar {
-    @apply bg-card border-b border-border flex items-center justify-between px-4 z-10;
+    @apply bg-background border-b border-border flex items-center justify-between px-5 z-30;
     grid-area: header;
+    /* Stays reachable while scrolling: it holds the stock switch and refresh. */
+    position: sticky;
+    top: 0;
   }
   .topbar-brand {
-    @apply flex items-center gap-2.5;
+    @apply flex items-center gap-3;
   }
-  .topbar-logo {
-    @apply w-7 h-7 bg-primary rounded-md flex items-center justify-center text-white font-bold text-[13px];
+  /* Wordmark in the topbar appears ONLY when the sidebar has collapsed to its
+     icon rail and has no room for it. The brand rules forbid inventing a
+     shortened mark, so the real wordmark moves rather than shrinks. */
+  .topbar-wordmark {
+    @apply hidden;
+    height: 17px;
+    width: auto;
   }
   .topbar-title {
-    @apply text-[18px] font-bold text-text;
+    @apply font-heading text-[17px] font-semibold text-text;
+  }
+  /* Stock switch — a segmented control, so a capsule like the other ones.
+     It was hand-painted with inline colours (#edeae3, #555) that no theme
+     change could reach. */
+  .stock-switch {
+    @apply inline-flex items-center gap-0.5 ml-2 p-0.5 rounded-full bg-surface border border-border;
+  }
+  .stock-switch-btn {
+    @apply numeral px-3.5 py-1 text-[12px] font-semibold rounded-full border-0 bg-transparent text-muted cursor-pointer transition-colors;
+    transition-duration: 150ms;
+  }
+  .stock-switch-btn:hover {
+    @apply text-text;
+  }
+  .stock-switch-btn.is-active {
+    @apply bg-primary text-white shadow-sm;
   }
   .topbar-sub {
     @apply text-[13px] text-muted;
@@ -57,33 +117,62 @@
     @apply text-[13px] text-muted flex items-center gap-1.5;
   }
 
+  /* Navy, full height, and pinned while the page scrolls so navigation never
+     scrolls out of reach on a long news feed. */
   .sidebar {
-    @apply bg-sidebar-bg border-r border-border py-2 overflow-y-auto;
+    @apply bg-sidebar-bg overflow-y-auto;
     grid-area: sidebar;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;   /* mobile browser chrome grows and shrinks */
+    align-self: start;
+  }
+  .sidebar-brand {
+    @apply flex items-center px-4 border-b border-sidebar-border;
+    height: 52px;     /* lines up with the topbar beside it */
+  }
+  .sidebar-wordmark {
+    height: 17px;
+    width: auto;
   }
   .sidebar-group {
     @apply py-2 pb-1;
   }
+  /* No uppercase or letter-spacing: these titles are Thai ("เมนูหลัก",
+     "อื่นๆ"), and tracking pulls Thai clusters apart. */
   .sidebar-group-title {
-    @apply text-[12px] font-bold uppercase tracking-wider text-sidebar-muted pt-1 px-3.5 pb-1.5;
+    @apply text-[12px] font-medium text-sidebar-muted pt-2 px-4 pb-1.5;
   }
   .sidebar-item {
-    @apply flex items-center gap-2.5 py-2.5 px-3.5 my-px mx-2 rounded-md text-sidebar-text text-[15px] cursor-pointer transition-colors select-none;
+    @apply flex items-center gap-2.5 py-2 px-3 my-0.5 mx-2.5 text-sidebar-text text-[14px] font-medium cursor-pointer transition-colors select-none rounded-control;
+    transition-duration: 150ms;
   }
   .sidebar-item:hover {
-    @apply bg-surface;
+    @apply bg-sidebar-hover text-white;
   }
+  .sidebar-item:hover .sidebar-icon {
+    @apply text-white;
+  }
+  /* Active = soft primary fill + the 2px left rail. The left corners go square
+     so the rail reads as a straight edge rather than a rounded pill. */
   .sidebar-item.active {
-    @apply bg-sidebar-active font-semibold;
+    @apply bg-sidebar-active text-sidebar-active-text rail-active;
+    --rail: var(--sidebar-active-text);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
   }
   .sidebar-item.active .sidebar-icon {
-    @apply text-primary;
+    @apply text-sidebar-active-text;
   }
   .sidebar-icon {
-    @apply text-muted flex;
+    @apply text-sidebar-muted flex;
+  }
+  .sidebar-item:focus-visible {
+    outline-color: var(--sidebar-active-text);
   }
   .sidebar-divider {
-    @apply border-0 border-t border-border mx-3.5 my-2;
+    @apply border-0 border-t border-sidebar-border mx-4 my-2;
   }
 
   .main {
@@ -96,7 +185,22 @@
   }
   .statusbar-left, .statusbar-right {
     @apply flex items-center gap-3;
+    white-space: nowrap;
   }
+  /* Never let the status bar widen the page. Since the sidebar now runs the
+     full height, this bar sits in the content column only (315px on a phone),
+     and its two groups (~470px) spilled out and set the page's scroll width.
+     The diagnostic left group gives way first. */
+  .statusbar {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .statusbar-left {
+    min-width: 0;
+    overflow: hidden;
+    flex-shrink: 1;
+  }
+  .statusbar-right { flex-shrink: 0; }
 
   /* === Views === */
   .view {
@@ -114,7 +218,7 @@
 
   /* === Cards === */
   .card {
-    @apply bg-card border border-border rounded-lg py-3.5 px-4;
+    @apply bg-card border border-border rounded-card shadow-sm py-3.5 px-4;
   }
   .card-title {
     @apply text-[13px] font-medium text-muted mb-2;
@@ -126,7 +230,7 @@
     @apply mt-1.5;
   }
   .kpi-value {
-    @apply text-2xl font-bold leading-tight;
+    @apply numeral text-2xl font-semibold leading-tight;
   }
   .kpi-unit {
     @apply text-[14px] text-muted ml-0.5;
@@ -146,16 +250,20 @@
 
   /* === Buttons === */
   .btn {
-    @apply inline-flex items-center gap-1.5 border border-border bg-card text-text rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors;
+    @apply inline-flex items-center gap-1.5 border border-border bg-card text-text rounded-control px-3 py-1.5 text-[13px] font-medium transition-colors;
   }
   .btn:hover {
     @apply bg-surface;
   }
   .btn-primary {
-    @apply bg-primary text-white border-primary;
+    @apply bg-primary text-white border-primary shadow-sm;
   }
+  /* Derived from the token rather than hardcoded: this was #347cbe, a shade of
+     the OLD primary, so hovering would have shifted the button to a different
+     blue once the brand colour changed. */
   .btn-primary:hover {
-    @apply bg-[#347cbe];
+    background: color-mix(in srgb, var(--primary) 88%, black);
+    border-color: color-mix(in srgb, var(--primary) 88%, black);
   }
   .btn-ghost {
     @apply bg-transparent border-transparent text-muted;
@@ -164,15 +272,30 @@
     @apply bg-surface text-text;
   }
   .btn-icon {
-    @apply py-1.5 px-2;
+    @apply justify-center py-1 px-2 text-[15px] leading-none;
+    min-width: 30px;
+  }
+  .btn:disabled {
+    @apply opacity-40 cursor-not-allowed;
   }
 
   /* === Pills / range buttons === */
   .pill-row {
-    @apply inline-flex bg-surface border border-border rounded-md p-0.5 gap-px;
+    @apply inline-flex bg-surface border border-border rounded-full p-0.5 gap-px;
+    /* A segmented control too wide for its line scrolls inside its capsule
+       rather than pushing the card past the screen edge (phones: the price
+       filters need 365px). */
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  .pill-row::-webkit-scrollbar { display: none; }
+  /* Drawn inward, or the scroll container clips the ring. */
+  .pill-row .pill:focus-visible { outline-offset: -2px; }
   .pill {
-    @apply bg-transparent text-muted border-0 px-3 py-1.5 rounded text-[13px] font-medium transition-colors;
+    @apply bg-transparent text-muted border-0 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors;
+    /* A capsule can't carry a wrapped label — "+ SET" broke onto two lines. */
+    white-space: nowrap;
   }
   .pill:hover {
     @apply text-text;
@@ -191,7 +314,7 @@
     @apply text-left py-2 px-2.5 border-b border-border;
   }
   .data-table th {
-    @apply text-muted font-semibold text-xs bg-surface sticky top-0 cursor-pointer select-none;
+    @apply text-muted font-semibold text-xs bg-surface-sunken sticky top-0 cursor-pointer select-none;
   }
   .data-table th:hover {
     @apply text-text;
@@ -211,14 +334,14 @@
   }
   /* Row clicked to pin its date on the price chart (table↔graph link). */
   .data-table tr.price-focused {
-    @apply bg-[#E7F1FB];
-    box-shadow: inset 3px 0 0 var(--primary);
+    @apply bg-accent rail-active;
+    --rail: var(--primary);
   }
   .data-table tr.price-focused td {
     @apply font-semibold;
   }
   .data-table .num {
-    @apply text-right tabular-nums;
+    @apply text-right numeral;
   }
   .data-table .pos {
     @apply text-positive;
@@ -227,7 +350,7 @@
     @apply text-negative;
   }
   .data-table-wrap {
-    @apply overflow-auto border border-border rounded-md;
+    @apply overflow-auto border border-border rounded-card;
   }
 
   /* === Tags / badges === */
@@ -259,7 +382,7 @@
 
   /* === News items === */
   .news-item {
-    @apply grid items-start gap-3 p-2.5 border border-border rounded-md bg-card mb-2 cursor-pointer transition-colors;
+    @apply grid items-start gap-3 p-2.5 border border-border rounded-card bg-card mb-2 cursor-pointer transition-colors;
     grid-template-columns: 80px 1fr auto;
   }
   .news-item:hover {
@@ -359,7 +482,7 @@
     height: 15px;
   }
   .news-search-input {
-    @apply pl-9 pr-3 py-2 rounded-md border border-border bg-surface text-text w-full;
+    @apply pl-9 pr-3 py-2 rounded-control border border-border bg-surface text-text w-full;
   }
   .news-search-input:focus {
     @apply border-primary;
@@ -375,7 +498,7 @@
    * in the News & Factors view only.
    */
   #dashNewsList .news-item-uniform {
-    @apply grid items-center gap-3 p-3 mb-2 border border-border rounded-lg bg-card cursor-pointer transition-all;
+    @apply grid items-center gap-3 p-3 mb-2 border border-border rounded-card bg-card cursor-pointer transition-all;
     grid-template-columns: 64px 1fr auto;
     min-height: 56px;
   }
@@ -541,13 +664,13 @@
     @apply text-[11px] text-muted;
   }
   .hp-move-value {
-    @apply text-[20px] font-semibold leading-tight;
+    @apply numeral text-[20px] font-semibold leading-tight;
   }
   .hp-move-arrow {
     @apply text-[18px] text-muted;
   }
   .hp-move-change {
-    @apply text-[26px] font-bold leading-none ml-1;
+    @apply numeral text-[26px] font-semibold leading-none ml-1;
   }
   .hp-move-days {
     @apply text-[11px] text-muted ml-auto;
@@ -575,12 +698,12 @@
   @media (max-width: 900px) { .hp-insights { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 520px) { .hp-insights { grid-template-columns: 1fr; } }
   .hp-insight {
-    @apply bg-card border border-border rounded-md px-3 py-2.5 text-left cursor-pointer transition-colors;
+    @apply bg-card border border-border rounded-card px-3 py-2.5 text-left cursor-pointer transition-colors;
   }
   .hp-insight:hover { @apply border-primary; }
   .hp-insight:focus-visible { @apply outline-none border-primary; }
   .hp-insight .i-label { @apply text-[11px] text-muted flex items-center gap-1; }
-  .hp-insight .i-value { @apply text-[17px] font-bold leading-tight mt-0.5; }
+  .hp-insight .i-value { @apply numeral text-[17px] font-semibold leading-tight mt-0.5; }
   .hp-insight .i-date  { @apply text-[11px] text-text mt-0.5; }
   .hp-insight .i-sub   { @apply text-[11px] text-muted; }
 
@@ -588,8 +711,9 @@
   .hp-table-head {
     @apply flex items-start justify-between gap-2 flex-wrap mb-2;
   }
+  .hp-table-head > .row { min-width: 0; }
   .hp-search {
-    @apply border border-border rounded-md bg-surface px-2 py-1 text-[12px] text-text;
+    @apply border border-border rounded-control bg-surface px-2 py-1 text-[12px] text-text;
     width: 140px;
   }
   .hp-search:focus { @apply outline-none border-primary; }
@@ -609,7 +733,7 @@
   }
   @media (max-width: 760px) { .hp-spans { grid-template-columns: 1fr; } }
   .hp-span {
-    @apply bg-card border border-border rounded-md px-3 py-2.5;
+    @apply bg-card border border-border rounded-card px-3 py-2.5;
   }
   .hp-span-head { @apply flex items-baseline justify-between gap-2; }
   .hp-span-date { @apply text-[12px] font-semibold; }
@@ -648,7 +772,7 @@
   .hp-drawer-body { @apply overflow-y-auto px-4 py-3; }
   .hp-dgrid { @apply grid grid-cols-2 gap-3; }
   .hp-dstat .k { @apply text-[11px] text-muted; }
-  .hp-dstat .v { @apply text-[16px] font-semibold; }
+  .hp-dstat .v { @apply numeral text-[16px] font-semibold; }
   .hp-dsection { @apply mt-4 pt-3 border-t border-border; }
   .hp-dsection h4 { @apply text-[12px] font-semibold mb-2; }
   .hp-cmp-row { @apply flex items-center justify-between py-1 text-[12px]; }
@@ -660,7 +784,7 @@
 
   /* Date inputs read as ONE range control, not two unrelated fields. */
   .date-range-group {
-    @apply inline-flex items-center gap-1.5 border border-border rounded-md bg-surface px-2 py-1;
+    @apply inline-flex items-center gap-1.5 border border-border rounded-control bg-surface px-2 py-1;
   }
   .date-range-group input[type="date"] {
     @apply bg-transparent border-0 text-[12px] text-text p-0;
@@ -705,6 +829,12 @@
   .chart-toolbar {
     @apply flex items-center justify-between mb-2 gap-2 flex-wrap;
   }
+  /* Both capsule groups sit in one .row; let them stack when the card is
+     narrower than the pair. */
+  .chart-toolbar > .row {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
   .chart-legend {
     @apply flex gap-3.5 flex-wrap text-[12px] text-muted mt-2;
   }
@@ -723,7 +853,7 @@
     @apply flex gap-2 mb-4;
   }
   .wizard-step {
-    @apply flex-1 p-3 border border-border rounded-md bg-card text-muted text-[13px] font-medium;
+    @apply flex-1 p-3 border border-border rounded-control bg-card text-muted text-[13px] font-medium;
   }
   .wizard-step.active {
     @apply border-primary text-primary;
@@ -740,7 +870,7 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .template-card {
-    @apply border-2 border-border rounded-lg p-4 bg-card cursor-pointer transition-colors;
+    @apply border-2 border-border rounded-card p-4 bg-card cursor-pointer transition-colors;
   }
   .template-card:hover {
     @apply border-primary;
@@ -767,7 +897,7 @@
   .form-field input,
   .form-field select,
   .form-field textarea {
-    @apply border border-border rounded-md py-2 px-3 text-[14px] bg-card;
+    @apply border border-border rounded-control py-2 px-3 text-[14px] bg-card;
   }
   .form-field input:focus,
   .form-field select:focus,
@@ -779,7 +909,7 @@
 
   /* === Toast === */
   .toast {
-    @apply fixed left-1/2 bg-text text-white py-2.5 rounded-md text-[13px] z-[1000] opacity-0 pointer-events-none transition-opacity;
+    @apply fixed left-1/2 bg-text text-white py-2.5 rounded-control text-[13px] z-[1000] opacity-0 pointer-events-none transition-opacity;
     bottom: 50px;
     padding-left: 18px;
     padding-right: 18px;
@@ -882,7 +1012,7 @@
 
   /* Placeholder */
   .placeholder {
-    @apply border border-dashed border-border rounded-md p-[18px] text-muted text-[14px] text-center;
+    @apply border border-dashed border-border rounded-card p-[18px] text-muted text-[14px] text-center;
   }
 
   /* Thai font shortcut (kept for backward-compat class hook) */
@@ -915,21 +1045,55 @@
   }
   @media (max-width: 1300px) {
     .chart-row {
-      grid-template-columns: 1fr;
+      /* minmax(0, …): a bare 1fr won't shrink below the chart toolbar's
+         min-content, which stretched the card past a phone screen. */
+      grid-template-columns: minmax(0, 1fr);
     }
   }
   @media (max-width: 1100px) {
     .app {
-      grid-template-columns: 56px 1fr;
+      grid-template-columns: 60px minmax(0, 1fr);
     }
     .sidebar .sidebar-label {
       display: none;
     }
+    /* The icon rail is too narrow for the wordmark, and the brand rules forbid
+       a home-made short mark, so the wordmark moves into the topbar instead. */
+    .sidebar-brand { display: none; }
+    .topbar-wordmark { display: block; }
+    .sidebar-group-title { display: none; }
+    .sidebar-item {
+      @apply justify-center px-0 mx-2;
+    }
+    .sidebar-group { @apply pt-3; }
     /* Stack the two bottom panels only below the desktop range so they stay
        side-by-side (and equal-height) at 1280 / 1440 / 1920. */
     .bottom-row {
       grid-template-columns: 1fr;
     }
+  }
+  /* Phones: the topbar column is ~318px wide and cannot also carry a 158px
+     wordmark — at 378px it overflowed to 464px and crushed the title onto two
+     lines. Where there is no room the brand rules say show no logo (never a
+     shrunken or home-made mark), so it goes, and the title stays on one line. */
+  @media (max-width: 640px) {
+    .topbar-wordmark { display: none; }
+    .topbar { @apply px-3; }
+    .topbar-brand { @apply gap-2; }
+    /* Truncate rather than nowrap: nowrap made the title's full width the
+       topbar's minimum, which is what widened the page. */
+    .topbar-brand, .topbar-brand > div:not(.stock-switch) { min-width: 0; }
+    .topbar-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Essentials only on a phone: the stock switch and refresh stay; the
+       last-updated line and the refresh label move off this bar. */
+    .topbar-meta { display: none; }
+    .statusbar-left { display: none; }
+    /* Three KPI columns left ~95px each, and the mono figures (wider than the
+       old proportional digits) overflowed their cards. */
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .statusbar { @apply justify-end px-3; }
+    #refreshBtn .th { display: none; }
+    .stock-switch { @apply ml-0; }
   }
 }
 
@@ -940,7 +1104,7 @@
     @apply flex gap-2 items-center flex-wrap;
   }
   .feed-toolbar .input {
-    @apply px-3 py-2 rounded-md border border-border bg-surface text-text;
+    @apply px-3 py-2 rounded-control border border-border bg-surface text-text;
   }
   /* Specificity bump: .feed-toolbar .input (0,2,0) above flattens padding to a
    * uniform 12px, which would let typed text overlap the leading magnifier
@@ -977,7 +1141,7 @@
     @apply flex flex-col gap-2;
   }
   .news-day {
-    @apply rounded-lg border border-border overflow-hidden bg-card;
+    @apply rounded-card border border-border overflow-hidden bg-card;
   }
   .news-day-toggle {
     @apply w-full flex items-center gap-2 px-4 py-2.5 bg-card border-0 text-text font-semibold cursor-pointer transition-colors;
@@ -1014,17 +1178,20 @@
   .severity-pill {
     @apply inline-block text-[10px] px-1.5 py-0.5 rounded-md ml-1.5 font-semibold uppercase;
   }
+  /* Status text on its own pale tint must use the -ink tone. The bright fill
+     colours failed here: "medium" was amber on cream at 2.01:1 and "low" grey
+     at 3.25:1 — the labels were close to unreadable. Inks: 4.95 / 5.69 / 6.49. */
   .severity-pill.severity-high {
-    background: rgba(163, 45, 45, 0.10);
-    color: #A32D2D;
+    background: rgba(201, 15, 26, 0.10);
+    color: #C90F1A;   /* destructive-ink */
   }
   .severity-pill.severity-medium {
-    background: rgba(239, 159, 39, 0.10);
-    color: #EF9F27;
+    background: rgba(232, 161, 39, 0.10);
+    color: #895709;   /* warning-ink */
   }
   .severity-pill.severity-low {
-    background: rgba(136, 135, 128, 0.10);
-    color: #888780;
+    background: rgba(75, 85, 101, 0.10);
+    color: #4B5565;   /* muted-foreground */
   }
 
   /* Body text under feed item title (Gemini SUMMARY field, migrate-v5).
