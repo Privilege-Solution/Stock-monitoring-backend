@@ -1121,19 +1121,6 @@
   .feed-cat-label {
     @apply text-xs;
   }
-  /* Per-chip accent color is set inline at boot via the --cat-color custom
-     property (pulled from REMARK_BADGE.color). Hover + .active states use
-     this so chips match the badges inside news cards. */
-  .pill[data-cat]:not([data-cat="__all"]):hover {
-    border-color: var(--cat-color);
-    color: var(--cat-color);
-  }
-  .pill[data-cat]:not([data-cat="__all"]).active {
-    background: color-mix(in srgb, var(--cat-color) 14%, transparent);
-    border-color: var(--cat-color);
-    color: var(--cat-color);
-  }
-
   /* Date-grouped feed (replaces the old 5 relative buckets). One .news-day
      section per calendar date; header is a collapsible toggle, body holds the
      .news-card rows. Newest date renders first (driven by renderUnifiedNews). */

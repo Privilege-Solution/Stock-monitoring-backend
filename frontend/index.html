@@ -3394,18 +3394,6 @@ function buildMergedNewsItems() {
   return b.filter(it => it.text);
 }
 
-// Migrate-v8: paint the .active state on category chips based on
-// STATE.newsCats. Single-select (1:1): exactly one chip is active at a time.
-// "ทั้งหมด" is the sentinel for "show all" — active when STATE.newsCats
-// holds the sentinel value, otherwise the matching chip is active.
-function syncNewsCatPills() {
-  document.querySelectorAll('#newsCatPills .pill').forEach(b => {
-    const cat = b.dataset.cat;
-    const active = cat === STATE.newsCats;
-    b.classList.toggle('active', active);
-  });
-}
-
 function renderUnifiedNews() {
   let items = buildMergedNewsItems();
   const todayICT = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
@@ -4698,29 +4686,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       handleMarkNews(btn.dataset.markId);
     });
   }
-  // Migrate-v9: paint the 6 category chips with REMARK_BADGE colors so they
-  // match the badges inside news cards (which render via the same
-  // REMARK_BADGE color tokens). The 6 chip keys are the taxonomy-v2
-  // values (COMPANY / RATES / GOV_POLICY / POLITICS / INDUSTRY / MACRO)
-  // — direct REMARK_BADGE lookup, no bucketFor() collapse.
-  document.querySelectorAll('#newsCatPills .pill[data-cat]').forEach(b => {
-    const cat = b.dataset.cat;
-    if (cat === '__all') return;
-    const badge = REMARK_BADGE[cat];
-    if (!badge) return;
-    b.style.setProperty('--cat-color', badge.color);
-  });
-  // Migrate-v8 (revised): category chips — single-select (1:1). Clicking a
-  // chip sets STATE.newsCats directly to that chip's category. "ทั้งหมด"
-  // is the reset sentinel meaning "show all categories".
-  document.querySelectorAll('#newsCatPills .pill').forEach(b => {
-    b.addEventListener('click', () => {
-      STATE.newsCats = b.dataset.cat;
-      syncNewsCatPills();
-      renderUnifiedNews();
-    });
-  });
-  syncNewsCatPills();
   // Date-group collapse: delegated on the persistent #newsDayGroups
   // container (its innerHTML is rebuilt every render, so per-button binding
   // would leak — delegation survives). Clicking a day header toggles that
