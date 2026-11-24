@@ -552,11 +552,12 @@ async function logFetchFinish(id, ok, source, added, updated, error, targetDate 
 
 // fetch_log rows for `sources` started at or after `sinceTs` (ISO UTC). The
 // catch-up planner (lib/news-catchup.mjs) works out from these which ICT days
-// each pipeline has covered. started_at is always written by
+// each pipeline has covered, and (rows_added) which recovered days need their
+// daily summary regenerated. started_at is always written by
 // new Date().toISOString(), so a text comparison orders correctly.
 async function readFetchRuns(sources, sinceTs) {
   const r = await getPool().query(
-    `SELECT source, ok, started_at, target_date
+    `SELECT source, ok, started_at, target_date, rows_added
        FROM fetch_log
       WHERE source = ANY($1::text[]) AND started_at >= $2`,
     [sources, sinceTs]

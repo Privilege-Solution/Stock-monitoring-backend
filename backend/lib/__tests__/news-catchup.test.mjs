@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CATCHUP_SOURCES, ictDate, addDays, candidateDays, runsSinceTs,
-  findMissedDays, planCatchUp, catchUpConfig, runCatchUp,
+  CATCHUP_SOURCES, SUMMARY_SOURCE, ictDate, addDays, candidateDays, runsSinceTs,
+  findMissedDays, planCatchUp, findStaleSummaries, catchUpConfig, runCatchUp,
 } from '../news-catchup.mjs';
 
 const TODAY = '2026-11-24';
@@ -13,8 +13,8 @@ const TODAY = '2026-11-24';
 const live = (source, day, ok = 1, hhmm = '08:00') => ({
   source, ok, started_at: new Date(`${day}T${hhmm}:00+07:00`).toISOString(), target_date: null,
 });
-const catchup = (source, target, ok = 1) => ({
-  source, ok, started_at: new Date(`${TODAY}T21:10:00+07:00`).toISOString(), target_date: target,
+const catchup = (source, target, ok = 1, rows_added = 0, hhmm = '21:10') => ({
+  source, ok, rows_added, started_at: new Date(`${TODAY}T${hhmm}:00+07:00`).toISOString(), target_date: target,
 });
 const only = (source) => ({ todayIso: TODAY, sources: [source], lookbackDays: 7 });
 const dates = (list) => list.map(m => m.date);
@@ -114,6 +114,63 @@ test('planCatchUp gives one pipeline the whole budget when it is the only one be
   assert.deepEqual(planCatchUp(missed, 0), []);
 });
 
+// ---- findStaleSummaries ---------------------------------------------------------------
+const stale = (runs) => findStaleSummaries(runs, { todayIso: TODAY, lookbackDays: 7 });
+const keys = (list) => list.map(s => `${s.source}@${s.date}`);
+
+test('a catch-up that added rows makes that stock-day\'s summary stale', () => {
+  const { stale: s } = stale([catchup('gemini-macro', '2026-11-20', 1, 3)]);
+  assert.deepEqual(s, [{ stock: 'ASW', source: 'gemini-daily-summary', date: '2026-11-20', attempts: 0 }]);
+});
+
+test('TITLE pipelines map to the TITLE summary; one job per stock-day', () => {
+  const { stale: s } = stale([
+    catchup('gemini-title-company', '2026-11-19', 1, 1),
+    catchup('gemini-title-drivers', '2026-11-19', 1, 2),
+    catchup('gemini-sector', '2026-11-19', 1, 1),
+    catchup('gemini-company', '2026-11-18', 1, 1),
+  ]);
+  assert.deepEqual(keys(s), [
+    'gemini-daily-summary@2026-11-18',
+    'gemini-daily-summary@2026-11-19',
+    'gemini-title-daily-summary@2026-11-19',
+  ]);
+});
+
+test('nothing to summarize when the catch-up added nothing, failed, or was a live run', () => {
+  const { stale: s } = stale([
+    catchup('gemini-macro', '2026-11-20', 1, 0),     // all duplicates
+    catchup('gemini-sector', '2026-11-21', 0, 0),    // failed
+    { ...live('gemini-company', '2026-11-22'), rows_added: 4 },
+    catchup('gemini-company', '2026-11-10', 1, 5),   // outside the window
+  ]);
+  assert.deepEqual(s, []);
+});
+
+test('a successful summary for the day AFTER the recovery settles it; one before does not', () => {
+  const rec = catchup('gemini-company', '2026-11-20', 1, 2, '08:10');
+  assert.deepEqual(stale([rec, catchup(SUMMARY_SOURCE.ASW, '2026-11-20', 1, 1, '08:20')]).stale, []);
+  assert.equal(stale([rec, catchup(SUMMARY_SOURCE.ASW, '2026-11-20', 1, 1, '08:00')]).stale.length, 1);
+  // A summary for a different day, or the live evening summary, does not count.
+  assert.equal(stale([rec, catchup(SUMMARY_SOURCE.ASW, '2026-11-21', 1, 1, '08:20')]).stale.length, 1);
+  assert.equal(stale([rec, { ...live(SUMMARY_SOURCE.ASW, TODAY, 1, '17:30') }]).stale.length, 1);
+});
+
+test('summary failures after a recovery count toward maxAttempts; a newer recovery resets them', () => {
+  const runs = [
+    catchup('gemini-sector', '2026-11-20', 1, 2, '08:10'),
+    catchup(SUMMARY_SOURCE.ASW, '2026-11-20', 0, 0, '08:20'),
+    catchup(SUMMARY_SOURCE.ASW, '2026-11-20', 0, 0, '12:40'),
+    catchup(SUMMARY_SOURCE.ASW, '2026-11-20', 0, 0, '15:10'),
+  ];
+  const first = stale(runs);
+  assert.deepEqual(first.stale, []);
+  assert.deepEqual(keys(first.exhausted), ['gemini-daily-summary@2026-11-20']);
+  // Another pipeline recovers more of that day later: it deserves a fresh try.
+  runs.push(catchup('gemini-macro', '2026-11-20', 1, 1, '17:40'));
+  assert.deepEqual(stale(runs).stale.map(s => [s.date, s.attempts]), [['2026-11-20', 0]]);
+});
+
 // ---- catchUpConfig ------------------------------------------------------------------
 test('catchUpConfig: defaults, an off switch, and clamps', () => {
   assert.deepEqual(catchUpConfig({}), { lookbackDays: 7, maxRunsPerBatch: 5, maxAttempts: 3 });
@@ -134,7 +191,10 @@ function fakeDb(rows = []) {
       return log.filter(r => sources.includes(r.source) && r.started_at >= sinceTs);
     },
     async logFetchStart() {
-      const row = { id: log.length + 1, source: 'pending', ok: 0, started_at: new Date(`${TODAY}T21:05:00+07:00`).toISOString(), target_date: null };
+      // Strictly increasing, like real started_at values: "a summary started
+      // after the recovery" depends on it.
+      const started_at = new Date(Date.parse(`${TODAY}T21:05:00+07:00`) + log.length * 1000).toISOString();
+      const row = { id: log.length + 1, source: 'pending', ok: 0, started_at, target_date: null };
       log.push(row);
       return row.id;
     },
@@ -155,21 +215,30 @@ function coveredExcept(gaps) {
   return rows;
 }
 
-test('runCatchUp re-runs each missed day with its target date and records it in fetch_log', async () => {
+test('runCatchUp re-runs each missed day, then regenerates the summaries of the days that gained rows', async () => {
   const db = fakeDb(coveredExcept([['gemini-company', '2026-11-20'], ['gemini-title-drivers', '2026-11-21']]));
   const calls = [];
-  const runFetch = async (args) => { calls.push(args); return { ok: true, inserted: 2, fetched: 3 }; };
+  const runFetch = async (args) => {
+    calls.push(args);
+    return args.targetDate ? { ok: true, inserted: 2, fetched: 3 } : { ok: true, sourceCount: 9 };
+  };
 
   const s = await runCatchUp({ db, runFetch, todayIso: TODAY });
   assert.deepEqual(calls, [
     { source: 'gemini-company', targetDate: '2026-11-20' },
     { source: 'gemini-title-drivers', targetDate: '2026-11-21' },
+    // the daily summary takes its day as sinceDate
+    { source: 'gemini-daily-summary', sinceDate: '2026-11-20' },
+    { source: 'gemini-title-daily-summary', sinceDate: '2026-11-21' },
   ]);
   assert.equal(s.planned, 2);
+  assert.deepEqual(s.summaries.map(x => [x.stock, x.date, x.ok]), [['ASW', '2026-11-20', true], ['TITLE', '2026-11-21', true]]);
   const written = db.log.filter(r => r.target_date);
   assert.deepEqual(written.map(r => [r.source, r.target_date, r.ok, r.rows_added]), [
     ['gemini-company', '2026-11-20', 1, 2],
     ['gemini-title-drivers', '2026-11-21', 1, 2],
+    ['gemini-daily-summary', '2026-11-20', 1, 1],
+    ['gemini-title-daily-summary', '2026-11-21', 1, 1],
   ]);
 
   // The rows it wrote close the gap: the next pass has nothing to do.
@@ -217,7 +286,64 @@ test('a non-outage failure (bad answer for one day) does not stop the pass', asy
       return { ok: true, inserted: 1 };
     },
   });
-  assert.deepEqual(seen, ['gemini-company', 'gemini-sector']);
+  assert.deepEqual(seen, ['gemini-company', 'gemini-sector', 'gemini-daily-summary']);
+});
+
+test('a recovered day whose catch-up added nothing gets no summary run', async () => {
+  const db = fakeDb(coveredExcept([['gemini-macro', '2026-11-20']]));
+  const seen = [];
+  await runCatchUp({ db, todayIso: TODAY, runFetch: async ({ source }) => { seen.push(source); return { ok: true, inserted: 0 }; } });
+  assert.deepEqual(seen, ['gemini-macro']);
+});
+
+test('an outage mid-pass skips the summaries; the next pass runs the one still owed', async () => {
+  const db = fakeDb(coveredExcept([['gemini-company', '2026-11-20'], ['gemini-sector', '2026-11-20']]));
+  const outage = Object.assign(new Error('Gemini 503'), { status: 503 });
+  const first = [];
+  const s1 = await runCatchUp({
+    db, todayIso: TODAY, isOutage: (e) => e.status === 503,
+    runFetch: async ({ source }) => { first.push(source); if (source === 'gemini-sector') throw outage; return { ok: true, inserted: 2 }; },
+  });
+  assert.deepEqual(first, ['gemini-company', 'gemini-sector']);
+  assert.equal(s1.stoppedEarly, true);
+  assert.deepEqual(s1.summaries, []);
+
+  // Gemini is back. Sector is recovered, and the ASW summary for 11-20 — owed
+  // since the company recovery — runs once, after both.
+  const second = [];
+  const s2 = await runCatchUp({
+    db, todayIso: TODAY,
+    runFetch: async (args) => { second.push(args); return { ok: true, inserted: 1 }; },
+  });
+  assert.deepEqual(second, [
+    { source: 'gemini-sector', targetDate: '2026-11-20' },
+    { source: 'gemini-daily-summary', sinceDate: '2026-11-20' },
+  ]);
+  assert.equal(s2.summaries.length, 1);
+
+  // Settled: a third pass does nothing.
+  let n = 0;
+  await runCatchUp({ db, todayIso: TODAY, runFetch: async () => { n++; return { ok: true }; } });
+  assert.equal(n, 0);
+});
+
+test('summaries owed from earlier passes are bounded by maxRunsPerBatch too, oldest first', async () => {
+  const owed = candidateDays(TODAY, 7).map(d => catchup('gemini-sector', d, 1, 1, '08:10'));
+  const db = fakeDb([...coveredExcept([]), ...owed]);
+  const seen = [];
+  await runCatchUp({ db, todayIso: TODAY, maxRunsPerBatch: 2, runFetch: async (a) => { seen.push(a.sinceDate); return { ok: true }; } });
+  assert.deepEqual(seen, ['2026-11-17', '2026-11-18']);
+});
+
+test('a failing summary is retried on later passes, maxAttempts times in all', async () => {
+  const db = fakeDb([...coveredExcept([]), catchup('gemini-title-company', '2026-11-22', 1, 3, '08:10')]);
+  let n = 0;
+  const pass = () => runCatchUp({
+    db, todayIso: TODAY,
+    runFetch: async ({ source }) => { assert.equal(source, 'gemini-title-daily-summary'); n++; return { ok: false, reason: 'empty' }; },
+  });
+  for (let i = 0; i < 5; i++) await pass();
+  assert.equal(n, 3);
 });
 
 test('a day that keeps failing is retried maxAttempts times in all, then left alone', async () => {

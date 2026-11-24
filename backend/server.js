@@ -1085,7 +1085,8 @@ async function runNewsBatch(phase) {
 }
 
 // Gemini catch-up pass (lib/news-catchup.mjs): re-run each news pipeline for
-// the ICT days of the last week it has no successful run for, a few per batch.
+// the ICT days of the last week it has no successful run for, a few per batch,
+// then regenerate the daily summary of every stock-day that gained rows.
 // Runs LAST in the batch so it never delays the live pulls or the evening
 // summaries, and not at all when no live Gemini run in this batch succeeded —
 // Gemini being down is exactly when every catch-up would fail too.
@@ -1108,9 +1109,11 @@ async function _runGeminiCatchUp(phase, liveGeminiOk) {
       todayIso: new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10),
       log: (m) => console.log(`${tag} ${m}`),
     });
-    if (s.planned) {
+    if (s.planned || s.summaries.length) {
       const ok = s.results.filter(r => r.ok).length;
-      console.log(`${tag} catch-up done: ${ok}/${s.results.length} ok, ${s.missed - ok} pipeline-day(s) still missing`);
+      const sumOk = s.summaries.filter(r => r.ok).length;
+      console.log(`${tag} catch-up done: ${ok}/${s.results.length} ok, ${s.missed - ok} pipeline-day(s) still missing; ` +
+        `daily summaries regenerated ${sumOk}/${s.summaries.length}`);
     }
   } catch (e) {
     console.error(`${tag} catch-up failed:`, e.message || e);
