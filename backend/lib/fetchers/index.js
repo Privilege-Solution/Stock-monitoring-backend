@@ -63,10 +63,12 @@ async function loadRssExtended() {
 // maxAgeDays — the cron's `maxAgeDays: 2` was ignored and fetchers fell
 // back to their internal default (7 days). Manual refresh via
 // `/api/news/rss-refresh?maxAgeDays=N` was also broken the same way.
-async function runFetch({ source = 'yahoo', sinceDate, maxAgeDays } = {}) {
+// `targetDate` (gemini news pipelines only) makes a catch-up run for one missed
+// ICT day — see lib/news-catchup.mjs.
+async function runFetch({ source = 'yahoo', sinceDate, maxAgeDays, targetDate } = {}) {
   if (source.startsWith('gemini-')) {
     const m = await loadGemini();
-    return await m.run({ source, sinceDate });
+    return await m.run({ source, sinceDate, targetDate });
   }
 
   if (source === 'rss-property') {

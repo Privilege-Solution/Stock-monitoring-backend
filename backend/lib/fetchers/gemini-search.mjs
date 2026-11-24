@@ -63,19 +63,61 @@ const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
 // the SYSTEM timezone (UTC on Railway), so any run in the 00:00–07:00 ICT
 // window asked Gemini for YESTERDAY's Thai date while todayISO() — which does
 // use ICT — stamped the resulting rows with TODAY's date. The prompt and the
-// DB key have to agree on which day "วันนี้" is.
-const todayThai = () =>
-  new Date().toLocaleDateString('th-TH', {
+// DB key have to agree on which day "วันนี้" is. Built from the run's ISO day
+// (see dayContext) at noon ICT, so the display string and the key are the
+// same day by construction, for today and for a catch-up day alike.
+const thaiDate = (iso) =>
+  new Date(`${iso}T12:00:00+07:00`).toLocaleDateString('th-TH', {
     timeZone: 'Asia/Bangkok', year: 'numeric', month: 'long', day: 'numeric',
   });
 
 // ISO date key (YYYY-MM-DD) for `daily.date` writes. MUST be used for any DB
-// key — todayThai() returns a Buddhist-era display string ("2 กรกฎาคม 2569")
+// key — thaiDate() returns a Buddhist-era display string ("2 กรกฎาคม 2569")
 // that never matches a stored 'YYYY-MM-DD' primary key, so pin UPDATEs would
 // silently touch 0 rows. Uses ICT (+7) so the day rolls at Thai midnight, not
 // UTC midnight (matches the daily price row's date).
 const todayISO = () =>
   new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// First ICT day of the date-discipline window that ends on `iso`: the window
+// reaches DEDUP_WINDOW_HOURS back from the END of that day. For a live run this
+// is the same day the old now-based formula gave (48h → two days back, at any
+// hour), so today's prompt and gate are unchanged; for a catch-up run it is
+// anchored on the missed day instead of on the clock.
+function windowStartIso(iso) {
+  const endOfDay = Date.parse(`${iso}T23:59:59Z`);
+  return new Date(endOfDay - DEDUP_WINDOW_HOURS * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// Which ICT day a news run is FOR. A live run is for today. A catch-up run
+// (lib/news-catchup.mjs) re-asks about a day every run of the pipeline missed,
+// so its prompt, its date-discipline window, its write gate, its fallback row
+// date and its remark pin all have to be built for that day rather than for
+// the clock — otherwise the "catch-up" would just be one more run about today.
+//
+// `word` is how the prompt refers to the day: "วันนี้" (today) for a live run,
+// "วันดังกล่าว" (that day) for a past one, where "today" would point Gemini at
+// the wrong date.
+function dayContext(targetIso, today = todayISO()) {
+  const iso = targetIso || today;
+  if (!ISO_DATE.test(iso) || Number.isNaN(Date.parse(`${iso}T00:00:00Z`))) {
+    throw new Error(`gemini-search: bad target date "${targetIso}"`);
+  }
+  if (iso > today) throw new Error(`gemini-search: target date ${iso} is in the future`);
+  const isToday = iso === today;
+  return {
+    iso,
+    thai: thaiDate(iso),
+    oldestIso: windowStartIso(iso),
+    isToday,
+    word: isToday ? 'วันนี้' : 'วันดังกล่าว',
+  };
+}
+
+// Log tag for a run: the bare source for a live run, source@day for a catch-up.
+const runTag = (source, day) => (day.isToday ? source : `${source}@${day.iso}`);
 
 // =============================================================================
 // PROMPTS (verbatim from user spec — keep formatting literal)
@@ -110,15 +152,21 @@ const CATEGORY_OPTIONS_TITLE = categoriesForStock('TITLE').join(' | ');
 // present-tense headline ("ต่ออายุ", "ขยายเวลา") is describing an approval that
 // already happened. Four outlets covering the same ครม. transfer-fee extension
 // on different days is exactly this pattern.
-// oldestIso is derived here, not threaded through every prompt, and comes from
-// the SAME DEDUP_WINDOW_HOURS the gate in writeFeedItems() uses — the prompt
-// and the gate have to agree on the window or one silently overrules the other.
+// The window (day.oldestIso .. day.iso) comes from dayContext(), i.e. from the
+// SAME DEDUP_WINDOW_HOURS the gate in writeFeedItems() uses — the prompt and
+// the gate have to agree on the window or one silently overrules the other.
 // (Asking Gemini for today-only while the gate accepts 48h just means the
-// widened gate never sees anything to admit.)
-const DATE_DISCIPLINE = (today, todayIso) => ((oldestIso) => `
+// widened gate never sees anything to admit.) A catch-up run gets the window
+// ending on the missed day, plus a note that the day is in the past so Gemini
+// does not fill the answer with what happened since.
+const CATCHUP_NOTE = (day) => day.isToday ? '' : `
+หมายเหตุ: ${day.thai} (${day.iso}) เป็นวันที่ผ่านมาแล้ว ระบบกำลังเก็บข่าวย้อนหลังของวันที่พลาดไป
+ให้ค้นหาข่าวที่เกิดขึ้นในวันนั้นโดยเฉพาะ ห้ามใส่ข่าวที่เกิดขึ้นหลังวันที่ ${day.iso}`;
 
-=== กฎการตรวจสอบวันที่ (สำคัญมาก ห้ามข้าม) ===
-เอาเฉพาะข่าวที่ "เหตุการณ์จริง" เกิดขึ้นระหว่างวันที่ ${oldestIso} ถึง ${todayIso} (${today}) เท่านั้น
+const DATE_DISCIPLINE = (day) => `
+
+=== กฎการตรวจสอบวันที่ (สำคัญมาก ห้ามข้าม) ===${CATCHUP_NOTE(day)}
+เอาเฉพาะข่าวที่ "เหตุการณ์จริง" เกิดขึ้นระหว่างวันที่ ${day.oldestIso} ถึง ${day.iso} (${day.thai}) เท่านั้น
 ห้ามเอาข่าวเก่ากว่านั้นที่ถูกนำมาเผยแพร่ซ้ำ อ้างอิงถึง หรือสรุปย้อนหลัง
 
 สำหรับทุกข่าว ต้องแยกวันที่ออกเป็น 2 อย่าง:
@@ -128,14 +176,14 @@ const DATE_DISCIPLINE = (today, todayIso) => ((oldestIso) => `
   ถ้าหน้าเว็บแสดงทั้งวันเผยแพร่และวันแก้ไข ให้ใช้วันเผยแพร่เสมอ
   ถ้าระบุวันเผยแพร่ครั้งแรกไม่ได้ ให้ตอบ PUBLISH_DATE: UNKNOWN ห้ามเดา
 
-เกณฑ์ตัดสิน: ถ้า EVENT_DATE อยู่นอกช่วง ${oldestIso} ถึง ${todayIso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็นวันนี้ก็ตาม
+เกณฑ์ตัดสิน: ถ้า EVENT_DATE อยู่นอกช่วง ${day.oldestIso} ถึง ${day.iso} → ห้ามใส่ข่าวนั้น แม้ PUBLISH_DATE จะเป็น${day.word}ก็ตาม
 EVENT_DATE ที่ถูกต้องสำคัญมาก เพราะระบบใช้ค่านี้เป็น "วันที่ของข่าว" บนกราฟราคา
-ข่าวของเมื่อวานที่ยังอยู่ในช่วง ให้ใส่มาได้ โดยระบุ EVENT_DATE เป็นวันที่เกิดเหตุจริง ห้ามแก้เป็นวันนี้
+ข่าวของ${day.isToday ? 'เมื่อวาน' : 'วันก่อนหน้า'}ที่ยังอยู่ในช่วง ให้ใส่มาได้ โดยระบุ EVENT_DATE เป็นวันที่เกิดเหตุจริง ห้ามแก้เป็น${day.word}
 
 ระวังรูปแบบข่าวเก่าที่ถูกทำให้ดูเหมือนใหม่:
 1. มีคำว่า "ก่อนหน้านี้" / "เมื่อเดือนที่แล้ว" / "มีผลตั้งแต่วันที่ <วันที่ในอดีต>" → เหตุการณ์เป็นของเก่า
 2. หลายสำนักข่าวรายงานมติรัฐ/ประกาศเดียวกัน โดยในเนื้อข่าวระบุวันมีผลเดียวกัน → ให้ดูวันที่มีมติในเนื้อข่าว ไม่ใช่แค่พาดหัว
-3. พาดหัวใช้รูปปัจจุบัน/อนาคต ("ต่ออายุ", "ขยายเวลา") แต่เนื้อข่าวบอกว่า ครม. อนุมัติไปแล้วหลายสัปดาห์/เดือน → EVENT_DATE คือวันอนุมัติเดิม ไม่ใช่วันนี้
+3. พาดหัวใช้รูปปัจจุบัน/อนาคต ("ต่ออายุ", "ขยายเวลา") แต่เนื้อข่าวบอกว่า ครม. อนุมัติไปแล้วหลายสัปดาห์/เดือน → EVENT_DATE คือวันอนุมัติเดิม ไม่ใช่${day.word}
 
 ถ้าไม่แน่ใจว่าเป็นข่าวใหม่จริงหรือข่าวเก่าโผล่ซ้ำ ให้ใส่ CONFIDENCE: low และคงข้อมูลไว้ ห้ามใส่เงียบ ๆ โดยไม่ระบุ
 
@@ -155,12 +203,11 @@ CONFIDENCE: [high | medium | low]
 - ข่าวที่มีเนื้อหาครบแต่ URL: NONE ถือว่าถูกต้อง ส่วนข่าวที่ใส่ URL มั่ว ๆ ให้พอมีค่า ถือว่าผิด
 - บรรทัด URL: ต้องมี "ลิงก์เดียว" เท่านั้น ห้ามใส่ 2 ลิงก์ ห้ามคั่นด้วย , หรือ / และห้ามเขียนคำอธิบายต่อท้ายลิงก์
   ผิด: URL: https://a.com/x , https://b.com/y (อ้างอิงจากข่าว)
-  ถูก: URL: https://a.com/x`)(
-  new Date(Date.now() + 7 * 3600 * 1000 - DEDUP_WINDOW_HOURS * 3600 * 1000)
-    .toISOString().slice(0, 10));
+  ถูก: URL: https://a.com/x`;
 
-const PROMPT_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
-ที่เกิดขึ้นใน${today}
+// Each news prompt takes a dayContext() — the day the run is FOR.
+const PROMPT_COMPANY = (day) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "Assetwise" หรือ "ASW" หรือ "แอสเซทไวส์"
+ที่เกิดขึ้นใน${day.thai}
 
 ค้นหาเฉพาะข่าวที่เกี่ยวกับ:
 - งบการเงิน / ผลประกอบการ / Presale / โอนกรรมสิทธิ์
@@ -170,7 +217,7 @@ const PROMPT_COMPANY = (today, todayIso) => `คุณเป็น analyst ห�
 - ผู้บริหารซื้อขายหุ้น (insider / Form 59)
 - SET Smart Alert / cash balance alert
 
-ถ้าไม่มีข่าว ASW วันนี้ ตอบว่า NONE
+ถ้าไม่มีข่าว ASW ${day.word} ตอบว่า NONE
 
 ถ้ามีข่าว ตอบในรูปแบบนี้เท่านั้น (ไม่ต้องมีคำอธิบายเพิ่ม):
 CATEGORY: [COMPANY]
@@ -196,10 +243,10 @@ HEADLINE: ASW รายงาน Presale 9 เดือน 79% ของเป�
 SUMMARY: ยอด Presale 9 เดือนแตะ 1.6 หมื่นล้านบาท ใกล้เป้าทั้งปี 2 หมื่นล้าน แนวโน้ม Q4 เร่งเปิดโครงการใหม่หนุนรายได้
 IMPACT_LEVEL: HIGH
 SOURCE: SET
-URL: https://...${DATE_DISCIPLINE(today, todayIso)}`;
+URL: https://...${DATE_DISCIPLINE(day)}`;
 
-const PROMPT_SECTOR = (today, todayIso) => `คุณเป็น analyst หุ้นอสังหาริมทรัพย์ไทย ค้นหาข่าวอสังหาฯ ไทย
-ที่เกิดขึ้นใน${today}
+const PROMPT_SECTOR = (day) => `คุณเป็น analyst หุ้นอสังหาริมทรัพย์ไทย ค้นหาข่าวอสังหาฯ ไทย
+ที่เกิดขึ้นใน${day.thai}
 
 ค้นหาข่าวที่เกี่ยวกับหัวข้อเหล่านี้:
 - ยอดโอนกรรมสิทธิ์ / ยอด Presale ของกลุ่มอสังหาฯ
@@ -208,7 +255,7 @@ const PROMPT_SECTOR = (today, todayIso) => `คุณเป็น analyst หุ
 - ดัชนี REIC / ความเชื่อมั่นผู้บริโษก
 - Supply/Demand คอนโด / บ้านแนวราบ กรุงเทพ
 
-ถ้าไม่มีข่าว sector วันนี้ ตอบว่า NONE
+ถ้าไม่มีข่าว sector ${day.word} ตอบว่า NONE
 
 ถ้ามี ตอบได้สูงสุด 5 ข่าว รูปแบบนี้:
 ---
@@ -250,10 +297,10 @@ SUMMARY: มติ ครม. ต่ออายุมาตรการกร�
 IMPACT_LEVEL: HIGH
 SOURCE: กรุงเทพธุรกิจ
 URL: https://...
----${DATE_DISCIPLINE(today, todayIso)}`;
+---${DATE_DISCIPLINE(day)}`;
 
-const PROMPT_MACRO = (today, todayIso) => `คุณเป็น analyst เศรษฐกิจไทย ค้นหาข่าวสำคัญ
-ที่เกิดขึ้นใน${today}
+const PROMPT_MACRO = (day) => `คุณเป็น analyst เศรษฐกิจไทย ค้นหาข่าวสำคัญ
+ที่เกิดขึ้นใน${day.thai}
 
 ค้นหาเฉพาะเหตุการณ์ที่อาจกระทบตลาดหุ้นไทย ได้แก่:
 - การประชุม กนง. / ประกาศอัตราดอกเบี้ยนโยบาย
@@ -265,7 +312,7 @@ const PROMPT_MACRO = (today, todayIso) => `คุณเป็น analyst เศ�
 - ช็อกเศรษฐกิจโลก: สงครามการค้า / ภาษีนำเข้าสหรัฐฯ / วิกฤตการเงิน ที่กระทบไทย
 - ค่าเงินบาทผันผวนแรง / Fed หรือธนาคารกลางโลกที่กระทบค่าเงินบาทหรือ Fund flow
 
-ถ้าไม่มีข่าวมหภาคสำคัญวันนี้ ตอบว่า NONE
+ถ้าไม่มีข่าวมหภาคสำคัญ${day.word} ตอบว่า NONE
 
 ถ้ามี ตอบได้สูงสุด 4 ข่าว เรียงจากสำคัญที่สุด รูปแบบนี้:
 ---
@@ -309,7 +356,7 @@ SUMMARY: คณะกรรมการ กนง. มีมติเป็น�
 IMPACT_LEVEL: HIGH
 SOURCE: กรุงเทพธุรกิจ
 URL: https://...
----${DATE_DISCIPLINE(today, todayIso)}`;
+---${DATE_DISCIPLINE(day)}`;
 
 // ── TITLE (ร่มโพธิ์ พร็อพเพอร์ตี้ — SET: TITLE) prompts (migrate-v13) ─────────
 // TITLE is ASW's ~68.9% subsidiary: a Phuket-only leisure-residence developer
@@ -318,8 +365,8 @@ URL: https://...
 // the war/sanctions cycle, oil (Russian wealth proxy), currencies and money-
 // transfer rules, travel access to Phuket, and foreign-ownership regulation.
 
-const PROMPT_TITLE_COMPANY = (today, todayIso) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "ร่มโพธิ์ พร็อพเพอร์ตี้" หรือหุ้น "TITLE" หรือแบรนด์ "The Title" (ผู้พัฒนาอสังหาฯ ภูเก็ต บริษัทลูกของ AssetWise)
-ที่เกิดขึ้นใน${today}
+const PROMPT_TITLE_COMPANY = (day) => `คุณเป็น analyst หุ้นไทย ค้นหาข่าวของ "ร่มโพธิ์ พร็อพเพอร์ตี้" หรือหุ้น "TITLE" หรือแบรนด์ "The Title" (ผู้พัฒนาอสังหาฯ ภูเก็ต บริษัทลูกของ AssetWise)
+ที่เกิดขึ้นใน${day.thai}
 
 ค้นหาเฉพาะข่าวที่เกี่ยวกับ:
 - งบการเงิน / ผลประกอบการ / Presale / ยอดโอนกรรมสิทธิ์
@@ -330,7 +377,7 @@ const PROMPT_TITLE_COMPANY = (today, todayIso) => `คุณเป็น analyst
 
 ระวัง: คำว่า "title" ในภาษาอังกฤษ (เช่น title deed = โฉนด) ไม่ใช่หุ้น TITLE — ต้องเป็นข่าวของบริษัทร่มโพธิ์เท่านั้น
 
-ถ้าไม่มีข่าว TITLE วันนี้ ตอบว่า NONE
+ถ้าไม่มีข่าว TITLE ${day.word} ตอบว่า NONE
 
 ถ้ามีข่าว ตอบในรูปแบบนี้เท่านั้น (ไม่ต้องมีคำอธิบายเพิ่ม):
 CATEGORY: [COMPANY]
@@ -343,10 +390,10 @@ URL: [url จริงเท่านั้น ห้ามว่าง ถ้�
 หมายเหตุเรื่อง IMPACT_LEVEL:
 - HIGH   = กระทบพื้นฐาน/มูลค่า TITLE โดยตรง เช่น งบ, ปันผล, เพิ่มทุน, backlog เปลี่ยนแรง
 - MEDIUM = โครงการใหม่, milestone ยอดขาย, JV
-- LOW    = ข่าวประชาสัมพันธ์ / กิจกรรมบริษัท${DATE_DISCIPLINE(today, todayIso)}`;
+- LOW    = ข่าวประชาสัมพันธ์ / กิจกรรมบริษัท${DATE_DISCIPLINE(day)}`;
 
-const PROMPT_TITLE_DRIVERS = (today, todayIso) => `คุณเป็น analyst ตลาดอสังหาริมทรัพย์ภูเก็ต ลูกค้าหลักของตลาดนี้คือชาวต่างชาติ
-(รัสเซียอันดับ 1 ตามมูลค่าโอนคอนโดภูเก็ต ตามด้วยจีน อิสราเอล ยุโรป) ค้นหาข่าว${today}
+const PROMPT_TITLE_DRIVERS = (day) => `คุณเป็น analyst ตลาดอสังหาริมทรัพย์ภูเก็ต ลูกค้าหลักของตลาดนี้คือชาวต่างชาติ
+(รัสเซียอันดับ 1 ตามมูลค่าโอนคอนโดภูเก็ต ตามด้วยจีน อิสราเอล ยุโรป) ค้นหาข่าว${day.thai}
 ที่กระทบ "กำลังซื้อหรือการเดินทางของผู้ซื้อต่างชาติในภูเก็ต"
 
 ค้นหาเฉพาะหัวข้อเหล่านี้ และรายงานเฉพาะเหตุการณ์ที่กระทบดีมานด์อสังหาฯ ภูเก็ตจริง ๆ
@@ -363,7 +410,7 @@ const PROMPT_TITLE_DRIVERS = (today, todayIso) => `คุณเป็น analyst
 - โควตาต่างชาติถือครองคอนโด / nominee / leasehold / มาตรการรัฐเรื่องต่างชาติซื้ออสังหาฯ → GOV_POLICY
 - ตลาดอสังหาฯ ภูเก็ต: supply ใหม่, ยอดโอนต่างชาติ, ราคา → INDUSTRY
 
-ถ้าไม่มีข่าวสำคัญวันนี้ ตอบว่า NONE
+ถ้าไม่มีข่าวสำคัญ${day.word} ตอบว่า NONE
 
 ถ้ามี ตอบได้สูงสุด 6 ข่าว เรียงจากสำคัญที่สุด รูปแบบนี้:
 ---
@@ -400,7 +447,22 @@ SUMMARY: มติ ครม. ลดวันพำนักวีซ่าฟ�
 IMPACT_LEVEL: HIGH
 SOURCE: กรุงเทพธุรกิจ
 URL: https://...
----${DATE_DISCIPLINE(today, todayIso)}`;
+---${DATE_DISCIPLINE(day)}`;
+
+// The five news-search prompts, by fetch source. Exported (as newsPrompt) so
+// the catch-up tests can check what a back-dated run actually asks.
+const NEWS_PROMPTS = {
+  'gemini-company':       PROMPT_COMPANY,
+  'gemini-sector':        PROMPT_SECTOR,
+  'gemini-macro':         PROMPT_MACRO,
+  'gemini-title-company': PROMPT_TITLE_COMPANY,
+  'gemini-title-drivers': PROMPT_TITLE_DRIVERS,
+};
+function newsPrompt(source, day) {
+  const build = NEWS_PROMPTS[source];
+  if (!build) throw new Error(`gemini-search: no news prompt for "${source}"`);
+  return build(day);
+}
 
 const PROMPT_BRIEF = () => `คุณเป็น analyst หุ้นอสังหาฯ ไทย สรุปสถานการณ์ให้ผู้บริหาร
 
@@ -630,7 +692,10 @@ function resolveGroundedUrl(statedUrl, trustedHosts) {
   return null;
 }
 
-function parseAIResult(text, pipeline, grounding, stock = 'ASW') {
+// `fallbackDate` is the run's day (see dayContext): the date a row gets when
+// the model gives neither an event nor a publish date. A catch-up run for a
+// missed day must not stamp such rows with today.
+function parseAIResult(text, pipeline, grounding, stock = 'ASW', { fallbackDate } = {}) {
   if (!text || text.trim() === 'NONE') return [];
   // Validate categories against THIS stock's vocabulary, not the global
   // superset — a TOURISM row on the ASW panel would be invisible (no tab).
@@ -768,12 +833,12 @@ function parseAIResult(text, pipeline, grounding, stock = 'ASW') {
     let date = eventDate || publishDate;
     if (!date && /^\d{4}-\d{2}-\d{2}$/.test(statedDate)) date = statedDate;
     if (!date) {
-      date = todayISO();
-      console.warn(`[gemini] no event/publish date for "${String(get('HEADLINE')).slice(0, 48)}" — falling back to the crawl date ${date}`);
+      date = fallbackDate || todayISO();
+      console.warn(`[gemini] no event/publish date for "${String(get('HEADLINE')).slice(0, 48)}" — falling back to the run's day ${date}`);
     }
 
     return {
-      date,                                      // event > publish > stated > ICT today
+      date,                                      // event > publish > stated > run's day (ICT)
       event_date:   eventDate,
       publish_date: publishDate,
       confidence:   ['high', 'medium', 'low'].includes(confidence) ? confidence : null,
@@ -982,7 +1047,21 @@ function normalizeForNewsFeed(it) {
 // Dropping (rather than keeping the homepage, or keeping an empty URL) is
 // deliberate and matches the RSS fetchers: better to lose one row than to show
 // a headline the reader cannot actually open.
-async function writeFeedItems(items, tag, stock = 'ASW') {
+// The date-discipline gate, on its own so the window can be tested without a
+// DB. Keeps items whose event_date lies inside [day.oldestIso, day.iso] — the
+// same window the prompt asked for — and items with no event_date at all.
+function applyDateGate(items, day) {
+  const kept = [], stale = [];
+  for (const it of items) {
+    // Inside the window. An event_date after the run's day is a model error
+    // for a live run, and for a catch-up run belongs to a later day's run.
+    if (!it.event_date || (it.event_date >= day.oldestIso && it.event_date <= day.iso)) kept.push(it);
+    else stale.push(it);
+  }
+  return { kept, stale };
+}
+
+async function writeFeedItems(items, tag, stock = 'ASW', day = dayContext()) {
   // Date discipline gate. Rejects recaps — an article published today about a
   // cabinet resolution from June is not news, and filing it under today
   // misrepresents when the market actually moved.
@@ -1003,19 +1082,16 @@ async function writeFeedItems(items, tag, stock = 'ASW') {
   // it must flag rather than silently include, and a human can then judge.
   // Items with no EVENT_DATE at all (older prompt shape, or a truncated
   // response) pass through — this gate must not become a silent blackhole.
-  const today = todayISO();
-  const oldest = new Date(Date.now() + 7 * 3600 * 1000 - DEDUP_WINDOW_HOURS * 3600 * 1000)
-    .toISOString().slice(0, 10);
-  const stale = [];
-  items = items.filter(it => {
-    if (!it.event_date) return true;
-    // Inside [oldest, today]. A future event_date is a model error, not news.
-    if (it.event_date >= oldest && it.event_date <= today) return true;
-    stale.push(it);
-    return false;
-  });
+  //
+  // The window ends on the run's day (dayContext): today for a live run, the
+  // missed day for a catch-up run. Content dedup in db.writeNewsItems compares
+  // around each ITEM's date, so a back-dated row is checked against that day's
+  // coverage, not today's — the "gate = dedup window" argument above holds.
+  const gated = applyDateGate(items, day);
+  const stale = gated.stale;
+  items = gated.kept;
   if (stale.length) {
-    console.log(`[${tag}] dropped ${stale.length} recap(s) — event outside ${oldest}..${today}:`);
+    console.log(`[${tag}] dropped ${stale.length} recap(s) — event outside ${day.oldestIso}..${day.iso}:`);
     for (const s of stale) {
       console.log(`   event=${s.event_date} published=${s.publish_date || '?'} conf=${s.confidence || '?'}  ${String(s.headline).slice(0, 56)}`);
     }
@@ -1145,32 +1221,53 @@ function normalizeBullets(raw) {
 // 4 RUN FUNCTIONS
 // =============================================================================
 
+// Every news run takes an optional `targetDate` (ICT 'YYYY-MM-DD'). Omitted, it
+// is a live run about today, exactly as before. Given, it is a catch-up run for
+// a day the pipeline missed (lib/news-catchup.mjs): prompt, date gate, fallback
+// row date and remark pin are all built for that day.
+//
+// The daily.remark pin differs between the two. A live run owns today's remark
+// and overwrites it (company) or appends to it (macro / title-drivers), as it
+// always has. A catch-up run only ever APPENDS — the missed day may already
+// hold another pipeline's pins or a summary headline — and only when it added
+// a row: if every item was already in the feed, a neighbouring day's run caught
+// the story and pinned it there.
+const catchUpPins = (day, inserted) => !day.isToday && inserted > 0;
+
 // (1) COMPANY — 1 pin per day, stored in daily.remark. All headlines also
 // land in news_feed so the dashboard news sidebar can link to sources.
-async function runCompany(sinceDate) {
-  const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_COMPANY(td, todayISO()));
-  const items = parseAIResult(text, 'company', grounding, 'ASW');
+async function runCompany(targetDate) {
+  const day = dayContext(targetDate);
+  const tag = runTag('gemini-company', day);
+  const { text, grounding } = await geminiSearch(newsPrompt('gemini-company', day));
+  const items = parseAIResult(text, 'company', grounding, 'ASW', { fallbackDate: day.iso });
   if (!items.length) {
-    console.log(`[gemini-company] ${td} → no items`);
-    return { ok: true, date: td, category: null, text: null, sourceTitles: [] };
+    console.log(`[${tag}] ${day.thai} → no items`);
+    return { ok: true, date: day.thai, targetDate: day.iso, category: null, text: null, sourceTitles: [] };
   }
 
   const top = items[0];
-  // Write the pin against the ISO date key (todayISO), NOT the Thai display
+  // Write the pin against the ISO date key (day.iso), NOT the Thai display
   // string — otherwise the UPDATE matches no daily row and the pin is lost.
-  await db.updateSingleRemark('ASW', todayISO(), {
-    category: top.category,
-    text: top.headline,
-  });
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-company', 'ASW');
+  if (day.isToday) {
+    await db.updateSingleRemark('ASW', day.iso, {
+      category: top.category,
+      text: top.headline,
+    });
+  }
+  const { inserted, dropped } = await writeFeedItems(items, tag, 'ASW', day);
+  if (catchUpPins(day, inserted)) {
+    await db.appendRemarkPin('ASW', day.iso, top.headline, top.category);
+  }
 
   return {
     ok: true,
-    date: td,
+    date: day.thai,
+    targetDate: day.iso,
     category: top.category,
     text: top.headline,
     sourceTitles: items.map(it => it.source ? `${it.source}: ${it.headline}` : it.headline),
+    fetched: items.length,
     inserted,
     dropped,
   };
@@ -1178,33 +1275,35 @@ async function runCompany(sinceDate) {
 
 // (2) SECTOR — news feed only. No chart pin (sector doesn't move ASW price
 // on its own).
-async function runSector(sinceDate) {
-  const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_SECTOR(td, todayISO()));
-  const items = parseAIResult(text, 'sector', grounding, 'ASW');
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-sector', 'ASW');
-  console.log(`[gemini-sector] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped}`);
-  return { ok: true, fetched: items.length, inserted, dropped };
+async function runSector(targetDate) {
+  const day = dayContext(targetDate);
+  const tag = runTag('gemini-sector', day);
+  const { text, grounding } = await geminiSearch(newsPrompt('gemini-sector', day));
+  const items = parseAIResult(text, 'sector', grounding, 'ASW', { fallbackDate: day.iso });
+  const { inserted, dropped } = await writeFeedItems(items, tag, 'ASW', day);
+  console.log(`[${tag}] ${day.thai} → fetched=${items.length} inserted=${inserted} dropped=${dropped}`);
+  return { ok: true, targetDate: day.iso, fetched: items.length, inserted, dropped };
 }
 
 // (3) MACRO — news feed for all items. severity=high items ALSO append to
 // daily.remark so they show up as event pins (macro that moves the market).
-async function runMacro(sinceDate) {
-  const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_MACRO(td, todayISO()));
-  const items = parseAIResult(text, 'macro', grounding, 'ASW');
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-macro', 'ASW');
+async function runMacro(targetDate) {
+  const day = dayContext(targetDate);
+  const tag = runTag('gemini-macro', day);
+  const { text, grounding } = await geminiSearch(newsPrompt('gemini-macro', day));
+  const items = parseAIResult(text, 'macro', grounding, 'ASW', { fallbackDate: day.iso });
+  const { inserted, dropped } = await writeFeedItems(items, tag, 'ASW', day);
 
   // The first severity=high item gets appended as a pin. We use
   // appendRemarkPin so the company pin from runCompany (above) is preserved.
   const topHigh = items.find(it => it.severity === 'high');
-  if (topHigh) {
+  if (topHigh && (day.isToday || catchUpPins(day, inserted))) {
     // ISO key (see runCompany) — the Thai display string never matches daily.date.
-    await db.appendRemarkPin('ASW', todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
+    await db.appendRemarkPin('ASW', day.iso, `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
   }
   const highCount = items.filter(i => i.severity === 'high').length;
-  console.log(`[gemini-macro] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
-  return { ok: true, fetched: items.length, inserted, dropped, high: highCount };
+  console.log(`[${tag}] ${day.thai} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
+  return { ok: true, targetDate: day.iso, fetched: items.length, inserted, dropped, high: highCount };
 }
 
 // (4) MORNING BRIEF — Monday-only weekly summary, lands in daily.{morning_*}.
@@ -1231,39 +1330,49 @@ async function runMorningBrief(sinceDate) {
 
 // (4b) TITLE COMPANY — news feed + remark pin on the TITLE chart, mirroring
 //      runCompany's shape but writing under stock='TITLE'.
-async function runTitleCompany(sinceDate) {
-  const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_TITLE_COMPANY(td, todayISO()));
-  const items = parseAIResult(text, 'title-company', grounding, 'TITLE');
+async function runTitleCompany(targetDate) {
+  const day = dayContext(targetDate);
+  const tag = runTag('gemini-title-company', day);
+  const { text, grounding } = await geminiSearch(newsPrompt('gemini-title-company', day));
+  const items = parseAIResult(text, 'title-company', grounding, 'TITLE', { fallbackDate: day.iso });
   if (!items.length) {
-    console.log(`[gemini-title-company] ${td} → no items`);
-    return { ok: true, date: td, category: null, text: null, sourceTitles: [] };
+    console.log(`[${tag}] ${day.thai} → no items`);
+    return { ok: true, date: day.thai, targetDate: day.iso, category: null, text: null, sourceTitles: [] };
   }
   const top = items[0];
-  await db.updateSingleRemark('TITLE', todayISO(), {
-    category: top.category,
-    text: top.headline,
-  });
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-title-company', 'TITLE');
-  return { ok: true, date: td, category: top.category, text: top.headline, inserted, dropped };
+  if (day.isToday) {
+    await db.updateSingleRemark('TITLE', day.iso, {
+      category: top.category,
+      text: top.headline,
+    });
+  }
+  const { inserted, dropped } = await writeFeedItems(items, tag, 'TITLE', day);
+  if (catchUpPins(day, inserted)) {
+    await db.appendRemarkPin('TITLE', day.iso, top.headline, top.category);
+  }
+  return {
+    ok: true, date: day.thai, targetDate: day.iso, category: top.category, text: top.headline,
+    fetched: items.length, inserted, dropped,
+  };
 }
 
 // (4c) TITLE DRIVERS — the TITLE panel's soul: wars/sanctions, oil, FX,
 //      tourism access, foreign-ownership policy, filtered by "does this move
 //      Phuket property demand". severity=high items pin the TITLE chart,
 //      mirroring runMacro.
-async function runTitleDrivers(sinceDate) {
-  const td = todayThai();
-  const { text, grounding } = await geminiSearch(PROMPT_TITLE_DRIVERS(td, todayISO()));
-  const items = parseAIResult(text, 'title-drivers', grounding, 'TITLE');
-  const { inserted, dropped } = await writeFeedItems(items, 'gemini-title-drivers', 'TITLE');
+async function runTitleDrivers(targetDate) {
+  const day = dayContext(targetDate);
+  const tag = runTag('gemini-title-drivers', day);
+  const { text, grounding } = await geminiSearch(newsPrompt('gemini-title-drivers', day));
+  const items = parseAIResult(text, 'title-drivers', grounding, 'TITLE', { fallbackDate: day.iso });
+  const { inserted, dropped } = await writeFeedItems(items, tag, 'TITLE', day);
   const topHigh = items.find(it => it.severity === 'high');
-  if (topHigh) {
-    await db.appendRemarkPin('TITLE', todayISO(), `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
+  if (topHigh && (day.isToday || catchUpPins(day, inserted))) {
+    await db.appendRemarkPin('TITLE', day.iso, `[${topHigh.category}] ${topHigh.headline}`, topHigh.category);
   }
   const highCount = items.filter(i => i.severity === 'high').length;
-  console.log(`[gemini-title-drivers] ${td} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
-  return { ok: true, fetched: items.length, inserted, dropped, high: highCount };
+  console.log(`[${tag}] ${day.thai} → fetched=${items.length} inserted=${inserted} dropped=${dropped} high=${highCount}`);
+  return { ok: true, targetDate: day.iso, fetched: items.length, inserted, dropped, high: highCount };
 }
 
 // (5) DAILY SUMMARY — one Gemini digest of the day's news_feed rows, stored
@@ -1341,19 +1450,24 @@ async function runDailySummary(sinceDate, stock = 'ASW') {
 // DISPATCHER
 // =============================================================================
 
-async function run({ source, sinceDate } = {}) {
+// `targetDate` (catch-up day, ICT ISO) applies to the five news-search
+// pipelines only. `sinceDate` keeps its old meaning: the day to summarize for
+// the daily summaries, ignored by everything else — so a caller that has been
+// passing sinceDate to gemini-company (POST /api/remarks/refresh) does not
+// suddenly start back-dated runs.
+async function run({ source, sinceDate, targetDate } = {}) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not set in environment');
   }
   switch (source) {
-    case 'gemini-company':        return runCompany(sinceDate);
-    case 'gemini-sector':         return runSector(sinceDate);
-    case 'gemini-macro':          return runMacro(sinceDate);
+    case 'gemini-company':        return runCompany(targetDate);
+    case 'gemini-sector':         return runSector(targetDate);
+    case 'gemini-macro':          return runMacro(targetDate);
     case 'gemini-morning-brief':  return runMorningBrief(sinceDate);
     case 'gemini-daily-summary':  return runDailySummary(sinceDate, 'ASW');
     // migrate-v13 — the TITLE (Phuket / foreign-demand) pipelines.
-    case 'gemini-title-company':       return runTitleCompany(sinceDate);
-    case 'gemini-title-drivers':       return runTitleDrivers(sinceDate);
+    case 'gemini-title-company':       return runTitleCompany(targetDate);
+    case 'gemini-title-drivers':       return runTitleDrivers(targetDate);
     case 'gemini-title-daily-summary': return runDailySummary(sinceDate, 'TITLE');
     default:
       throw new Error(`gemini-search: unknown source "${source}"`);
@@ -1363,5 +1477,7 @@ async function run({ source, sinceDate } = {}) {
 export {
   run, parseAIResult, geminiSearch, normalizeForNewsFeed, extractSection,
   parseTone, normalizeBullets, truncateHeadline, normalizeEnumValue,
+  // catch-up (lib/news-catchup.mjs) and its tests
+  dayContext, windowStartIso, newsPrompt, applyDateGate, isRetryableGeminiError,
 };
 export default { run };

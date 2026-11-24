@@ -261,6 +261,11 @@ async function ensureSchema() {
       rows_updated INTEGER,
       error        TEXT
     );
+    -- The ICT day a Gemini catch-up run was FOR (lib/news-catchup.mjs). NULL on
+    -- every live run, which is about the day it started. Without it a catch-up
+    -- for a missed day would look like one more run of today, and the missed
+    -- day would be retried forever.
+    ALTER TABLE fetch_log ADD COLUMN IF NOT EXISTS target_date TEXT;
 
     -- Per-day AI digest of news_feed (migrate-v10). One row per ICT date,
     -- upserted on each run. Dedicated table (not the daily price row) so a
@@ -522,14 +527,41 @@ async function logFetchStart() {
   return Number(r.rows[0].id);
 }
 
-async function logFetchFinish(id, ok, source, added, updated, error) {
+// `targetDate` is set only by Gemini catch-up runs. Live runs keep the original
+// statement, so their logging never depends on the target_date column.
+async function logFetchFinish(id, ok, source, added, updated, error, targetDate = null) {
+  const params = [new Date().toISOString(), ok ? 1 : 0, source, added || 0, updated || 0, error || null, id];
+  if (targetDate) {
+    await getPool().query(
+      `UPDATE fetch_log
+       SET finished_at = $1, ok = $2, source = $3,
+           rows_added = $4, rows_updated = $5, error = $6, target_date = $8
+       WHERE id = $7`,
+      [...params, targetDate]
+    );
+    return;
+  }
   await getPool().query(
     `UPDATE fetch_log
      SET finished_at = $1, ok = $2, source = $3,
          rows_added = $4, rows_updated = $5, error = $6
      WHERE id = $7`,
-    [new Date().toISOString(), ok ? 1 : 0, source, added || 0, updated || 0, error || null, id]
+    params
   );
+}
+
+// fetch_log rows for `sources` started at or after `sinceTs` (ISO UTC). The
+// catch-up planner (lib/news-catchup.mjs) works out from these which ICT days
+// each pipeline has covered. started_at is always written by
+// new Date().toISOString(), so a text comparison orders correctly.
+async function readFetchRuns(sources, sinceTs) {
+  const r = await getPool().query(
+    `SELECT source, ok, started_at, target_date
+       FROM fetch_log
+      WHERE source = ANY($1::text[]) AND started_at >= $2`,
+    [sources, sinceTs]
+  );
+  return r.rows;
 }
 
 async function getStoredDates(stock = DEFAULT_STOCK) {
@@ -1325,10 +1357,12 @@ async function readNewsStatus(stock = DEFAULT_STOCK) {
   // 7 simple queries — fetch_log is small (append-only). Could be combined
   // into one LATERAL but readability wins here.
   for (const source of sources) {
+    // Live runs only: a catch-up run for an old day (target_date set) runs at
+    // the end of a batch, and its outcome is not the pipeline's current state.
     const r = await p.query(
       `SELECT source, started_at, finished_at, ok, rows_added, error
        FROM fetch_log
-       WHERE source = $1
+       WHERE source = $1 AND target_date IS NULL
        ORDER BY id DESC LIMIT 1`,
       [source]
     );
@@ -1389,6 +1423,7 @@ module.exports = {
   metadata,
   logFetchStart,
   logFetchFinish,
+  readFetchRuns,        // Gemini catch-up — which days each pipeline covered
   getStoredDates,
   updateRemarks,        // legacy 3-col shim → updateSingleRemark (drop next release)
   updateSingleRemark,   // v2 — COMPANY pipeline writes here

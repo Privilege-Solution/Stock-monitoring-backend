@@ -1049,10 +1049,24 @@ cron.schedule('35 10 * * *', async () => {
 // duplicate Gemini calls against the same quota, duplicate fetch_log rows and
 // interleaved run records in /api/news/status. Set/checked synchronously so the
 // two callers cannot both pass.
+//
+// A CRON tick that lands during a batch is deferred, not dropped: it used to be
+// skipped for good, and with it that tick's phase-only work (the evening daily
+// summaries, the Monday brief). It runs once the current batch finishes. Only
+// one tick is remembered — the batches are hours apart, so a second one
+// queueing behind it would mean something is badly stuck anyway. A manual
+// refresh-all that lands during a batch is still just skipped: the batch in
+// progress is already doing what it asked for.
 let _newsBatchRunning = false;
+let _deferredNewsPhase = null;
 async function runNewsBatch(phase) {
   if (_newsBatchRunning) {
-    console.log(`[scheduler:${phase}] another news batch is already running — skip`);
+    if (phase !== 'manual') {
+      _deferredNewsPhase = phase;
+      console.log(`[scheduler:${phase}] another news batch is already running — will run when it finishes`);
+    } else {
+      console.log(`[scheduler:${phase}] another news batch is already running — skip`);
+    }
     return;
   }
   _newsBatchRunning = true;
@@ -1060,6 +1074,46 @@ async function runNewsBatch(phase) {
     return await _runNewsBatch(phase);
   } finally {
     _newsBatchRunning = false;
+    const next = _deferredNewsPhase;
+    _deferredNewsPhase = null;
+    if (next) {
+      setImmediate(() => runNewsBatch(next).catch(e => {
+        console.error(`[scheduler:${next}] deferred batch failed:`, e.message || e);
+      }));
+    }
+  }
+}
+
+// Gemini catch-up pass (lib/news-catchup.mjs): re-run each news pipeline for
+// the ICT days of the last week it has no successful run for, a few per batch.
+// Runs LAST in the batch so it never delays the live pulls or the evening
+// summaries, and not at all when no live Gemini run in this batch succeeded —
+// Gemini being down is exactly when every catch-up would fail too.
+async function _runGeminiCatchUp(phase, liveGeminiOk) {
+  const tag = `[scheduler:${phase}]`;
+  try {
+    const C = await import('./lib/news-catchup.mjs');
+    const cfg = C.catchUpConfig(process.env);
+    if (!cfg.maxRunsPerBatch) return;
+    if (!liveGeminiOk) {
+      console.log(`${tag} catch-up skipped — no live Gemini run succeeded this batch`);
+      return;
+    }
+    const G = await import('./lib/fetchers/gemini-search.mjs');
+    const s = await C.runCatchUp({
+      ...cfg,
+      db,
+      runFetch,
+      isOutage: G.isRetryableGeminiError,
+      todayIso: new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10),
+      log: (m) => console.log(`${tag} ${m}`),
+    });
+    if (s.planned) {
+      const ok = s.results.filter(r => r.ok).length;
+      console.log(`${tag} catch-up done: ${ok}/${s.results.length} ok, ${s.missed - ok} pipeline-day(s) still missing`);
+    }
+  } catch (e) {
+    console.error(`${tag} catch-up failed:`, e.message || e);
   }
 }
 
@@ -1090,6 +1144,7 @@ async function _runNewsBatch(phase) {
     sources.unshift({ source: 'gemini-morning-brief' });
   }
 
+  let liveGeminiOk = 0;                  // gates the catch-up pass below
   for (const cfg of sources) {
     const id = await db.logFetchStart();
     try {
@@ -1103,6 +1158,7 @@ async function _runNewsBatch(phase) {
         0,
         result.error || null,
       );
+      if (cfg.source.startsWith('gemini-') && result.ok !== false) liveGeminiOk++;
       console.log(`[scheduler:${phase}] ${cfg.source} ok fetched=${result.fetched ?? '?'} inserted=${result.inserted ?? '?'}`);
     } catch (e) {
       await db.logFetchFinish(id, 0, cfg.source, 0, 0, String(e.message || e));
@@ -1127,6 +1183,8 @@ async function _runNewsBatch(phase) {
       }
     }
   }
+
+  if (process.env.GEMINI_API_KEY) await _runGeminiCatchUp(phase, liveGeminiOk > 0);
   console.log(`[scheduler:${phase}] news batch done`);
 }
 
