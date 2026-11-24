@@ -48,7 +48,8 @@
        and the old grey sat well under 4.5:1 on white. */
     --muted:      #4B5565;
 
-    /* Event categories — unchanged in this pass (see REMARK_BADGE note). */
+    /* Price History digest-pin buckets (classifyEvent) — the older palette,
+       untouched. Live news categories take their colours from REMARK_BADGE. */
     --evt-rate:  #A32D2D;
     --evt-corp:  #3B6D11;
     --evt-pol:   #EF9F27;
@@ -1197,6 +1198,18 @@ const REMARK_BADGE = {
   investor_alert: { label: 'SET alert',   cls: 'investor_alert', color: '#A32D2D' },
   macro_fx:       { label: 'ค่าเงิน',      cls: 'macro_fx',       color: '#185FA5' },
   debt_rating:    { label: 'อันดับเครดิต', cls: 'debt_rating',    color: '#3B6D11' },
+  // ── Live categories: one colour each ────────────────────────────────────
+  //   `color` is the FILL — chart pins, the dots on the category tabs, and
+  //   the tint behind a tag (color + '1a'). `ink` is the same hue darkened until it reads as
+  //   small text at 4.5:1 on white AND on that tint; every label uses it.
+  //   The 11 fills were searched for separation (OKLab ΔE, normal and
+  //   protan/deutan-simulated) within what each panel shows at once — TITLE's
+  //   10, ASW's 7 — kept clear of the blue price line the pins sit on, and
+  //   anchored on the Attune chart hues (magenta, violet, indigo, terracotta)
+  //   where they fit. ASW's long-standing categories keep their colour family.
+  //   Before this, FX and MACRO were the same blue and five of these failed
+  //   as text. Red-green colour-blind readers still can't separate every pair
+  //   among ten, so a colour never travels without its text label.
   // ── Migrate-v9 taxonomy-v2 (live values, ASW-centric) ──────────────────
   //   COMPANY    — anything naming ASW/AssetWise/แอสเซทไวส์ (wins over topic)
   //   RATES      — BoT (กนง.) rate-decision headlines
@@ -1204,19 +1217,22 @@ const REMARK_BADGE = {
   //   POLITICS   — general political news (not housing-specific)
   //   INDUSTRY   — RE market trends / peer activity / supply-demand
   //   MACRO      — broad economic indicators (GDP/CPI/FX/trade)
-  COMPANY:    { label: 'COMPANY',     thaiLabel: 'บริษัท',            cls: 'cat-company',    color: '#1D9E75' },
+  COMPANY:    { label: 'COMPANY',     thaiLabel: 'บริษัท',            cls: 'cat-company',    color: '#1D9E75', ink: '#007B59' },
   // ── Migrate-v13 driver categories (TITLE panel: Phuket / foreign demand) ──
-  TOURISM:    { label: 'TOURISM',     thaiLabel: 'ท่องเที่ยว',          cls: 'cat-tourism',    color: '#0E9AA7' },
-  GEOPOLITICS:{ label: 'GEOPOLITICS', thaiLabel: 'ภูมิรัฐศาสตร์',       cls: 'cat-geopolitics',color: '#5D4037' },
-  OIL:        { label: 'OIL',         thaiLabel: 'น้ำมัน',             cls: 'cat-oil',        color: '#37474F' },
-  FX:         { label: 'FX',          thaiLabel: 'ค่าเงิน',            cls: 'cat-fx',         color: '#185FA5' },
-  COMPETITOR: { label: 'คู่แข่ง',      thaiLabel: 'คู่แข่ง',             cls: 'cat-competitor', color: '#C2185B' },
-  RATES:      { label: 'RATES',       thaiLabel: 'อัตราดอกเบี้ย',       cls: 'cat-rates',      color: '#A32D2D' },
-  GOV_POLICY: { label: 'GOV_POLICY',  thaiLabel: 'นโยบายรัฐ',          cls: 'cat-gov-policy', color: '#7F77DD' },
-  POLITICS:   { label: 'POLITICS',    thaiLabel: 'การเมือง',           cls: 'cat-politics',   color: '#EF9F27' },
-  INDUSTRY:   { label: 'INDUSTRY',    thaiLabel: 'อุตสาหกรรมอสังหาฯ',  cls: 'cat-industry',   color: '#3B8BD4' },
-  MACRO:      { label: 'MACRO',       thaiLabel: 'มหภาค',             cls: 'cat-macro',      color: '#185FA5' },
+  TOURISM:    { label: 'TOURISM',     thaiLabel: 'ท่องเที่ยว',          cls: 'cat-tourism',    color: '#036D92', ink: '#036D92' },
+  GEOPOLITICS:{ label: 'GEOPOLITICS', thaiLabel: 'ภูมิรัฐศาสตร์',       cls: 'cat-geopolitics',color: '#B64E10', ink: '#B14906' },
+  OIL:        { label: 'OIL',         thaiLabel: 'น้ำมัน',             cls: 'cat-oil',        color: '#909714', ink: '#6B7006' },
+  FX:         { label: 'FX',          thaiLabel: 'ค่าเงิน',            cls: 'cat-fx',         color: '#C06AF7', ink: '#9941CC' },
+  COMPETITOR: { label: 'คู่แข่ง',      thaiLabel: 'คู่แข่ง',             cls: 'cat-competitor', color: '#BF2A82', ink: '#BC267F' },
+  RATES:      { label: 'RATES',       thaiLabel: 'อัตราดอกเบี้ย',       cls: 'cat-rates',      color: '#82344A', ink: '#82344A' },
+  GOV_POLICY: { label: 'GOV_POLICY',  thaiLabel: 'นโยบายรัฐ',          cls: 'cat-gov-policy', color: '#7B4BD4', ink: '#7B4BD4' },
+  POLITICS:   { label: 'POLITICS',    thaiLabel: 'การเมือง',           cls: 'cat-politics',   color: '#917326', ink: '#836614' },
+  INDUSTRY:   { label: 'INDUSTRY',    thaiLabel: 'อุตสาหกรรมอสังหาฯ',  cls: 'cat-industry',   color: '#2A92BB', ink: '#117498' },
+  MACRO:      { label: 'MACRO',       thaiLabel: 'มหภาค',             cls: 'cat-macro',      color: '#384CA2', ink: '#384CA2' },
 };
+// Legacy / compatibility entries have one colour; let it serve as their ink so
+// every call site can read badge.ink without a fallback.
+for (const b of Object.values(REMARK_BADGE)) if (!b.ink) b.ink = b.color;
 
 // Thai display label for a taxonomy-v2 category key. Falls back to the raw
 // key for any unknown value so old/offline rows still render something.
@@ -2109,7 +2125,7 @@ function buildDashChart(filtered) {
               for (const n of news) {
                 const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
                 const headline = escapeHtml((n.title || '').slice(0, 46));
-                html += '<div style="color:' + badge.color + ';margin-bottom:3px;font-size:12px;line-height:1.4;">[' + escapeHtml(badge.label) + '] ' + headline + '</div>';
+                html += '<div style="color:' + badge.ink + ';margin-bottom:3px;font-size:12px;line-height:1.4;">[' + escapeHtml(badge.label) + '] ' + headline + '</div>';
               }
             }
 
@@ -2252,12 +2268,12 @@ function renderDashNewsCard(item) {
                   : item.change <  0     ? 'text-neg'
                   :                        'muted';
   const marked = item.chart_marked;
-  const pinIcon = isFeed ? `<span class="ni-pin ${marked ? 'on' : ''}" style="cursor:pointer;font-size:16px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s;color:${marked ? badge.color : '#ccc'};background:${marked ? badge.color + '15' : 'transparent'};" title="${marked ? 'ถอน pin' : 'ปัก pin บนกราฟ'}">${marked ? '●' : '○'}</span>` : '';
+  const pinIcon = isFeed ? `<span class="ni-pin ${marked ? 'on' : ''}" style="cursor:pointer;font-size:16px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;transition:all .15s;color:${marked ? badge.ink : '#ccc'};background:${marked ? badge.color + '15' : 'transparent'};" title="${marked ? 'ถอน pin' : 'ปัก pin บนกราฟ'}">${marked ? '●' : '○'}</span>` : '';
   return `<div class="news-item-uniform${focused}"${dataAttrs} style="${marked ? 'background:' + badge.color + '0d;' : ''}">
     <div class="ni-date th">${fmtThaiShort(item.date)}</div>
     <div class="ni-title-row">
       ${pinIcon}
-      <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+      <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.ink};">${escapeHtml(badge.label)}</span>
       <span class="ni-title th">${escapeHtml(item.text)}</span>
     </div>
     <div class="ni-meta">
@@ -2330,10 +2346,10 @@ function renderDashNews(filtered) {
     const headline = escapeHtml((item.text || '').slice(0, 80));
     const sev = item.severity === 'high' ? 'font-weight:600;' : '';
     const link = u
-      ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" style="color:${badge.color};text-decoration:none;${sev}">${headline}</a>`
+      ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" style="color:${badge.ink};text-decoration:none;${sev}">${headline}</a>`
       : `<span style="color:var(--muted);${sev}">${headline}</span>`;
     return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);${isTarget ? '' : 'opacity:0.6;'}">
-      <span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;padding:2px 6px;border-radius:3px;margin-right:6px;">${escapeHtml(badge.label)}</span>
+      <span class="tag th" style="background:${badge.color}1a;color:${badge.ink};font-size:10px;padding:2px 6px;border-radius:3px;margin-right:6px;">${escapeHtml(badge.label)}</span>
       ${link}
       <div class="th muted" style="font-size:11px;margin-top:2px;">${fmtThaiShort(item.date)}</div>
     </div>`;
@@ -3145,7 +3161,7 @@ function hpOpenDrawer(date) {
         ? news.slice(0, 8).map(n => {
             const u = articleHref(n);
             const badge = REMARK_BADGE[n.category] || REMARK_BADGE.MACRO;
-            const inner = `<span class="tag th" style="background:${badge.color}1a;color:${badge.color};font-size:10px;">${escapeHtml(badge.label)}</span> ${escapeHtml(n.title || '')}`;
+            const inner = `<span class="tag th" style="background:${badge.color}1a;color:${badge.ink};font-size:10px;">${escapeHtml(badge.label)}</span> ${escapeHtml(n.title || '')}`;
             return u ? `<a class="hp-dnews th" href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
                      : `<div class="hp-dnews th muted">${inner}</div>`;
           }).join('')
@@ -3494,7 +3510,7 @@ function renderUnifiedNewsItem(item) {
     </div>
     <div class="news-card-main">
       <div class="news-card-tags">
-        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
+        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.ink};">${escapeHtml(catLabel(item.category))}</span>${sevPill}${src}${manualBadge}
       </div>
       ${href
         ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="news-card-title th">${escapeHtml(item.text)}</a>` +
@@ -3791,7 +3807,7 @@ function renderPinPickerList() {
     return `<div class="pin-picker-item">
       <div class="pp-date th">${fmtThaiShort((n.date || '').slice(0, 10))}</div>
       <div class="pp-main">
-        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(catLabel(n.category))}</span>
+        <span class="tag ${badge.cls}" style="background:${badge.color}1a;color:${badge.ink};">${escapeHtml(catLabel(n.category))}</span>
         <span class="pp-title th">${escapeHtml(n.title)}</span>
       </div>
       <button class="pp-toggle${marked ? ' is-marked' : ''}" type="button" data-mark-id="${n.id}" title="${marked ? 'เลิกปักหมุด' : 'ปักหมุดบนกราฟ'}" aria-label="${marked ? 'เลิกปักหมุด' : 'ปักหมุดบนกราฟ'}" aria-pressed="${marked}">${icon('pin')}</button>
@@ -3873,7 +3889,7 @@ function openNewsDetailModal(ymd) {
       const dateNote = realDate && realDate !== ymd ? ' · ' + fmtThaiShort(realDate) : '';
       const inner = `
         <div class="nd-head">
-          <span class="tag th" style="background:${badge.color}1a;color:${badge.color};">${escapeHtml(badge.label)}</span>
+          <span class="tag th" style="background:${badge.color}1a;color:${badge.ink};">${escapeHtml(badge.label)}</span>
           ${sevPill}
         </div>
         <div class="nd-title th">${escapeHtml(n.title || '')}</div>
@@ -4046,6 +4062,16 @@ function renderNewsCatTabs() {
     b.textContent = cat === '__all' ? 'ทั้งหมด'
       : cat === 'COMPANY' ? ('บริษัท (' + STOCKS_META[STATE.stock].label + ')')
       : catLabel(cat);
+    // A dot in the category's own colour, drawn the way its chart pin is
+    // (fill + white ring), so this row doubles as the legend for the pins.
+    const badge = cat !== '__all' && REMARK_BADGE[cat];
+    if (badge) {
+      const dot = document.createElement('span');
+      dot.setAttribute('aria-hidden', 'true');
+      dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;'
+        + 'background:' + badge.color + ';box-shadow:0 0 0 1.5px #fff;';
+      b.prepend(dot);
+    }
     b.addEventListener('click', () => {
       STATE.newsCats = cat;
       renderNewsCatTabs();
