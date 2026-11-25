@@ -13,8 +13,9 @@
 //
 // Note: ASW (AssetWise) — our primary tracked ticker — is included in the
 // basket, which gives the synthetic PROP index a 5% ASW self-bias by design.
-// Method: equal-weighted mean of daily % changes; base 100.00 on the first
-// common date; then accumulate (1 + meanPct) cumulatively per trading day.
+// Method: equal-weighted mean of daily % changes over the tickers that traded
+// that day (at least MIN_BASKET_COVERAGE of the basket); base 100.00 on the
+// first such date; then accumulate (1 + meanPct) cumulatively per trading day.
 //
 // If a real SETPROP index becomes available (e.g. SET Smart, Bloomberg, or a
 // new Yahoo ticker), swap this entire file:
@@ -54,24 +55,32 @@ const PEER_NAMES = {
   'MJD.BK':   'Major Development',
 };
 
-function computePropBasket(peerSeries) {
+// A day gets a basket value when at least this share of the basket has a
+// price for it (and for the ticker's previous trading day). Was effectively
+// 100%: one peer with a missing candle — or one Yahoo response cut short to a
+// couple of rows, which pushed the start date to the window's last day — left
+// every other day of the run without a propIdx, and the upsert then wrote
+// those NULLs over the stored values. 15 of 20 keeps the basket representative
+// while a single flaky ticker no longer blanks the series.
+const MIN_BASKET_COVERAGE = 0.75;
+
+function computePropBasket(peerSeries, { minCoverage = MIN_BASKET_COVERAGE } = {}) {
   // peerSeries: [{ date, close, ... }] per ticker; may have different date ranges.
-  // Build per-ticker sorted-by-date array.
+  // Failed fetches arrive as [] and still count toward the basket size, so a
+  // run where most peers failed produces nothing rather than a thin basket.
+  const basketSize = peerSeries.length;
   const sorted = peerSeries
     .map(s => s.slice().sort((a, b) => a.date.localeCompare(b.date)))
     .filter(s => s.length >= 2);
 
-  if (!sorted.length) return [];
+  const need = Math.max(1, Math.ceil(basketSize * minCoverage));
+  if (sorted.length < need) return [];
 
-  // Find the first date for which ALL tickers have a row (so we have a % chg for every one).
-  // (A `tickerIndices` array used to be built here and was never read — the
-  // real per-ticker cursors are the `indices` array built below.)
-  let startDate = null;
-  // Walk: find the max of all "first-after-prev" dates where every ticker has prior + current.
-  const firstDates = sorted.map(s => s[1]?.date).filter(Boolean);
-  if (!firstDates.length) return [];
-  // Use the latest of these as startDate to ensure every ticker contributes.
-  startDate = firstDates.sort().slice(-1)[0];
+  // Start on the first date by which `need` tickers have a prior row to
+  // measure a % change against (each ticker's 2nd date, the need-th earliest).
+  // Tickers whose history starts later simply join when they have one.
+  const secondDates = sorted.map(s => s[1].date).sort();
+  const startDate = secondDates[need - 1];
 
   // Now for each trading day at-or-after startDate that exists in every ticker,
   // compute equal-weighted mean % chg.
@@ -83,9 +92,7 @@ function computePropBasket(peerSeries) {
 
   const points = [];
   let level = 100.00;
-  // Walk day by day using the union of all dates that are >= startDate and
-  // present in every ticker at or after their start.
-  const dateSets = sorted.map(s => new Set(s.map(r => r.date)));
+  // Walk day by day from startDate; a day counts when enough tickers traded.
   // Find max date among all tickers
   const maxDates = sorted.map(s => s[s.length - 1].date).filter(Boolean);
   const maxDate = maxDates.sort().slice(-1)[0];
@@ -107,17 +114,19 @@ function computePropBasket(peerSeries) {
   for (let d = new Date(startDate + 'T00:00:00Z'); d.getTime() <= endMs; d.setUTCDate(d.getUTCDate() + 1)) {
     const iso = d.toISOString().slice(0, 10);
     const pcts = [];
-    let allHave = true;
     for (let t = 0; t < sorted.length; t++) {
       const s = sorted[t];
       // advance pointer while next is <= iso
       while (indices[t] + 1 < s.length && s[indices[t] + 1].date <= iso) indices[t]++;
       const cur = s[indices[t]];
       const prev = indices[t] > 0 ? s[indices[t] - 1] : null;
-      if (!cur || !prev || !dateSets[t].has(iso) || !dateSets[t].has(prev.date)) { allHave = false; break; }
+      // No row today (or nothing before it) → this ticker sits the day out.
+      // When it trades again its change runs from its own last row, so its
+      // move is still counted once, on the day it reappears.
+      if (!cur || !prev || cur.date !== iso || !(prev.close > 0)) continue;
       pcts.push((cur.close - prev.close) / prev.close);
     }
-    if (!allHave) continue;
+    if (pcts.length < need) continue;
     const mean = pcts.reduce((a, b) => a + b, 0) / pcts.length;
     level = level * (1 + mean);
     points.push({ date: iso, close: Number(level.toFixed(4)) });

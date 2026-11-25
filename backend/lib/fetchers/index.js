@@ -13,6 +13,32 @@ async function loadYahoo() {
   return yahooModule;
 }
 
+let cnbcSetModule = null;
+async function loadCnbcSet() {
+  if (!cnbcSetModule) {
+    cnbcSetModule = await import('./cnbc-set.mjs');
+  }
+  return cnbcSetModule;
+}
+
+// Yahoo's ^SET.BK stopped serving history (only today's candle comes back),
+// so fill any of the stock's trading days the SET series lacks from CNBC.
+// Never fatal: a CNBC failure leaves the Yahoo series as it was, and the
+// COALESCE in writeRows keeps whatever SET value is already stored.
+async function withSetFallback(set, asw, sinceDate) {
+  try {
+    const cnbc = await loadCnbcSet();
+    if (!cnbc.hasGaps(set, asw)) return set;
+    const fallback = await cnbc.fetchSetIndexDaily({ sinceDate });
+    const merged = cnbc.fillMissingDates(set, fallback);
+    console.log(`[fetchers] SET: Yahoo had ${set.length} days, filled ${merged.length - set.length} from CNBC`);
+    return merged;
+  } catch (e) {
+    console.warn('[fetchers] SET fallback (CNBC) failed:', e.message || e);
+    return set;
+  }
+}
+
 let geminiModule = null;
 async function loadGemini() {
   if (!geminiModule) {
@@ -133,7 +159,8 @@ async function runDailyPrices({ sinceDate, source = 'yahoo' } = {}) {
   }
 
   const yahoo = await loadYahoo();
-  const { asw, set, peers } = await yahoo.fetchAll({ sinceDate: sharedSince || undefined });
+  const { asw, set: yahooSet, peers } = await yahoo.fetchAll({ sinceDate: sharedSince || undefined });
+  const set = await withSetFallback(yahooSet, asw, sharedSince || undefined);
   let propSeries = computePropBasket(peers);
   // Chain this window onto the stored PROP series (see rescaleToStored) —
   // without it every 7-day cron window re-based to 100.00 and overwrote the

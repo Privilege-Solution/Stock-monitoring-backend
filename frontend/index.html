@@ -440,7 +440,7 @@
             <h3 class="th" style="font-size:13px;">หุ้นอสังหาฯ ไทย — วันล่าสุด</h3>
             <span class="muted th" id="peerSnapshotDate" style="font-size:11px;">—</span>
           </div>
-          <div class="muted th mb-8" style="font-size:11px;">เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์</div>
+          <div class="muted th mb-8" style="font-size:11px;" id="peerSnapshotHint">เทียบ % เปลี่ยนแปลงรายวัน · ASW ไฮไลต์</div>
           <div class="data-table-wrap">
             <table class="data-table" id="peerTable">
               <thead>
@@ -956,6 +956,7 @@ const STOCKS_META = {
   },
   TITLE: {
     label: 'TITLE', ticker: 'TITLE.BK', title: 'TITLE Monitor',
+    company: 'Rhom Bho Property',  // not in the peer basket — peer table row is built from its own data
     ipoDate: '2017-11-02',   // mai debut; moved to SET Jan 2026, same ticker
     categories: ['COMPANY', 'GEOPOLITICS', 'OIL', 'FX', 'TOURISM', 'GOV_POLICY', 'COMPETITOR', 'RATES', 'INDUSTRY', 'MACRO'],
     hasMorningBrief: false,  // v13 scope: Monday brief is ASW-only
@@ -2039,17 +2040,23 @@ function buildDashChart(filtered) {
     yAxisID: 'yPrice',
   }];
 
+  // Index lines bridge a missing day or two (one source skipping a session the
+  // stock traded) but still break across a real outage, so a long stretch of
+  // missing data shows as a gap instead of a straight line pretending to be data.
+  const INDEX_SPAN_GAPS_MS = 6 * 86400000;
   const ov = STATE.overlay;
   if (ov === 'set' || ov === 'all') datasets.push({
     label: 'SET Index', data: setData,
     borderColor: getCSS('--muted'), borderDash: [5, 4],
     borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    spanGaps: INDEX_SPAN_GAPS_MS,
     yAxisID: 'yIdx',
   });
   if (ov === 'prop' || ov === 'all') datasets.push({
     label: 'PROP Index', data: propData,
     borderColor: getCSS('--teal'), borderDash: [3, 3],
     borderWidth: 1.5, pointRadius: 0, tension: 0.18,
+    spanGaps: INDEX_SPAN_GAPS_MS,
     yAxisID: 'yIdx',
   });
 
@@ -2716,9 +2723,15 @@ async function buildPeerSnapshot() {
   // dated a day back. Keep that date so the row can say so instead of quietly
   // passing yesterday's close off as today's.
   const snapshotDate = PEER_CACHE.date || null;
+  // The highlighted row is the stock being viewed. ASW is in the basket, so
+  // its row comes from /api/peers like the rest; TITLE is not, so its row is
+  // built from its own latest daily close and goes on top, and ASW drops back
+  // to an ordinary peer row.
+  const self = STATE.stock;
+  const selfLabel = STOCKS_META[self].label;
+  $('peerSnapshotHint').textContent = `เทียบ % เปลี่ยนแปลงรายวัน · ${selfLabel} ไฮไลต์`;
   const peerRows = THAI_RE_PEERS.map(p => {
     const live = peerByTicker.get(p.ticker);
-    const isASW = p.ticker === 'ASW';
     return {
       ticker: p.ticker,
       name: live?.name || p.name,
@@ -2726,15 +2739,26 @@ async function buildPeerSnapshot() {
       change: live?.change ?? null,
       asOf: live?.date || null,
       stale: !!(live?.date && snapshotDate && live.date < snapshotDate),
-      isASW,
+      isSelf: p.ticker === self,
     };
   });
+  if (!peerRows.some(r => r.isSelf)) {
+    peerRows.unshift({
+      ticker: selfLabel,
+      name: STOCKS_META[self].company || selfLabel,
+      close: lastRow.close,
+      change: lastRow.change ?? null,
+      asOf: lastDate,
+      stale: !!(snapshotDate && lastDate < snapshotDate),
+      isSelf: true,
+    });
+  }
 
   body.innerHTML = peerRows.map(r => {
     const chg = r.change != null ? r.change : null;
     const hasData = r.close != null && chg != null;
     const arrow = !hasData ? '─ ' : chg > 0.05 ? '▲ ' : chg < -0.05 ? '▼ ' : '─ ';
-    const aswBadge = r.isASW ? '<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">ASW</span>' : '';
+    const aswBadge = r.isSelf ? `<span class="tag" style="background:var(--primary); color:#fff; margin-left:6px;">${escapeHtml(selfLabel)}</span>` : '';
     // A trailing ticker shows its real price with the date it belongs to, so a
     // one-session lag reads as a lag rather than as today's number.
     const staleMark = (hasData && r.stale)
@@ -2754,10 +2778,10 @@ async function buildPeerSnapshot() {
     // so the row connects seamlessly with the white peer rows while staying
     // opaque enough to occlude the rows scrolling behind it; ASW is still set
     // apart by the bold weight + badge, not a background band.
-    const aswPin = r.isASW
+    const aswPin = r.isSelf
       ? 'background:var(--card); position:sticky; top:calc(2rem); z-index:1;'
       : '';
-    return `<tr style="${r.isASW ? 'font-weight:600;' : ''}">
+    return `<tr style="${r.isSelf ? 'font-weight:600;' : ''}">
       <td style="${aswPin}"><strong>${escapeHtml(r.ticker)}</strong>${aswBadge}</td>
       <td class="th muted" style="${aswPin}">${escapeHtml(r.name)}</td>
       <td class="num" style="${aswPin}">${closeText}</td>

@@ -441,8 +441,13 @@ async function writeRows(stock, rows) {
       "change"   = EXCLUDED."change",
       volume     = EXCLUDED.volume,
       value      = EXCLUDED.value,
-      "setIdx"   = EXCLUDED."setIdx",
-      "propIdx"  = EXCLUDED."propIdx",
+      -- A run that has no index value for a day must not erase the one already
+      -- stored. Yahoo stopped serving ^SET.BK history in Jul 2026 (it returns
+      -- only today's candle), so every 7-day self-heal run was writing NULL
+      -- over six stored SET closes, and a PROP window missing a peer did the
+      -- same to propIdx — months of index line gone from the chart.
+      "setIdx"   = COALESCE(EXCLUDED."setIdx",  daily."setIdx"),
+      "propIdx"  = COALESCE(EXCLUDED."propIdx", daily."propIdx"),
       remark     = COALESCE(EXCLUDED.remark,    daily.remark),
       category   = COALESCE(EXCLUDED.category,  daily.category),
       fetched_at = EXCLUDED.fetched_at
