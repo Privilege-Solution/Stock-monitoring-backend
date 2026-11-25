@@ -1773,13 +1773,19 @@ function thinPinDays(byTargetDay) {
  * had this same staleness before zoom existed; it now routes through here too.
  */
 function visibleDataWindow() {
-  if (!DASH_CHART) return DATA;
+  // The rows the price LINE was drawn from (buildDashChart stores them), never
+  // the whole of DATA. The axis carries 7 days of padding before the range
+  // starts, and filtering DATA by the axis window put pins on those padding
+  // days, where no line is drawn — dots floating left of the line's first
+  // point. A pin may only sit where the line is.
+  const rows = (DASH_CHART && DASH_CHART.$rows) || DATA;
+  if (!DASH_CHART) return rows;
   const sx = DASH_CHART.scales.x;
-  if (!sx || sx.min == null || sx.max == null) return DATA;
+  if (!sx || sx.min == null || sx.max == null) return rows;
   // Compare timestamps rather than date strings: the axis bounds are epoch ms
   // and the data was parsed as LOCAL midnight, so a UTC-based toISOString()
   // comparison would clip a day at each edge in Bangkok's +07.
-  return DATA.filter(r => {
+  return rows.filter(r => {
     const t = new Date(r.date + 'T00:00:00').getTime();
     return t >= sx.min && t <= sx.max;
   });
@@ -2234,6 +2240,10 @@ function buildDashChart(filtered) {
     }
   });
 
+  // The line's own rows — visibleDataWindow() rebuilds pins from these, so a
+  // pin can never land where the line is not drawn.
+  DASH_CHART.$rows = filtered;
+
   // Re-apply focused date zoom if set
   if (STATE.focusedDate) {
     focusDashOnDate(STATE.focusedDate);
@@ -2241,8 +2251,19 @@ function buildDashChart(filtered) {
 }
 
 function focusDashOnDate(dateStr) {
-  if (!DASH_CHART) return;
+  if (!DASH_CHART || !dateStr) return;
   if (!DATA.length) return;   // empty DB — DATA[0] below would throw
+  // ‹ › day navigation walks every news day back to the IPO, past the start of
+  // the selected range. Centring the axis there showed empty space (the line is
+  // only drawn for the range). Widen to ALL first; refreshDashboard rebuilds the
+  // chart and re-applies STATE.focusedDate, which lands back here in range.
+  const lineRows = DASH_CHART.$rows || [];
+  if (STATE.range !== 'ALL' && lineRows.length && dateStr < lineRows[0].date) {
+    STATE.focusedDate = dateStr;
+    STATE.range = 'ALL';
+    refreshDashboard();
+    return;
+  }
   const dt = new Date(dateStr + 'T00:00:00');
   const start = new Date(dt); start.setDate(start.getDate() - 30);
   const end = new Date(dt); end.setDate(end.getDate() + 30);
