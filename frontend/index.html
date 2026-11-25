@@ -2159,7 +2159,21 @@ function buildDashChart(filtered) {
             el.style.top = top + 'px';
           }
         },
-        annotation: { annotations },
+        annotation: {
+          annotations,
+          // Pins never animate. They are matched to their drawn elements by
+          // ORDER, not by date, and the set is re-thinned on every zoom/pan
+          // step (pinWindowWatcher), so element #7 can mean a different day
+          // from one update to the next. An animated update — every
+          // ⌘/Ctrl+wheel step (update('zoom')), focusDashOnDate's update() —
+          // starts a 300ms tween toward the OLD set's positions, and the
+          // update('none') that installs the new set writes positions directly
+          // without stopping that tween, which then keeps overwriting them
+          // until it ends. Net effect: the dots settled on a shifted copy of
+          // the line (measured 127px after a wheel zoom, ~1,170px after
+          // focusing a day). With no tween there is nothing to overwrite them.
+          animations: false,
+        },
         // Drag a region to zoom into it; ⌘/Ctrl+wheel to zoom (a trackpad
         // pinch arrives as ctrl+wheel, so that gesture works for free);
         // shift+drag to pan; two-finger pinch on touch.
